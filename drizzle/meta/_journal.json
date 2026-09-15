@@ -197,6 +197,13 @@
       "when": 1789468200000,
       "tag": "0027_waiter_pos_actions",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1789516800000,
+      "tag": "0028_guest_receipts",
+      "breakpoints": true
     }
   ]
 }

@@ -294,6 +294,30 @@ export const waiterOrders = pgTable("waiter_orders", {
   sentAt: timestamp("sent_at", { withTimezone: true }),
 }, (table) => [uniqueIndex("waiter_orders_external_id_uq").on(table.externalId)]);
 
+export type GuestSurveyAnswer = { questionId: number; question: string; answer: string };
+
+export const guestSurveyQuestions = pgTable("guest_survey_questions", {
+  id: serial("id").primaryKey(),
+  prompt: text("prompt").notNull(),
+  kind: text("kind").notNull().default("SINGLE_CHOICE"),
+  options: jsonb("options").$type<string[]>().notNull().default([]),
+  required: boolean("required").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const guestSurveyResponses = pgTable("guest_survey_responses", {
+  id: serial("id").primaryKey(),
+  dotykackaOrderId: text("dotykacka_order_id").notNull(),
+  documentNumber: text("document_number").notNull(),
+  tableDotykackaId: text("table_dotykacka_id"),
+  presentedByEmployeeDotykackaId: text("presented_by_employee_dotykacka_id").notNull(),
+  answers: jsonb("answers").$type<GuestSurveyAnswer[]>().notNull().default([]),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("guest_survey_responses_order_uq").on(table.dotykackaOrderId)]);
+
 export type WaiterSettlementCorrection = {
   direction: "CARD_TO_CASH" | "CASH_TO_CARD";
   amount: string;

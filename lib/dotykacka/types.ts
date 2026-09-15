@@ -160,3 +160,45 @@ export type DotykackaTable = {
   deleted?: boolean;
   versionDate?: string | null;
 };
+
+export type DotykackaOrder = {
+  id: number | string;
+  _cloudId?: number | string | null;
+  _branchId?: number | string | null;
+  _tableId?: number | string | null;
+  completed?: string | number | null;
+  created?: string | number | null;
+  documentNumber?: string | null;
+  documentType?: string | null;
+  currency?: string | null;
+  paid?: boolean | null;
+  status?: string | null;
+  totalValueRounded?: number | string | null;
+};
+
+export type DotykackaOrderItem = {
+  id: number | string;
+  _orderId?: number | string | null;
+  alternativeName?: string | null;
+  billedUnitPriceWithVat?: number | string | null;
+  canceledDate?: string | number | null;
+  completed?: string | number | null;
+  discountPercent?: number | string | null;
+  name?: string | null;
+  quantity?: number | string | null;
+  totalPriceWithVat?: number | string | null;
+  unitPriceWithVat?: number | string | null;
+  vat?: number | string | null;
+  orderItemCustomizations?: Array<{ name?: string | null; priceWithVat?: number | string | null }> | null;
+};
+
+export type DotykackaMoneyLog = {
+  id: number | string;
+  _orderId?: number | string | null;
+  amount?: number | string | null;
+  amountDefaultCurrency?: number | string | null;
+  currency?: string | null;
+  paymentTypeId?: number | string | null;
+  tipAmount?: number | string | null;
+  transactionType?: string | null;
+};

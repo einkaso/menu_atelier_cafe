@@ -81,6 +81,14 @@ npm test
 - `public/uploads/` jest przeznaczony na dane runtime i pozostaje poza repozytorium z wyjątkiem `.gitkeep`.
 - Endpoint synchronizacji wymaga `SYNC_SECRET`; webhook może używać osobnego `DOTYKACKA_WEBHOOK_SECRET`.
 
+## Rachunek dla gościa i ankiety
+
+W strefie kelnera przycisk „Rachunek dla gościa” pobiera z Dotykački zamknięte rachunki z ostatnich 12 godzin. Kelner może wybrać dowolny stolik na dowolnym tablecie. Widok gościa korzysta z końcowego zamówienia w POS, dlatego uwzględnia pozycje zmienione w Dotykačce po pierwotnym wysłaniu zamówienia. Przekazanie tabletu wylogowuje kelnera, a „Zakończ” usuwa krótką sesję rachunku i wraca do menu gościa.
+
+Ankieta przed zamówieniem pozostaje w `waiter_survey_questions`. Osobna ankieta po rachunku i jej odpowiedzi używają tabel `guest_survey_questions` oraz `guest_survey_responses`, tworzonych przez migrację `0028_guest_receipts.sql`.
+
+Kod QR wymaga ustawienia zmiennej `GOOGLE_REVIEW_URL` na dokładny, publiczny link „napisz opinię” z profilu Google firmy. Bez tej zmiennej rachunek i ankieta działają, ale kod QR jest ukryty.
+
 Szczegóły wdrożenia znajdują się w [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), a zasady integracji magazynowej w [`docs/DOTYKACKA_INVENTORY_INTEGRATION.md`](docs/DOTYKACKA_INVENTORY_INTEGRATION.md).
 
 ## Licencja i publikacja

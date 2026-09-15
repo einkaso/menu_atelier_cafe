@@ -1,5 +1,5 @@
 import "server-only";
-import type { DotykackaCategory, DotykackaConfig, DotykackaDeliveryNote, DotykackaEmployee, DotykackaNamedEntity, DotykackaPosActionResponse, DotykackaProduct, DotykackaProductCustomization, DotykackaSalesReport, DotykackaStockProduct, DotykackaStockTakingResponse, DotykackaStockTakingStatus, DotykackaSupplier, DotykackaTable, DotykackaWebhook } from "./types";
+import type { DotykackaCategory, DotykackaConfig, DotykackaDeliveryNote, DotykackaEmployee, DotykackaMoneyLog, DotykackaNamedEntity, DotykackaOrder, DotykackaOrderItem, DotykackaPosActionResponse, DotykackaProduct, DotykackaProductCustomization, DotykackaSalesReport, DotykackaStockProduct, DotykackaStockTakingResponse, DotykackaStockTakingStatus, DotykackaSupplier, DotykackaTable, DotykackaWebhook } from "./types";
 
 type Page<T> = T[] | { data?: T[]; items?: T[]; page?: number; pages?: number; totalPages?: number };
 
@@ -99,6 +99,25 @@ export class DotykackaClient {
 
   tables() {
     return this.all<DotykackaTable>(`/clouds/${this.config.cloudId}/tables`);
+  }
+
+  recentClosedOrders(since: Date) {
+    const filters = [`status|eq|closed`, `completed|gteq|${since.toISOString()}`];
+    if (this.config.branchId) filters.push(`_branchId|eq|${this.config.branchId}`);
+    const query = new URLSearchParams({ filter: filters.join(";"), sort: "-completed" });
+    return this.all<DotykackaOrder>(`/clouds/${this.config.cloudId}/orders?${query}`);
+  }
+
+  async closedOrderDetail(orderId: string) {
+    if (!/^\d+$/.test(orderId)) throw new Error("Invalid Dotykačka order id");
+    const itemQuery = new URLSearchParams({ filter: `_orderId|eq|${orderId}`, sort: "created" });
+    const paymentQuery = new URLSearchParams({ filter: `_orderId|eq|${orderId}`, sort: "created" });
+    const [order, items, payments] = await Promise.all([
+      this.request<DotykackaOrder>(`/clouds/${this.config.cloudId}/orders/${orderId}`),
+      this.all<DotykackaOrderItem>(`/clouds/${this.config.cloudId}/order-items?${itemQuery}`),
+      this.all<DotykackaMoneyLog>(`/clouds/${this.config.cloudId}/money-logs?${paymentQuery}`),
+    ]);
+    return { order, items, payments };
   }
 
   salesReport(dateFrom: Date, dateTo: Date) {
