@@ -126,6 +126,8 @@ export async function syncDotykackaMenu() {
     }
 
     const inventorySyncedAt = new Date();
+    const existingInventoryTracking = await db.select({ dotykackaId: inventoryCatalogProducts.dotykackaId, inventoryTracked: inventoryCatalogProducts.inventoryTracked }).from(inventoryCatalogProducts);
+    const inventoryTrackingByProduct = new Map(existingInventoryTracking.map((product) => [product.dotykackaId, product.inventoryTracked]));
     const inventoryCategoryRows = categories.map((category) => ({
       dotykackaId: String(category.id),
       name: category.name,
@@ -145,6 +147,7 @@ export async function syncDotykackaMenu() {
         display: product.display !== false,
         deleted: product.deleted === true,
         stockDeduct: product.stockDeduct === true,
+        inventoryTracked: inventoryTrackingByProduct.get(productId) ?? false,
         stockQuantity: stockByProduct.get(productId) == null ? null : String(stockByProduct.get(productId)),
         unit: stockDetailsByProduct.get(productId)?.unit ?? product.unit ?? null,
         priceWithVat: product.priceWithVat == null ? null : String(product.priceWithVat),

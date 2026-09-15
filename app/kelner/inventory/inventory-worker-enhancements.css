@@ -1,0 +1,32 @@
+.inventory-count-identity h3 {
+  font-size: 1.55rem !important;
+}
+
+.inventory-count-expected {
+  min-width: 190px;
+  padding: 12px;
+  border: 1px solid #e7c585;
+  background: #fff3dd;
+}
+
+.inventory-count-expected span,
+.inventory-count-expected small {
+  color: #79501c;
+  font-weight: 800;
+}
+
+.inventory-count-expected b {
+  font-size: 1.55rem;
+}
+
+.inventory-count-photo > span {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+@media (max-width: 580px) {
+  .inventory-count-expected {
+    min-width: 0;
+    text-align: left;
+  }
+}

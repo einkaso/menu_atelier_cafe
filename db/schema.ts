@@ -472,6 +472,7 @@ export const inventoryCatalogProducts = pgTable("inventory_catalog_products", {
   display: boolean("display").notNull().default(true),
   deleted: boolean("deleted").notNull().default(false),
   stockDeduct: boolean("stock_deduct").notNull().default(false),
+  inventoryTracked: boolean("inventory_tracked").notNull().default(false),
   stockQuantity: numeric("stock_quantity", { precision: 14, scale: 3 }),
   unit: text("unit"),
   priceWithVat: numeric("price_with_vat", { precision: 12, scale: 2 }),

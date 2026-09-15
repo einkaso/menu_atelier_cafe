@@ -2,6 +2,12 @@
 
 Stan realizacji: 15 września 2026. Źródłem możliwości technicznych są wyłącznie oficjalne materiały Dotykački/Dotypos. Zbudowany jest obieg zlecenia, liczenia, korekty, zatwierdzania, audytu i raportu odchyleń. Kod integracji magazynowej istnieje, ale zapis produkcyjny jest domyślnie zablokowany przez `DOTYKACKA_INVENTORY_WRITE_ENABLED` do kontrolowanego testu.
 
+## Które produkty liczymy
+
+Samo ustawienie Dotykački „pomniejszaj magazyn” nie oznacza, że pozycja jest fizycznym towarem do policzenia. Gotowe napoje, takie jak frappe czy latte smakowe, mogą pomniejszać wirtualny stan i schodzić poniżej zera, choć powstają ze składników.
+
+Administrator jawnie zaznacza w panelu „Produkty podlegające inwentaryzacji” wyłącznie fizyczne towary i składniki. Nowe zadanie zawiera tylko zaznaczone produkty. Ustawienie jest zachowywane między synchronizacjami Dotykački.
+
 ## Wniosek
 
 API pozwala ustawić absolutny stan wybranych produktów w magazynie przez:

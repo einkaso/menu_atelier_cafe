@@ -5,6 +5,7 @@ import "./inventory.css";
 
 type Category = { dotykackaId: string; name: string; display: boolean; productCount: number };
 type Employee = { dotykackaId: string; name: string };
+type InventoryProduct = { dotykackaId: string; categoryDotykackaId: string | null; categoryName: string; name: string; inventoryTracked: boolean; stockQuantity: string | null; unit: string | null; imageSourceUrl: string | null };
 type StageSummary = { id: number; title: string; status: string; categoryName: string; assignedEmployeeName: string; dueAt: string | null; createdAt: string; totalItems: number; countedItems: number; differences: number };
 type Anomaly = { productDotykackaId: string; productName: string; occurrences: number; netDifference: string; referenceLoss: string; reasons: Record<string, number> };
 type CountEntry = { id: number; location: string; quantity: string; note: string | null; createdByName: string; updatedAt: string };
@@ -20,6 +21,7 @@ const difference = (item: StageItem) => item.countedQuantity == null ? null : Nu
 export default function InventoryAdminClient() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [stages, setStages] = useState<StageSummary[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -33,9 +35,9 @@ export default function InventoryAdminClient() {
 
   const load = useCallback(async () => {
     const response = await fetch("/api/admin/inventory", { cache: "no-store" });
-    const body = await response.json().catch(() => ({})) as { categories?: Category[]; employees?: Employee[]; stages?: StageSummary[]; anomalies?: Anomaly[]; inventoryWriteEnabled?: boolean; error?: string };
+    const body = await response.json().catch(() => ({})) as { categories?: Category[]; products?: InventoryProduct[]; employees?: Employee[]; stages?: StageSummary[]; anomalies?: Anomaly[]; inventoryWriteEnabled?: boolean; error?: string };
     if (!response.ok) setError(body.error ?? "Nie udało się pobrać inwentaryzacji.");
-    else { setCategories(body.categories ?? []); setEmployees(body.employees ?? []); setStages(body.stages ?? []); setAnomalies(body.anomalies ?? []); setWriteEnabled(Boolean(body.inventoryWriteEnabled)); }
+    else { setCategories(body.categories ?? []); setProducts(body.products ?? []); setEmployees(body.employees ?? []); setStages(body.stages ?? []); setAnomalies(body.anomalies ?? []); setWriteEnabled(Boolean(body.inventoryWriteEnabled)); }
     setLoading(false);
   }, []);
 
@@ -70,6 +72,15 @@ export default function InventoryAdminClient() {
     setBusy("");
   }
 
+  async function setProductTracking(product: InventoryProduct, inventoryTracked: boolean) {
+    setBusy(`tracking:${product.dotykackaId}`); setError(""); setMessage("");
+    const response = await fetch("/api/admin/inventory", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "SET_PRODUCT_TRACKING", productDotykackaId: product.dotykackaId, inventoryTracked }) });
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) setError(body.error ?? "Nie udało się zmienić ustawienia produktu.");
+    else { setMessage(inventoryTracked ? `Dodano do inwentaryzacji: ${product.name}.` : `Wyłączono z inwentaryzacji: ${product.name}.`); await load(); }
+    setBusy("");
+  }
+
   async function stageAction(action: string) {
     if (!detail) return;
     setBusy(action); setError(""); setMessage("");
@@ -99,6 +110,7 @@ export default function InventoryAdminClient() {
     {(message || error) && <div className={error ? "admin-status is-error" : "admin-status"}>{error || message}</div>}
     {!writeEnabled && <div className="inventory-safety"><b>Bezpieczny tryb wdrożeniowy</b><span>Liczenie, korekty i zatwierdzanie działają. Przycisk wysyłki do Dotykački pozostaje zablokowany do kontrolowanego testu.</span></div>}
     <div className="inventory-admin-content">
+      <details className="inventory-product-settings"><summary><span><b>Produkty podlegające inwentaryzacji</b><small>Wybierz fizyczne towary i składniki. Gotowych napojów przygotowywanych ze składników nie zaznaczaj.</small></span><strong>{products.filter((product) => product.inventoryTracked).length} wybranych</strong></summary><div>{Array.from(new Set(products.map((product) => product.categoryName))).sort((a, b) => a.localeCompare(b, "pl")).map((categoryName) => <section key={categoryName}><h3>{categoryName}</h3>{products.filter((product) => product.categoryName === categoryName).map((product) => <label key={product.dotykackaId} className={product.inventoryTracked ? "is-tracked" : ""}><input type="checkbox" checked={product.inventoryTracked} disabled={busy !== ""} onChange={(event) => void setProductTracking(product, event.target.checked)}/>{product.imageSourceUrl ? <img src={product.imageSourceUrl} alt=""/> : <span className="inventory-product-placeholder">{product.name.slice(0, 2)}</span>}<span><b>{product.name}</b><small>Stan: {formatQuantity(product.stockQuantity)} {product.unit || "szt."}</small></span></label>)}</section>)}</div></details>
       <section className="inventory-create"><div><span className="admin-eyebrow">Nowe zlecenie</span><h2>Przypisz jeden etap</h2><p>Etap można zakończyć i zatwierdzić niezależnie od pozostałych kategorii lub miejsc.</p></div><form onSubmit={createStage}><label>Kategoria<select name="categoryDotykackaId" required defaultValue=""><option value="" disabled>Wybierz kategorię</option>{categories.map((category) => <option value={category.dotykackaId} key={category.dotykackaId}>{category.name} · {category.productCount} poz.</option>)}</select></label><label>Osoba licząca<select name="assignedEmployeeDotykackaId" required defaultValue=""><option value="" disabled>Wybierz pracownika</option>{employees.map((employee) => <option value={employee.dotykackaId} key={employee.dotykackaId}>{employee.name}</option>)}</select></label><label>Nazwa etapu<input name="title" maxLength={160} placeholder="np. Wina — lodówka barowa"/></label><label>Miejsca, po przecinku<input name="locations" defaultValue="Lodówka barowa, Zaplecze" maxLength={600}/></label><label>Termin<input name="dueAt" type="datetime-local"/></label><button className="admin-primary" disabled={busy === "create" || loading}>{busy === "create" ? "Tworzę…" : "Przypisz etap"}</button></form></section>
       <section className="inventory-summary"><span><b>{summary.active}</b> etapów w liczeniu</span><span><b>{summary.review}</b> czeka na akceptację</span><span><b>{summary.finished}</b> zakończonych w Dotykačce</span><span><b>{anomalies.length}</b> produktów z odchyleniami</span></section>
       <div className="inventory-admin-layout"><section className="inventory-stage-list"><header><span className="admin-eyebrow">Etapy</span><h2>Historia i zadania</h2></header>{stages.map((stage) => <button className={selectedId === stage.id ? "is-active" : ""} onClick={() => setSelectedId(stage.id)} key={stage.id}><div><b>{stage.title}</b><span>{stage.categoryName} · {stage.assignedEmployeeName}</span><small>{stage.countedItems}/{stage.totalItems} pozycji · {stage.differences} różnic</small></div><em data-status={stage.status}>{statusLabels[stage.status] ?? stage.status}</em></button>)}{!stages.length && <p className="admin-muted">Nie utworzono jeszcze żadnego etapu.</p>}</section>

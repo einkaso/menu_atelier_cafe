@@ -12,7 +12,17 @@ export async function GET() {
   const db = getDb();
   const [categoryRows, catalogProducts, employees, stages, reportableStages, stageItems] = await Promise.all([
     db.select().from(inventoryCatalogCategories).where(eq(inventoryCatalogCategories.deleted, false)).orderBy(asc(inventoryCatalogCategories.sortOrder), asc(inventoryCatalogCategories.name)),
-    db.select({ categoryId: inventoryCatalogProducts.categoryDotykackaId, stockDeduct: inventoryCatalogProducts.stockDeduct, stockQuantity: inventoryCatalogProducts.stockQuantity, deleted: inventoryCatalogProducts.deleted }).from(inventoryCatalogProducts),
+    db.select({
+      dotykackaId: inventoryCatalogProducts.dotykackaId,
+      categoryId: inventoryCatalogProducts.categoryDotykackaId,
+      name: inventoryCatalogProducts.name,
+      stockDeduct: inventoryCatalogProducts.stockDeduct,
+      inventoryTracked: inventoryCatalogProducts.inventoryTracked,
+      stockQuantity: inventoryCatalogProducts.stockQuantity,
+      unit: inventoryCatalogProducts.unit,
+      imageSourceUrl: inventoryCatalogProducts.imageSourceUrl,
+      deleted: inventoryCatalogProducts.deleted,
+    }).from(inventoryCatalogProducts).orderBy(asc(inventoryCatalogProducts.name)),
     db.select({ dotykackaId: waiterEmployees.dotykackaId, name: waiterEmployees.name }).from(waiterEmployees).where(and(eq(waiterEmployees.enabled, true), eq(waiterEmployees.deleted, false))).orderBy(asc(waiterEmployees.name)),
     db.select().from(inventoryStages).orderBy(desc(inventoryStages.createdAt)).limit(100),
     db.select({ id: inventoryStages.id }).from(inventoryStages).where(inArray(inventoryStages.status, ["SUBMITTED", "APPROVED", "SENDING", "PROCESSING", "FINISHED", "FAILED", "UNKNOWN"])),
@@ -29,7 +39,7 @@ export async function GET() {
   ]);
   const productCountByCategory = new Map<string, number>();
   for (const product of catalogProducts) {
-    if (!product.categoryId || product.deleted || !product.stockDeduct || product.stockQuantity == null) continue;
+    if (!product.categoryId || product.deleted || !product.inventoryTracked || product.stockQuantity == null) continue;
     productCountByCategory.set(product.categoryId, (productCountByCategory.get(product.categoryId) ?? 0) + 1);
   }
   const itemStatsByStage = new Map<number, { counted: number; differences: number; total: number }>();
@@ -57,6 +67,16 @@ export async function GET() {
   }
   return Response.json({
     categories: categoryRows.map((category) => ({ ...category, productCount: productCountByCategory.get(category.dotykackaId) ?? 0 })).filter((category) => category.productCount > 0),
+    products: catalogProducts.filter((product) => !product.deleted && product.stockDeduct && product.stockQuantity != null).map((product) => ({
+      dotykackaId: product.dotykackaId,
+      categoryDotykackaId: product.categoryId,
+      categoryName: categoryRows.find((category) => category.dotykackaId === product.categoryId)?.name ?? "Bez kategorii",
+      name: product.name,
+      inventoryTracked: product.inventoryTracked,
+      stockQuantity: product.stockQuantity,
+      unit: product.unit,
+      imageSourceUrl: product.imageSourceUrl,
+    })),
     employees,
     stages: stages.map((stage) => ({ ...stage, totalItems: stageTotals.get(stage.id) ?? 0, countedItems: itemStatsByStage.get(stage.id)?.counted ?? 0, differences: itemStatsByStage.get(stage.id)?.differences ?? 0 })),
     anomalies: [...anomalyByProduct.values()].sort((left, right) => right.occurrences - left.occurrences || right.referenceLoss - left.referenceLoss).slice(0, 20).map((item) => ({ ...item, netDifference: millisToQuantity(item.netDifferenceMillis), referenceLoss: item.referenceLoss.toFixed(2) })),
@@ -81,7 +101,7 @@ export async function POST(request: Request) {
   const [[category], [employee], products, localProducts] = await Promise.all([
     db.select().from(inventoryCatalogCategories).where(and(eq(inventoryCatalogCategories.dotykackaId, categoryDotykackaId), eq(inventoryCatalogCategories.deleted, false))).limit(1),
     db.select({ dotykackaId: waiterEmployees.dotykackaId, name: waiterEmployees.name }).from(waiterEmployees).where(and(eq(waiterEmployees.dotykackaId, assignedEmployeeDotykackaId), eq(waiterEmployees.enabled, true), eq(waiterEmployees.deleted, false))).limit(1),
-    db.select().from(inventoryCatalogProducts).where(and(eq(inventoryCatalogProducts.categoryDotykackaId, categoryDotykackaId), eq(inventoryCatalogProducts.deleted, false), eq(inventoryCatalogProducts.stockDeduct, true), isNotNull(inventoryCatalogProducts.stockQuantity))).orderBy(asc(inventoryCatalogProducts.name)),
+    db.select().from(inventoryCatalogProducts).where(and(eq(inventoryCatalogProducts.categoryDotykackaId, categoryDotykackaId), eq(inventoryCatalogProducts.deleted, false), eq(inventoryCatalogProducts.inventoryTracked, true), isNotNull(inventoryCatalogProducts.stockQuantity))).orderBy(asc(inventoryCatalogProducts.name)),
     db.select({ id: menuProducts.id, dotykackaId: menuProducts.dotykackaId, imagePath: productContent.imagePath }).from(menuProducts).leftJoin(productContent, eq(menuProducts.id, productContent.productId)),
   ]);
   if (!category) return Response.json({ error: "Kategoria nie istnieje w katalogu magazynowym." }, { status: 404 });
@@ -125,4 +145,16 @@ export async function POST(request: Request) {
     return [stage];
   });
   return Response.json({ ok: true, stageId: created.id }, { status: 201 });
+}
+
+export async function PATCH(request: Request) {
+  const actor = await currentAdmin();
+  if (!actor) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => ({})) as { action?: unknown; productDotykackaId?: unknown; inventoryTracked?: unknown };
+  if (body.action !== "SET_PRODUCT_TRACKING" || typeof body.productDotykackaId !== "string" || typeof body.inventoryTracked !== "boolean") {
+    return Response.json({ error: "Nieprawidłowa zmiana produktu magazynowego." }, { status: 400 });
+  }
+  const [updated] = await getDb().update(inventoryCatalogProducts).set({ inventoryTracked: body.inventoryTracked }).where(eq(inventoryCatalogProducts.dotykackaId, body.productDotykackaId)).returning({ id: inventoryCatalogProducts.id });
+  if (!updated) return Response.json({ error: "Produkt nie istnieje w katalogu magazynowym." }, { status: 404 });
+  return Response.json({ ok: true });
 }

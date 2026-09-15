@@ -123,7 +123,8 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(schema, /inventoryCountEntries = pgTable\("inventory_count_entries"/);
   assert.match(migration, /CREATE TABLE "inventory_exports"/);
   assert.match(sync, /await tx\.delete\(inventoryCatalogProducts\)/);
-  assert.match(adminRoute, /eq\(inventoryCatalogProducts\.stockDeduct, true\)/);
+  assert.match(adminRoute, /eq\(inventoryCatalogProducts\.inventoryTracked, true\)/);
+  assert.match(adminRoute, /SET_PRODUCT_TRACKING/);
   assert.match(adminStageRoute, /process\.env\.DOTYKACKA_INVENTORY_WRITE_ENABLED !== "true"/);
   assert.ok(adminStageRoute.indexOf("DOTYKACKA_INVENTORY_WRITE_ENABLED") < adminStageRoute.indexOf("createStockTaking(payload)"));
   assert.match(adminStageRoute, /stage\.status !== "APPROVED"/);
