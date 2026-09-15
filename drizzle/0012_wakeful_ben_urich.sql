@@ -1,0 +1,1 @@
+ALTER TABLE "menu_products" ADD COLUMN "supplier_detected_at" timestamp with time zone;

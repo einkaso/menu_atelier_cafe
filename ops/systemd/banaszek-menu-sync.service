@@ -1,0 +1,14 @@
+[Unit]
+Description=Synchronizacja Dotykacki i automatyczne tlumaczenie menu
+After=network-online.target banaszek-menu.service
+Requires=banaszek-menu.service
+
+[Service]
+Type=oneshot
+User=menuapp
+Group=menuapp
+WorkingDirectory=/opt/banaszek-menu
+EnvironmentFile=/etc/banaszek-menu/menu.env
+ExecStart=/usr/local/bin/node /opt/banaszek-menu/scripts/run-automatic-sync.mjs
+NoNewPrivileges=true
+PrivateTmp=true

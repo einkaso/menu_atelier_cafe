@@ -1,0 +1,61 @@
+# Dependencies and package-manager state
+/node_modules/
+/.pnp
+.pnp.*
+/.pnpm-store/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Local environments and credentials. The public template is intentionally kept.
+.env*
+!.env_example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials*.json
+service-account*.json
+/.openai/hosting.json
+
+# Databases, dumps, backups, uploads, and logs
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.bak
+*.backup
+*.log
+/backups/
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+# Tests, builds, caches, and local runtimes
+/coverage/
+/.next/
+/out/
+/dist/
+/.turbo/
+/.cache/
+/.wrangler/
+/.sites-runtime/
+/outputs/
+/work/
+/tmp/
+*.tsbuildinfo
+next-env.d.ts
+
+# Hosting/editor metadata
+/.vercel/
+.DS_Store
+Thumbs.db
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*

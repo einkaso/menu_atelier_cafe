@@ -1,0 +1,1 @@
+ALTER TABLE "product_content" ADD COLUMN "content_approved" boolean DEFAULT false NOT NULL;

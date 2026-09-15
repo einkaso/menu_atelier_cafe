@@ -1,0 +1,1 @@
+ALTER TABLE "menu_categories" ADD COLUMN "show_catalog_codes" boolean;

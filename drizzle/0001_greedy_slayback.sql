@@ -1,0 +1,1 @@
+ALTER TABLE "menu_categories" ADD COLUMN "menu_sort_order" integer;

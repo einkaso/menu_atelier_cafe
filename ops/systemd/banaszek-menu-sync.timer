@@ -1,0 +1,12 @@
+[Unit]
+Description=Cykliczna synchronizacja i tlumaczenie menu
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=10s
+Persistent=true
+Unit=banaszek-menu-sync.service
+
+[Install]
+WantedBy=timers.target

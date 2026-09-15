@@ -1,0 +1,67 @@
+.cash-day-ledger {
+  margin: 0 clamp(1rem, 3vw, 2.5rem) 1rem;
+  border: 1px solid var(--admin-line);
+  background: #fff;
+}
+
+.cash-day-ledger-list > article { border-bottom: 1px solid var(--admin-line); }
+.cash-day-ledger-list > article:last-child { border-bottom: 0; }
+.cash-day-ledger-list article > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .9rem 1.2rem;
+  background: #f8faf9;
+}
+
+.cash-day-ledger-list header span { color: #718286; font-size: .62rem; }
+.cash-day-ledger-list h3 { margin: .2rem 0 0; font: 400 1.1rem Georgia, serif; }
+.cash-day-ledger-list em {
+  padding: .35rem .55rem;
+  background: #fff0e4;
+  color: #9a4e27;
+  font-size: .58rem;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.cash-day-ledger-list em[data-status="CLOSED"] { background: #e1f2e9; color: #247151; }
+.cash-day-ledger-flow {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  padding: 1rem 1.2rem;
+}
+.cash-day-ledger-flow > span {
+  position: relative;
+  display: grid;
+  min-width: 190px;
+  gap: .28rem;
+  padding: .75rem 1rem;
+  border: 1px solid var(--admin-line);
+  border-right: 0;
+}
+.cash-day-ledger-flow > span:last-child { border-right: 1px solid var(--admin-line); }
+.cash-day-ledger-flow > span:not(:last-child)::after {
+  position: absolute;
+  z-index: 1;
+  right: -7px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-top: 1px solid var(--admin-line);
+  border-right: 1px solid var(--admin-line);
+  background: #fff;
+  content: "";
+  transform: translateY(-50%) rotate(45deg);
+}
+.cash-day-ledger-flow small { color: #718286; font-size: .58rem; text-transform: uppercase; }
+.cash-day-ledger-flow b { font: 400 1.05rem Georgia, serif; }
+.cash-day-ledger-flow i { color: #718286; font-size: .58rem; font-style: normal; }
+.cash-day-ledger-flow .has-difference { background: #fff0ed; }
+.cash-day-ledger-list article > p { margin: 0; padding: 0 1.2rem 1rem; color: #873f39; font-size: .7rem; }
+
+@media (max-width: 700px) {
+  .cash-day-ledger { margin: 0 .7rem 1rem; }
+}

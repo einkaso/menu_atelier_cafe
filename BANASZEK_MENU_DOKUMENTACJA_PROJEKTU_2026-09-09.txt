@@ -1,0 +1,406 @@
+MARTA BANASZEK ATELIER-CAFÉ — DOKUMENTACJA PROJEKTU MENU
+Aktualizacja: 15 września 2026
+
+1. CEL I ADRESY
+
+Publiczne menu: https://menu.martabanaszek.pl
+Panel administracyjny: https://menu.martabanaszek.pl/admin
+Serwer aplikacji: /opt/banaszek-menu
+Konfiguracja/sekrety: /etc/banaszek-menu/menu.env
+Zdjęcia produktów: /var/lib/banaszek-menu/uploads/products
+Kopie zapasowe: /var/backups/banaszek-menu
+Usługa: banaszek-menu.service, port 8080
+
+2. ARCHITEKTURA
+
+Dotykačka jest źródłem cen, stanów, widoczności, kategorii, tagów, PLU, EAN,
+alergenów, sprzedaży i połączeń z dodatkami. PostgreSQL przechowuje warstwę
+prezentacyjną: zaakceptowane opisy, tłumaczenia, zdjęcia, dodatkowe cechy,
+układ kategorii i produktów, kolejność promocji oraz dane win. Synchronizacja
+nie może nadpisywać ręcznie przygotowanych treści.
+
+3. PUBLIKACJA
+
+- Zwykły produkt publiczny musi mieć tag MENU. Produkt półkowy używa zamiast
+  niego samodzielnego tagu PÓŁKA i trafia wyłącznie do karty „Z PÓŁKI”.
+  W obu przypadkach produkt musi być aktywny i widoczny w Dotykačce.
+- Ręczne ukrycie w panelu ma pierwszeństwo.
+- Przy blokadzie sprzedaży poniżej stanu produkt znika przy stanie <= 0.
+- Kategoria bez żadnego widocznego produktu MENU nie pojawia się w menu.
+- Tag PROMO wyróżnia produkt; liczba promowanych pozycji jest dowolna.
+- Kolejność PROMO ustawia się w zakładce Polecane.
+
+3A. SŁOWNIK TAGÓW ROZPOZNAWANYCH PRZEZ MENU
+
+- MENU — podstawowy i wymagany warunek publikacji produktu w cyfrowej karcie.
+- PROMO — wyróżnienie na stronie powitalnej i na początku zwykłej kategorii;
+  działa tylko razem z MENU.
+- LATO — włącza produkt do oferty letniej, gdy w panelu wybrano sezon Lato.
+- JESIEŃ — włącza produkt do oferty jesiennej, gdy wybrano sezon Jesień.
+- ZIMA — włącza produkt do oferty zimowej, gdy wybrano sezon Zima.
+- WIOSNA — włącza produkt do oferty wiosennej, gdy wybrano sezon Wiosna.
+- SPECJAL — włącza produkt do aktywnej, nazwanej w panelu oferty specjalnej.
+- KIELISZEK — oznacza wariant wina na kieliszki. Rozpoznawane są również
+  aliasy NA KIELISZKI i BY-GLASS. Pozycja wymaga MENU, słowa „kieliszek”
+  w nazwie oraz wspólnego kodu WINxxx z widoczną butelką.
+- ZIARNO — kieruje paczkowaną kawę do sekcji „Zabierz naszą kawę do domu”;
+  działa tylko razem z MENU.
+
+Wielkość liter w tagach nie ma znaczenia. Tagi sezonowe, PROMO, SPECJAL,
+KIELISZEK i ZIARNO nie zastępują tagu MENU. BAR, 0 oraz tagi Koncesja A,
+Koncesja B i Koncesja C nie sterują cyfrowym menu. Oznaczenie 0% jest ustalane
+na podstawie kodu koncesyjnego 0 w PLU albo nazwy, stylu lub opisowego tagu. Kody
+koncesyjne A/B/C/0 są odczytywane z PLU, a nie z tagów.
+
+4. TREŚCI I TŁUMACZENIA
+
+Opis z Dotykački jest tylko propozycją w panelu. Nie jest automatycznie
+publikowany. Administrator przyjmuje propozycję lub pisze własny opis. Dla win
+i piw panel najpierw przeszukuje stronę rozpoznanego dostawcy, a produkt z EAN
+sprawdza także w bezpłatnym katalogu Open Food Facts. EAN i kod dostawcy pomagają
+w identyfikacji, ale nie są wymagane. Gdy źródła automatyczne nie wystarczą,
+administrator wkleja adres właściwej strony produktu, a panel odczytuje z niej
+dane i zdjęcia. Parser rozpoznaje dane strukturalne produktu, klasyczne tabele,
+listy definicyjne etykieta–wartość oraz osadzone modele sklepów PrestaShop.
+Z pełnego opisu wydziela opis smakowy, a warianty rozmiarowe tego samego zdjęcia
+scala w jeden wybór. Wszystkie znalezione dane, adresy źródłowe i zdjęcia
+wymagają akceptacji; przy wielu zdjęciach administrator wybiera jedno przed
+zastosowaniem propozycji. Wyszukiwanie ręczne pozostaje dostępne.
+Jeżeli opis lub inne pole opisowe pochodzi ze źródła anglojęzycznego, system
+rozpoznaje ten język i przed zapisaniem propozycji automatycznie tłumaczy treść
+na polski przez skonfigurowane DeepL. Administrator ocenia i akceptuje już
+polską propozycję. Nazwy własne, szczepy, wartości liczbowe, zdjęcia i adresy
+źródeł nie są tłumaczone.
+Przycisk wyszukiwania ręcznego otwiera centralne okno wewnątrz panelu i wysyła
+zapytanie według oczyszczonej nazwy wina lub piwa. Nie otwiera pełnoekranowej
+karty Safari ani nie opuszcza edytowanego produktu. Administrator wybiera wynik,
+a jego adres jest od razu analizowany i zapisany jako propozycja do akceptacji.
+Jeśli sklep blokuje bezpośredni odczyt przez Cloudflare, system automatycznie
+korzysta z publicznie zindeksowanego opisu i zdjęcia dokładnie tej samej strony.
+Jeśli sklep chroni stronę przed automatycznym odczytem (np. Cloudflare i ekran
+„Just a moment”), administrator kopiuje z otwartej strony opis oraz tabelę cech
+i wkleja je w pole „Wklejona treść strony”. System rozpoznaje pary
+etykieta–wartość, opis i profil sensoryczny, po czym tworzy zwykłą propozycję
+do akceptacji. Jest to bezpłatny tryb awaryjny i nie próbuje omijać zabezpieczeń
+sklepu.
+Strefa wyszukiwania jest oznaczona bursztynowym kolorem jako robocza i
+niepublikowana. Po zaakceptowaniu propozycji formularz odświeża się, przenosi
+dane do osobnej zielono-granatowej strefy publikacyjnej i przewija do niej
+widok. Pola tej strefy odpowiadają bezpośrednio zawartości publicznego menu.
+Po zapisie polska nazwa i zaakceptowany polski opis są automatycznie
+tłumaczone na angielski i zapisywane w bazie. Tłumaczenie wymaga zmiennej
+DEEPL_API_KEY w /etc/banaszek-menu/menu.env. Brakujące tłumaczenia pokazuje
+zakładka Kontrola karty. Nazwy własne mogą później zostać poprawione ręcznie.
+Synchronizacja i kolejka tłumaczeń uruchamiają się co 2 minuty przez timer
+banaszek-menu-sync.timer. Tłumaczone są tylko nowe lub zmienione treści, a
+nieudana próba nie blokuje aktualizacji cen i stanów oraz jest ponawiana.
+Nazwy 14 alergenów korzystają ze stałego, zatwierdzonego słownika PL/EN.
+
+5. ZDJĘCIA
+
+Zdjęcie można pobrać z adresu internetowego albo wysłać z urządzenia osoby
+administrującej. Plik wejściowy może mieć maksymalnie 15 MB; przeglądarka
+zmniejsza go do maksymalnie 1600 px i około 2,5 MB. Publiczne pliki są
+obsługiwane przez /api/product-images. Podczas budowania nowej wersji katalog
+public/uploads musi być zwykłym katalogiem wewnątrz projektu, nie dowiązaniem
+poza katalog projektu — inaczej Turbopack przerwie kompilację.
+
+6. KAWA
+
+Połączenia / dodatki w Dotykačce łączą kawę z kategorią „DODATKI DO KAWY”.
+Synchronizacja pobiera wyłącznie produkty z tej grupy i ich aktualne ceny do
+sekcji „Dopasuj swoją kawę”; grupa „KAWY” nie jest traktowana jako dodatki.
+Nie wolno prowadzić cen dodatków ręcznie w aplikacji. Kawę paczkowaną oznacza
+się tagami MENU i ZIARNO; trafia na koniec zakładki Kawy do sekcji „Zabierz
+naszą kawę do domu”.
+Chemex, AeroPress i Drip są prezentowane w podgrupie „Kawy alternatywne”.
+Powiązane z nimi opcje z grupy „ZIARNA DO KAW ALTERNATYWNYCH” są pokazywane
+raz dla całej podgrupy jako wspólny wybór ziarna. Nazwy, profile smakowe,
+opisy i tłumaczenia ziaren są utrzymywane automatycznie.
+
+7. WINA NA KIELISZKI
+
+Butelka i kieliszek są osobnymi produktami z osobnymi cenami w Dotykačce.
+Mają wspólny kod WINxxx w PLU. Pozycja kieliszkowa ma tag KIELISZEK i słowo
+„kieliszek” w nazwie. Nie tworzy osobnej publicznej karty: cena i ikona
+dołączają do karty butelki. EAN pomaga w identyfikacji i wyszukiwaniu, ale nie
+jest wymagany. Bez wspólnego WINxxx pozycja kieliszkowa jest ukryta.
+Po stronie rozpoznanego dostawcy wyszukiwanie pozostaje pierwszym krokiem.
+W wynikach internetowych polskie domeny i polskojęzyczne karty produktów są
+zawsze ustawiane przed źródłami zagranicznymi; te są używane dopiero dalej,
+gdy polskie strony nie dostarczają wystarczających informacji.
+Podczas pobierania informacji z podanej strony system w pierwszej kolejności
+czyta tabelę parametrów i dane strukturalne właściwego produktu. Treści stopki,
+poradników oraz polecanych produktów nie mogą nadpisywać jego kraju, regionu,
+szczepu, stylu ani walorów smakowych. Wynik pozostaje propozycją do akceptacji.
+Dotknięcie dowolnej publicznej karty wina otwiera centralny podgląd ze zdjęciem,
+opisem, krajem, regionem, szczepem, rodzajem, smakiem, aromatami i osobnymi
+cenami kieliszka oraz butelki. Zamknięcie podglądu wraca do listy win.
+Ten sam podgląd automatycznie powtarza aktualne oznaczenia wynikające z reguł:
+„Wybór naszych gości”, „Polecamy”, „Na kieliszki”, „Wegańskie” i „0%”.
+
+8. INNE REGUŁY
+
+- Strefa 0% jest przekrojem dostępnych produktów bezalkoholowych.
+- Trzy dostępne wina z najwyższą sprzedażą z 30 dni dostają „Wybór naszych gości”.
+- Wina są wyświetlane po jednym w wierszu.
+- „Na słono” proponuje podgrupy Sałaty, Kanapki i Talerzyki.
+- Pola produktu zależą od kategorii (np. kolor wina, alkohol piwa, parzenie herbaty).
+- Pojemność butelki może pozostać daną roboczą w panelu, ale nie jest publikowana
+  w menu ani w podglądzie szczegółów produktu.
+- Kontrola karty bada aktualnie publikowane produkty: zdjęcia, opisy,
+  tłumaczenia, kolor win, alkohol piw oraz identyfikatory kieliszków.
+- Lista produktów używa czterech kropek statusu: zielona oznacza widoczny produkt
+  ręcznie zatwierdzony, czerwona — widoczny produkt wymagający przeglądu treści,
+  szara — ukrycie wynikające z Dotykački lub stanu, a pomarańczowa — ręczne
+  ukrycie tylko w cyfrowym menu. Kliknięcie „Zapisz zmiany” jest jednocześnie
+  ręcznym zatwierdzeniem produktu i zmienia czerwoną kropkę na zieloną. Nie ma
+  dodatkowego pola zatwierdzenia. Status pozostaje zapisany po synchronizacji
+  z Dotykačką.
+- Opisy kolorowych kropek nad listą produktów są jednocześnie drugim filtrem.
+  Domyślnie aktywne są „wszystkie”; kliknięcie wybranego statusu zawęża wyniki
+  uzyskane wcześniej przez wyszukiwarkę, kategorię i filtr widoczności. Przy
+  każdym statusie panel pokazuje liczbę pasujących produktów.
+- Panel administracyjny sprawdza wersję aplikacji automatycznie tak samo jak
+  tablety, ale po aktualizacji wraca zawsze do `/admin`, a nie do publicznego
+  menu. Jeśli formularz ma niezapisane zmiany, aktualizacja czeka na zapis, aby
+  nie utracić edytowanego tekstu.
+- Pasek zapisu produktu pokazuje trzy jednoznaczne stany: zapisane, niezapisane
+  zmiany oraz zapisywanie. Cała powierzchnia przycisku „Zapisz zmiany” jest
+  aktywna; pasek pozostaje wewnątrz formularza i nie jest przesuwany poza jego
+  obszar klikalny.
+- Stopka „Poproś obsługę” została usunięta, ponieważ nie miała mechanizmu odbioru.
+
+8A. OFERTY SEZONOWE I SPECJALNE
+
+Panel ma osobną zakładkę „Oferty czasowe”. Oferta sezonowa jest włączana przez
+wybór LATO, JESIEŃ, ZIMA albo WIOSNA; brak wyboru całkowicie ją wyłącza. Trafiają
+do niej wyłącznie produkty spełniające wszystkie zwykłe warunki publikacji,
+mające tag MENU i tag wybranego sezonu. Pusta oferta nie jest publikowana.
+Oferta otwiera się jako centralne okno, które można schować. Stały przycisk przy
+lewej krawędzi ekranu pozwala gościowi otworzyć ją ponownie w dowolnej chwili.
+Przy każdej pozycji mniejszym tekstem wyświetlana jest jej stała kategoria,
+z której produkt pochodzi.
+
+Oferta specjalna korzysta z tagu SPECJAL. Administrator osobno ją włącza i
+nadaje jej nazwę, np. „Wybór naszego artysty”; nazwa angielska jest tworzona
+automatycznie przez DeepL i zapisywana. Produkty widoczne w kartach sezonowych
+i specjalnych nadal pozostają bez zmian w swoich zwykłych kategoriach.
+Zmiana ustawień oferty trafia na tablet przy automatycznym odczycie menu,
+a zmiana tagów po najbliższej synchronizacji z Dotykačką.
+
+Każda kompilacja wpisuje swój identyfikator bezpośrednio do kodu aplikacji.
+Tablet porównuje własny identyfikator z serwerem natychmiast po uruchomieniu,
+po powrocie z tła, odzyskaniu internetu i następnie co 15 sekund. Dodatkową
+kontrolę wykonuje przy każdym cyklicznym pobraniu danych menu. Service worker
+jest generowany z identyfikatorem bieżącej kompilacji, więc jego treść zmienia
+się automatycznie przy każdym wdrożeniu i jest sprawdzana co 30 sekund. Po wdrożeniu
+nowej wersji sam przeładowuje interfejs, bez zamykania aplikacji, ręcznego
+odświeżania ani dotykania urządzenia. Mechanizm obejmuje cały interfejs, m.in.
+nowe zakładki i zmiany tekstów, a nie tylko dane produktów.
+Adres główny `/` uruchamia publiczne menu. Adres `/menu` jest stałym wejściem
+do konfiguratora i kieruje do panelu administracyjnego `/admin`.
+
+8B. WYDARZENIA
+
+Zakładka Wydarzenia pobiera automatycznie wyłącznie nadchodzące wydarzenia z
+kalendarza martabanaszek.pl. Dotknięcie wydarzenia otwiera estetyczny podgląd
+opisu i bilet informacyjny bez procesu płatności online. Komunikat „Zamów bilet
+do stolika” kieruje gościa do obsługi. Lista, szczegóły i tłumaczenia EN są
+odświeżane systemowo bez konieczności dotykania tabletu.
+
+8C. KARTA MB ATELIER CAFÉ
+
+Przycisk „Karta MB” w czarnym nagłówku, bezpośrednio za „Wydarzeniami”, otwiera własny, dopasowany
+graficznie panel rejestracji fizycznej karty. Gość widzi wyłącznie treść
+rejestracji — bez nagłówka logowania i bez stopki dostawcy Loyalty Studio.
+Bezpośredni iframe nie jest używany, ponieważ serwis club.mbstudio.online
+blokuje osadzanie. Formularz menu pobiera jednorazowy token rejestracyjny i
+przekazuje dane do istniejącego systemu programu kart; nie zapisuje ich w bazie
+menu. Rejestracja wymaga imienia, nazwiska, e-maila, telefonu, kodu w formacie
+MB-numer oraz zgody marketingowej. Interfejs i komunikaty działają po polsku i
+angielsku. Układ przewiduje miejsce na przyszły opis korzyści programu nad
+panelem rejestracji.
+
+8D. Z PÓŁKI
+
+Dolny pasek menu nie powiela przycisku „Wydarzenia”, ponieważ wydarzenia są
+dostępne z czarnego nagłówka. Ostatnie miejsce w pasku zajmuje automatyczna
+zakładka „Z PÓŁKI”. Produkt trafia do niej po dodaniu w Dotykačce samego tagu
+PÓŁKA, bez tagu MENU, i po spełnieniu zwykłych warunków widoczności i dostępności.
+Wewnątrz jednej zakładki produkty są grupowane pod nagłówkami odpowiadającymi
+ich kategoriom w Dotykačce, np. „Tłocznia Karkonoska”. Kategorie zawierające
+wyłącznie produkty półkowe nie tworzą osobnych zakładek głównych. Jeśli nie ma
+żadnego dostępnego produktu z tagiem PÓŁKA, zakładka „Z PÓŁKI” znika.
+Tagi sumują swoje działanie. PÓŁKA bez MENU publikuje produkt wyłącznie w karcie
+„Z PÓŁKI”. PÓŁKA razem z MENU dodaje tę kartę jako kolejne miejsce wyświetlania,
+nie usuwając produktu z jego zwykłej kategorii ani z sekcji wynikających z innych
+tagów. Przykład: MENU + ZIARNO + PÓŁKA pokazuje kawę jednocześnie w sekcji
+„Zabierz naszą kawę do domu” oraz w karcie „Z PÓŁKI”.
+Produkty półkowe są publikowane tylko przy stanie magazynowym większym od zera;
+zerowy, ujemny albo niepobrany stan ukrywa produkt niezależnie od ustawienia
+sprzedaży poniżej stanu. Kliknięcie pozycji otwiera centralny podgląd ze
+zdjęciem, opisem, ceną, kategorią źródłową i dodatkowymi informacjami. Późniejsze
+uzupełnienie zdjęcia lub opisu w panelu pojawia się w tym podglądzie automatycznie.
+Lista pokazuje najwyżej trzy linie opisu i nie rozwija się od długiej treści ani
+pola „Cechy”. Pełny opis i cechy są dostępne po kliknięciu w symetrycznym,
+dwukolumnowym oknie szczegółów. DeepL tłumaczy i zapisuje nie tylko opis główny,
+ale również wartości wszystkich dodatkowych cech; wersja angielska podglądu nie
+powiela polskich treści, gdy ich tłumaczenie jest już dostępne.
+W panelu „Zakładki i kody PLU” znajduje się osobna kolejność grup „Z PÓŁKI”.
+Lista zawiera wyłącznie kategorie mające co najmniej jeden produkt z tagiem
+PÓŁKA, także gdy produkt chwilowo czeka na dodatni stan. Panel pokazuje osobno
+liczbę pozycji oznaczonych i dostępnych. Jej ustawienie nie zmienia kolejności głównych zakładek, a nowa
+kategoria półkowa, której jeszcze ręcznie nie ustawiono, pojawia się automatycznie.
+Wszystkie okna podglądu korzystają z jednego, geometrycznie wycentrowanego
+przycisku zamykania, dzięki czemu znak pozostaje na środku także na iPadzie.
+Import zdjęcia z linku obsługuje JPG, PNG, WebP i AVIF, rozpoznaje format z
+zawartości pliku, używa nagłówków zgodnych ze zwykłą przeglądarką i pobiera
+własną kopię do magazynu aplikacji. Obok adresu działa osobny przycisk „Pobierz i zapisz
+zdjęcie”, który zapisuje plik natychmiast, bez zależności od pozostałych pól,
+tłumaczeń i pełnego zapisu produktu. Po powodzeniu panel ponownie pobiera rekord
+i pokazuje lokalny podgląd; dla wariantów wina ze wspólnym kodem WIN kopia jest
+automatycznie współdzielona także z pozycją kieliszkową. Jeżeli adres źródła
+był już wpisany, ale lokalna kopia nie powstała, kolejny zapis ponawia pobranie.
+Panel uznaje zapis opisu za zakończony dopiero po otrzymaniu z bazy tej samej
+treści, którą wysłano. Formularz pokazuje czas ostatniego trwałego zapisu, a
+synchronizacja Dotykački nie aktualizuje ani nie czyści opisów publikacyjnych.
+
+8E. WIDOKI PRODUKTÓW I FILTRY
+
+Wina, piwa i whisky mają w menu gościa filtry oparte na zaakceptowanych danych
+produktu. Wina można zawężać według koloru, smaku, musowania, podania, cech oraz
+kraju. Filtr „Na kieliszki” wynika z osobnej, dostępnej pozycji sprzedażowej
+w Dotykačce oznaczonej właściwą nazwą, tagiem KIELISZEK i wspólnym kodem WIN.
+Whisky i brandy można filtrować według rodzaju, stylu, profilu smaku, pochodzenia,
+wieku oraz podania 50 ml / butelka. Piwa można filtrować według stylu, zawartości
+alkoholu, pochodzenia i podania. Jako „Z nalewaka” rozpoznawane są dokładnie
+pozycje sprzedażowe Bosman mały/duży oraz Guinness mały/duży; pozostałe piwa,
+w tym Guinness 0% w puszce, są prezentowane jako butelkowe.
+
+Każda karta wina, piwa, whisky, herbaty i ciasta otwiera szczegółowy podgląd.
+Lista pokazuje równy, krótki fragment opisu zakończony wielokropkiem przez układ
+karty, a pełna treść znajduje się w podglądzie. Sekcja ciast nie ma wspólnego
+banera dostawcy: składa się z równych, apetycznych kart, dzięki czemu produkty
+różnych pracowni mają takie same miejsce w menu. Zdjęcie jest zawsze pobierane z
+rekordu konkretnego produktu — aplikacja nigdy nie używa zdjęcia innego ciasta
+jako zastępstwa. Brak fotografii oznacza neutralne pole Atelier. Ciasta od
+dostawcy Capuccino Cafe mają subtelne oznaczenie logotypem na własnej karcie i
+zachowują przycisk alergenów; kliknięcie całej karty otwiera ten sam rodzaj okna
+szczegółów co wina. Sekcja herbat promuje wybór
+Harney & Sons, a podgląd herbaty pokazuje zdjęcie naparu oraz opis. Opisy herbat
+pochodzą z aktualnej propozycji Dotykački i zaakceptowanej warstwy treści.
+
+8F. STREFA KELNERA, ZAMÓWIENIA I ROZLICZENIA
+
+Strefa `/kelner` jest dostępna po PIN-ie przypisanym do konkretnego pracownika.
+Katalog, dostępność i ceny pochodzą z bieżących danych Dotykački. Po wybraniu
+kategorii wina, piwa albo whisky kelner otrzymuje te same filtry wyszukiwania co
+gość. W szczególności może od razu znaleźć białe wino dostępne na kieliszki,
+piwo z nalewaka albo whisky sprzedawaną na porcje. Lista kelnera zachowuje osobne
+pozycje sprzedażowe potrzebne do prawidłowego wysłania zamówienia do POS i przy
+każdej z nich pokazuje sposób podania.
+
+Zamówienie zapisuje stolik, liczbę gości, wybrane warianty i dodatki oraz uwagi.
+Rozliczenie kasowe jest dziennikiem czynności powiązanych z pracownikiem
+potwierdzonym PIN-em. Przy każdym otwarciu, przekazaniu zmiany i zamknięciu
+system pobiera z Dotykački przychód gotówkowy oraz kartowy na dokładny moment
+wykonywania rozliczenia i zapisuje migawkę wraz z osobą oraz czasem czynności.
+
+Na otwarciu wyświetlana jest kwota pozostawiona poprzedniego dnia, ale pracownik
+musi fizycznie przeliczyć kasę i wpisać rzeczywisty stan. Przy przekazaniu zmiany
+wpisuje się pełną kwotę gotówki znajdującą się wtedy w kasie, a nie samą nadwyżkę.
+Kontrola porównuje ją z saldem otwarcia i gotówką zarejestrowaną dotąd przez POS.
+Przy zamknięciu również wpisuje się pełny stan kasy; oczekiwany stan dnia to
+potwierdzone otwarcie plus cały dzienny przychód gotówkowy, z uwzględnieniem
+zatwierdzonych napiwków, wydatków i korekt. Napiwki są na górze formularza,
+a zatwierdzone kwoty do wypłaty są widoczne przy przycisku „Rozliczenie”.
+
+Zamknięcie zawsze wymaga numeru bezpiecznej koperty, także gdy do sejfu trafia
+0 zł. Pracownik otrzymuje przypomnienie, że do koperty należy włożyć wydruk
+z kasy fiskalnej i wydruk z terminala. System zapisuje także kwotę pozostawioną
+w kasie na kolejny dzień. Każda korekta i decyzja administracyjna pozostaje
+w audytowalnej historii dnia kasowego.
+
+8G. MENTOR KULINARNY I WARSZTATY
+
+Andrzej Andrzejczak (Dr Meat) nie jest stałym szefem kuchni Atelier. Jest
+wybitnym szefem kuchni, który pełni u nas rolę mentora kulinarnego, autora
+receptur i opiekuna karty: wspiera zespół, dogląda jakości oraz proponuje zmiany
+i nowe pozycje. Jego prezentacja jest wyświetlana wyłącznie przy części kulinarnej,
+nie w zakładkach alkoholi. Aktualna oferta prowadzonych przez niego warsztatów
+otwiera się w małym oknie wewnątrz aplikacji, bez przechodzenia do osobnej karty
+Safari; zamknięcie okna przywraca menu w tym samym miejscu.
+
+9. IPAD / PWA
+
+Aplikacja ma manifest PWA, ikony, jawne znaczniki Apple Web App i tryb
+standalone. Po wdrożeniu należy
+otworzyć publiczne menu w Safari, wybrać Udostępnij > Dodaj do ekranu początkowego,
+a następnie uruchomić ikonę Menu Café. Pełną blokadę innych funkcji iPada można
+ustawić przez Dostęp nadzorowany albo MDM. W trybie aplikacji odnośniki
+zewnętrzne są ukryte, aby gość pozostał w menu. Po wdrożeniu nowej konfiguracji
+trzeba usunąć wcześniejszy skrót z ekranu i dodać go ponownie — iPad zapamiętuje
+ustawienia z chwili instalacji ikony.
+Po uruchomieniu menu tablet pobiera aktualne dane bez używania pamięci podręcznej.
+Gdy aplikacja pozostaje otwarta, ponawia odczyt co 60 sekund oraz natychmiast po
+powrocie z tła lub ponownym uaktywnieniu ekranu. Nie trzeba zamykać PWA po każdej
+zmianie w panelu.
+Pełne przeładowanie interfejsu następuje wyłącznie po wykryciu rzeczywiście nowej
+wersji aplikacji. Zwykłe odświeżanie danych nie może przerywać gościowi korzystania
+z menu ani przenosić go na ekran początkowy.
+
+10. BEZPIECZNE WDROŻENIE
+
+Zawsze: kopia bazy i zdjęć, rozpakowanie do /opt/banaszek-menu-next, npm ci,
+db:migrate, build:server, zatrzymanie usługi, zamiana katalogów, uruchomienie,
+test /api/health lokalnie i przez domenę. Nie kopiować pliku menu.env do paczki
+i nigdy nie publikować sekretów. Poprzednią działającą wersję zachować do czasu
+potwierdzenia działania nowej.
+
+11. WAŻNE ZMIENNE ŚRODOWISKOWE
+
+DATABASE_URL, PORT=8080, NEXT_PUBLIC_SITE_URL, DOTYKACKA_API_URL,
+DOTYKACKA_CONNECTOR_CLIENT_ID, DOTYKACKA_CONNECTOR_CLIENT_SECRET,
+DOTYKACKA_HTTP_TIMEOUT, DOTYKACKA_MENU_TAG, SYNC_SECRET, ADMIN_USERNAME,
+ADMIN_PASSWORD, ADMIN_SESSION_SECRET, WAITER_SESSION_SECRET,
+WAITER_POS_ACTIONS_ENABLED i DEEPL_API_KEY. Bezpłatne sprawdzanie strony
+dostawcy, katalogu Open Food Facts oraz wskazanego ręcznie adresu produktu nie
+wymaga dodatkowego klucza. BRAVE_SEARCH_API_KEY pozostaje wyłącznie opcjonalnym
+rozszerzeniem automatycznego wyszukiwania całego internetu.
+
+12. TESTY PO KAŻDEJ WERSJI
+
+- npm run build:server
+- GET http://127.0.0.1:8080/api/health
+- GET https://menu.martabanaszek.pl/api/health
+- logowanie do /admin
+- synchronizacja Dotykački
+- sprawdzenie zakładki Kontrola karty
+- sprawdzenie polskiej i angielskiej wersji menu
+- sprawdzenie zdjęcia, dodatków do kawy, wyboru ziarna, ZIARNO, PROMO i wina na kieliszek
+- sprawdzenie wydarzeń oraz kart LATO/JESIEŃ/ZIMA/WIOSNA, SPECJAL i PÓŁKA
+- sprawdzenie ostatniej zakładki Karta MB w PL i EN oraz testowej rejestracji
+- logowanie pracownika PIN-em i filtry wina, piwa oraz whisky w strefie kelnera
+- filtr białych win na kieliszki oraz oznaczenia: kieliszek, butelka, nalewak, 50 ml
+- otwarcie, przekazanie i zamknięcie dnia z nową migawką Dotykački na każdym kroku
+- napiwki, obowiązkowy numer koperty oraz przypomnienie o obu wydrukach
+- okno mentora kulinarnego i oferta warsztatów bez otwierania karty Safari
+
+13. PROWADZENIE KASY I INWENTARYZACJA (15 WRZEŚNIA 2026)
+
+Każde przekazanie lub zamknięcie liczy stan oczekiwany wyłącznie jako ostatnią
+fizycznie policzoną kwotę plus sprzedaż gotówkową od ostatniej zapisanej migawki
+Dotykački oraz korekty, napiwki i wydatki bieżącego odcinka. Wcześniejsza
+rozbieżność pozostaje w audycie poprzedniego checkpointu, ale nie jest ponownie
+naliczana kolejnej osobie.
+
+Panel administratora pokazuje osobę deklarującą saldo przy zamknięciu, osobę
+liczącą przy otwarciu, obie kwoty, różnicę, wszystkie przekazania i czasy migawek
+POS. Nowe dni zachowują kopię danych źródłowego zamknięcia.
+
+Ekran /admin/inventory przygotowuje lokalny protokół inwentaryzacji z aktualną
+migawką magazynu, jednostkami, stanem policzonym, różnicą, UUID i SHA-256.
+Nie wysyła stanów do Dotykački. Flaga DOTYKACKA_INVENTORY_WRITE_ENABLED musi
+pozostać wyłączona do testu na chmurze testowej i osobnej zgody użytkownika.
+Pełny projekt integracji: docs/DOTYKACKA_INVENTORY_INTEGRATION.md.

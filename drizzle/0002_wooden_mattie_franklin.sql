@@ -1,0 +1,1 @@
+ALTER TABLE "menu_products" ADD COLUMN "stock_overdraft" text DEFAULT 'ALLOW' NOT NULL;

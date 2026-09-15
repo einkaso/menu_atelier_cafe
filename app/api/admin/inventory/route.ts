@@ -1,0 +1,128 @@
+import { randomUUID } from "node:crypto";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { getDb } from "../../../../db";
+import { inventoryCatalogCategories, inventoryCatalogProducts, inventoryEvents, inventoryStageItems, inventoryStages, menuProducts, productContent, waiterEmployees } from "../../../../db/schema";
+import { currentAdmin } from "../../../../lib/admin-auth";
+import { cleanInventoryLocation, inventoryDifference, millisToQuantity } from "../../../../lib/inventory";
+
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  if (!(await currentAdmin())) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const db = getDb();
+  const [categoryRows, catalogProducts, employees, stages, reportableStages, stageItems] = await Promise.all([
+    db.select().from(inventoryCatalogCategories).where(eq(inventoryCatalogCategories.deleted, false)).orderBy(asc(inventoryCatalogCategories.sortOrder), asc(inventoryCatalogCategories.name)),
+    db.select({ categoryId: inventoryCatalogProducts.categoryDotykackaId, stockDeduct: inventoryCatalogProducts.stockDeduct, stockQuantity: inventoryCatalogProducts.stockQuantity, deleted: inventoryCatalogProducts.deleted }).from(inventoryCatalogProducts),
+    db.select({ dotykackaId: waiterEmployees.dotykackaId, name: waiterEmployees.name }).from(waiterEmployees).where(and(eq(waiterEmployees.enabled, true), eq(waiterEmployees.deleted, false))).orderBy(asc(waiterEmployees.name)),
+    db.select().from(inventoryStages).orderBy(desc(inventoryStages.createdAt)).limit(100),
+    db.select({ id: inventoryStages.id }).from(inventoryStages).where(inArray(inventoryStages.status, ["SUBMITTED", "APPROVED", "SENDING", "PROCESSING", "FINISHED", "FAILED", "UNKNOWN"])),
+    db.select({
+      stageId: inventoryStageItems.stageId,
+      productDotykackaId: inventoryStageItems.productDotykackaId,
+      productName: inventoryStageItems.productName,
+      expectedQuantity: inventoryStageItems.expectedQuantity,
+      countedQuantity: inventoryStageItems.countedQuantity,
+      referencePrice: inventoryStageItems.referencePrice,
+      countStatus: inventoryStageItems.countStatus,
+      reasonCode: inventoryStageItems.reasonCode,
+    }).from(inventoryStageItems).where(isNotNull(inventoryStageItems.countedQuantity)),
+  ]);
+  const productCountByCategory = new Map<string, number>();
+  for (const product of catalogProducts) {
+    if (!product.categoryId || product.deleted || !product.stockDeduct || product.stockQuantity == null) continue;
+    productCountByCategory.set(product.categoryId, (productCountByCategory.get(product.categoryId) ?? 0) + 1);
+  }
+  const itemStatsByStage = new Map<number, { counted: number; differences: number; total: number }>();
+  const stageTotals = new Map<number, number>();
+  for (const item of stageItems) {
+    const stats = itemStatsByStage.get(item.stageId) ?? { counted: 0, differences: 0, total: 0 };
+    stats.counted += item.countStatus === "PENDING" ? 0 : 1;
+    stats.differences += inventoryDifference(item.expectedQuantity, item.countedQuantity) ? 1 : 0;
+    itemStatsByStage.set(item.stageId, stats);
+  }
+  const allStageItems = await db.select({ stageId: inventoryStageItems.stageId }).from(inventoryStageItems);
+  for (const item of allStageItems) stageTotals.set(item.stageId, (stageTotals.get(item.stageId) ?? 0) + 1);
+  const anomalyByProduct = new Map<string, { productDotykackaId: string; productName: string; occurrences: number; netDifferenceMillis: number; referenceLoss: number; reasons: Record<string, number> }>();
+  const reportableStageIds = new Set(reportableStages.map((stage) => stage.id));
+  for (const item of stageItems) {
+    if (!reportableStageIds.has(item.stageId)) continue;
+    const difference = inventoryDifference(item.expectedQuantity, item.countedQuantity);
+    if (!difference) continue;
+    const anomaly = anomalyByProduct.get(item.productDotykackaId) ?? { productDotykackaId: item.productDotykackaId, productName: item.productName, occurrences: 0, netDifferenceMillis: 0, referenceLoss: 0, reasons: {} };
+    anomaly.occurrences += 1;
+    anomaly.netDifferenceMillis += difference;
+    if (difference < 0) anomaly.referenceLoss += Math.abs(difference / 1000) * Number(item.referencePrice ?? 0);
+    if (item.reasonCode) anomaly.reasons[item.reasonCode] = (anomaly.reasons[item.reasonCode] ?? 0) + 1;
+    anomalyByProduct.set(item.productDotykackaId, anomaly);
+  }
+  return Response.json({
+    categories: categoryRows.map((category) => ({ ...category, productCount: productCountByCategory.get(category.dotykackaId) ?? 0 })).filter((category) => category.productCount > 0),
+    employees,
+    stages: stages.map((stage) => ({ ...stage, totalItems: stageTotals.get(stage.id) ?? 0, countedItems: itemStatsByStage.get(stage.id)?.counted ?? 0, differences: itemStatsByStage.get(stage.id)?.differences ?? 0 })),
+    anomalies: [...anomalyByProduct.values()].sort((left, right) => right.occurrences - left.occurrences || right.referenceLoss - left.referenceLoss).slice(0, 20).map((item) => ({ ...item, netDifference: millisToQuantity(item.netDifferenceMillis), referenceLoss: item.referenceLoss.toFixed(2) })),
+    inventoryWriteEnabled: process.env.DOTYKACKA_INVENTORY_WRITE_ENABLED === "true",
+  });
+}
+
+export async function POST(request: Request) {
+  const actor = await currentAdmin();
+  if (!actor) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => ({})) as { categoryDotykackaId?: unknown; assignedEmployeeDotykackaId?: unknown; title?: unknown; dueAt?: unknown; locations?: unknown };
+  const categoryDotykackaId = typeof body.categoryDotykackaId === "string" ? body.categoryDotykackaId : "";
+  const assignedEmployeeDotykackaId = typeof body.assignedEmployeeDotykackaId === "string" ? body.assignedEmployeeDotykackaId : "";
+  const title = typeof body.title === "string" ? body.title.trim().slice(0, 160) : "";
+  const rawLocations = Array.isArray(body.locations) ? body.locations : [];
+  const locations = [...new Set(rawLocations.map(cleanInventoryLocation).filter(Boolean))].slice(0, 12);
+  const dueAt = typeof body.dueAt === "string" && body.dueAt ? new Date(body.dueAt) : null;
+  if (dueAt && Number.isNaN(dueAt.getTime())) return Response.json({ error: "Nieprawidłowy termin etapu." }, { status: 400 });
+  if (!categoryDotykackaId || !assignedEmployeeDotykackaId) return Response.json({ error: "Wybierz kategorię i pracownika." }, { status: 400 });
+
+  const db = getDb();
+  const [[category], [employee], products, localProducts] = await Promise.all([
+    db.select().from(inventoryCatalogCategories).where(and(eq(inventoryCatalogCategories.dotykackaId, categoryDotykackaId), eq(inventoryCatalogCategories.deleted, false))).limit(1),
+    db.select({ dotykackaId: waiterEmployees.dotykackaId, name: waiterEmployees.name }).from(waiterEmployees).where(and(eq(waiterEmployees.dotykackaId, assignedEmployeeDotykackaId), eq(waiterEmployees.enabled, true), eq(waiterEmployees.deleted, false))).limit(1),
+    db.select().from(inventoryCatalogProducts).where(and(eq(inventoryCatalogProducts.categoryDotykackaId, categoryDotykackaId), eq(inventoryCatalogProducts.deleted, false), eq(inventoryCatalogProducts.stockDeduct, true), isNotNull(inventoryCatalogProducts.stockQuantity))).orderBy(asc(inventoryCatalogProducts.name)),
+    db.select({ id: menuProducts.id, dotykackaId: menuProducts.dotykackaId, imagePath: productContent.imagePath }).from(menuProducts).leftJoin(productContent, eq(menuProducts.id, productContent.productId)),
+  ]);
+  if (!category) return Response.json({ error: "Kategoria nie istnieje w katalogu magazynowym." }, { status: 404 });
+  if (!employee) return Response.json({ error: "Pracownik nie istnieje lub jest nieaktywny w Dotykačce." }, { status: 404 });
+  if (!products.length) return Response.json({ error: "Ta kategoria nie ma aktywnych produktów ze śledzeniem stanu." }, { status: 400 });
+  const localByDotykackaId = new Map(localProducts.map((product) => [product.dotykackaId, product]));
+  const now = new Date();
+  const expectedSnapshotAt = products.reduce((oldest, product) => product.syncedAt < oldest ? product.syncedAt : oldest, products[0].syncedAt);
+  const [created] = await db.transaction(async (tx) => {
+    const [stage] = await tx.insert(inventoryStages).values({
+      externalId: randomUUID(),
+      title: title || `Inwentaryzacja: ${category.name}`,
+      categoryDotykackaId,
+      categoryName: category.name,
+      assignedEmployeeDotykackaId,
+      assignedEmployeeName: employee.name,
+      locations: locations.length ? locations : ["Główne miejsce"],
+      dueAt,
+      expectedSnapshotAt,
+      createdBy: actor.username,
+      updatedAt: now,
+    }).returning();
+    await tx.insert(inventoryStageItems).values(products.map((product) => {
+      const local = localByDotykackaId.get(product.dotykackaId);
+      return {
+        stageId: stage.id,
+        productLocalId: local?.id ?? null,
+        productDotykackaId: product.dotykackaId,
+        productName: product.name,
+        imagePath: local?.imagePath ?? product.imageSourceUrl,
+        eanCodes: product.eanCodes,
+        pluCodes: product.pluCodes,
+        wineCode: product.wineCode,
+        catalogCode: product.catalogCode,
+        unit: product.unit || "szt.",
+        expectedQuantity: product.stockQuantity ?? "0",
+        referencePrice: product.priceWithVat,
+      };
+    }));
+    await tx.insert(inventoryEvents).values({ stageId: stage.id, actorType: "ADMIN", actorId: actor.username, actorName: actor.employeeName ?? actor.username, action: "CREATED", details: { category: category.name, assignedTo: employee.name, productCount: products.length, locations: locations.length ? locations : ["Główne miejsce"] } });
+    return [stage];
+  });
+  return Response.json({ ok: true, stageId: created.id }, { status: 201 });
+}
