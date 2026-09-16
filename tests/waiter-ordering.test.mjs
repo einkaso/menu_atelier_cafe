@@ -173,6 +173,9 @@ test("guards the one-shot wine migration and preserves the agreed bottle and gla
   assert.match(source, /const divisor = sparkling \? 5 : 4/);
   assert.match(source, /sparkling \? 1 \/ 6 : 0\.2/);
   assert.match(source, /przed migracją/);
+  assert.match(source, /externalId: marker/);
+  assert.doesNotMatch(source, /externalIds: \[marker\]/);
+  assert.doesNotMatch(source, /"externalId",\s*\n\s*"externalIds"/);
 });
 
 test("places configurable survey answers before order submission", async () => {

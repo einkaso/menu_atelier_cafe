@@ -58,7 +58,7 @@ function glassName(base, sparkling) {
 const productWritableFields = [
   "id", "_categoryId", "_defaultCourseId", "_eetSubjectId", "_supplierId", "allergens", "alternativeName",
   "currency", "deleted", "description", "discountPercent", "discountPermitted", "display", "ean", "externalId",
-  "externalIds", "features", "flags", "hexColor", "imageUrl", "margin", "marginMin", "minCustomerAge", "name",
+  "features", "flags", "hexColor", "imageUrl", "margin", "marginMin", "minCustomerAge", "name",
   "notes", "onSale", "packageItem", "packaging", "packagingMeasurement", "packagingPriceWithVat", "plu", "points",
   "preparationDuration", "priceInPoints", "priceWithVat", "priceWithVatB", "priceWithVatC", "priceWithVatD",
   "priceWithVatE", "priceWithoutVat", "recipe", "requiresPriceEntry", "sortOrder", "stockDeduct", "stockOverdraft",
@@ -209,12 +209,17 @@ function buildPlan(categories, products, ingredients) {
   }
   const activeGlasses = wines.filter((product) => product.display !== false && wineGlassIds.has(String(product.id)));
   const existingByBase = new Map();
+  const unresolvedActive = [];
   for (const glass of activeGlasses) {
     const baseIngredients = (recipeByParent.get(String(glass.id)) ?? []).filter((item) => {
       const product = byId.get(String(item._productId));
       return product && String(product._categoryId) === String(wineCategory.id) && !isGlass(product);
     });
-    if (baseIngredients.length !== 1) throw new Error(`Aktywny kieliszek ID ${glass.id} (${glass.name}) nie ma jednej jednoznacznej bazy winnej.`);
+    if (baseIngredients.length > 1) throw new Error(`Aktywny kieliszek ID ${glass.id} (${glass.name}) ma więcej niż jedną bazę winną.`);
+    if (baseIngredients.length === 0) {
+      unresolvedActive.push(glass);
+      continue;
+    }
     const baseId = String(baseIngredients[0]._productId);
     if (existingByBase.has(baseId)) throw new Error(`Więcej niż jeden aktywny kieliszek jest przypięty do wina bazowego ID ${baseId}.`);
     existingByBase.set(baseId, glass);
@@ -222,7 +227,18 @@ function buildPlan(categories, products, ingredients) {
   const natural = bases.filter((base) => NATURAL_CODES.has(productCode(base)));
   if (natural.length !== NATURAL_CODES.size) throw new Error(`Oczekiwano ${NATURAL_CODES.size} win naturalnie musujących (${[...NATURAL_CODES].join(", ")}), znaleziono ${natural.length}.`);
   const eligible = bases.filter((base) => !NATURAL_CODES.has(productCode(base)));
-  const pairs = eligible.map((base) => ({ base, glass: existingByBase.get(String(base.id)) ?? null, ...glassChanges(base, true) }));
+  const activeByName = new Map(unresolvedActive.map((glass) => [normalized(glass.name), glass]));
+  const glassByMarker = new Map(wines.flatMap((product) => (product.externalIds ?? (product.externalId ? [product.externalId] : []))
+    .filter((value) => String(value).startsWith("menu-atelier-cafe:wine-glass:"))
+    .map((value) => [String(value), product])));
+  const pairs = eligible.map((base) => {
+    const expectedName = glassName(base, SPARKLING_CODES.has(productCode(base)));
+    const glass = existingByBase.get(String(base.id))
+      ?? activeByName.get(normalized(expectedName))
+      ?? glassByMarker.get(`menu-atelier-cafe:wine-glass:${base.id}`)
+      ?? null;
+    return { base, glass, ...glassChanges(base, true) };
+  });
   const unpairedActive = activeGlasses.filter((glass) => !pairs.some((pair) => pair.glass?.id === glass.id));
   if (unpairedActive.length) throw new Error(`Znaleziono ${unpairedActive.length} aktywnych kieliszków bez dozwolonej pary: ${JSON.stringify(unpairedActive.map((product) => ({ id: product.id, name: product.name, ingredients: (recipeByParent.get(String(product.id)) ?? []).map((item) => ({ productId: item._productId, productName: byId.get(String(item._productId))?.name, code: productCode(byId.get(String(item._productId)) ?? {}) })) })))}.`);
   for (const pair of pairs) if (!(pair.changes.priceWithVat > 0)) throw new Error(`Brak ceny butelki dla ${pair.base.name}.`);
@@ -304,7 +320,7 @@ async function main() {
 
   const toCreate = plan.pairs.filter((pair) => !pair.glass).map((pair) => {
     const marker = `menu-atelier-cafe:wine-glass:${pair.base.id}`;
-    return writableProduct(pair.base, { ...pair.changes, display: false, externalIds: [marker] }, true);
+    return writableProduct(pair.base, { ...pair.changes, display: false, externalId: marker }, true);
   });
   if (toCreate.length) await api.request(`/clouds/${config.cloudId}/products`, { method: "POST", body: toCreate });
 
