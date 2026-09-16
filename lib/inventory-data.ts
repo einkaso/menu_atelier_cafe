@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { inventoryCountEntries, inventoryEvents, inventoryExports, inventoryStageItems, inventoryStages } from "../db/schema";
 
@@ -21,9 +21,16 @@ function inventoryImage(imagePath: string | null, productName: string) {
 
 export async function inventoryStageDetail(stageId: number) {
   const db = getDb();
+  const expectedStockPriority = sql<number>`case
+    when ${inventoryStageItems.expectedQuantity} > 0 then 0
+    when ${inventoryStageItems.expectedQuantity} = 0 then 1
+    else 2
+  end`;
   const [[stage], items, entries, events, [inventoryExport]] = await Promise.all([
     db.select().from(inventoryStages).where(eq(inventoryStages.id, stageId)).limit(1),
-    db.select().from(inventoryStageItems).where(eq(inventoryStageItems.stageId, stageId)).orderBy(asc(inventoryStageItems.productName)),
+    db.select().from(inventoryStageItems)
+      .where(eq(inventoryStageItems.stageId, stageId))
+      .orderBy(asc(expectedStockPriority), asc(inventoryStageItems.productName)),
     db.select().from(inventoryCountEntries)
       .innerJoin(inventoryStageItems, eq(inventoryCountEntries.itemId, inventoryStageItems.id))
       .where(eq(inventoryStageItems.stageId, stageId))

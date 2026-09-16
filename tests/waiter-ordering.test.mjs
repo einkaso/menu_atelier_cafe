@@ -102,7 +102,7 @@ test("grants menu admin access only to active Dotykacka employees with hashed pa
 });
 
 test("implements independently approved inventory stages with a gated Dotykacka export", async () => {
-  const [docs, client, panel, schema, migration, sync, adminRoute, adminStageRoute, workerRoute, workerScreen, adminScreen] = await Promise.all([
+  const [docs, client, panel, schema, migration, sync, adminRoute, adminStageRoute, workerRoute, workerScreen, workerStyles, inventoryData, adminScreen] = await Promise.all([
     read("docs/DOTYKACKA_INVENTORY_INTEGRATION.md"),
     read("lib/dotykacka/client.ts"),
     read("app/admin/admin-panel.tsx"),
@@ -113,6 +113,8 @@ test("implements independently approved inventory stages with a gated Dotykacka 
     read("app/api/admin/inventory/[id]/route.ts"),
     read("app/api/waiter/inventory/[id]/route.ts"),
     read("app/kelner/inventory/inventory-worker-client.tsx"),
+    read("app/kelner/inventory/inventory-worker-enhancements.css"),
+    read("lib/inventory-data.ts"),
     read("app/admin/inventory/inventory-admin-client.tsx"),
   ]);
   assert.match(docs, /zatwierdzamy etapy, nie cały magazyn/i);
@@ -133,6 +135,10 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(client, /\/stock-takings/);
   assert.match(workerRoute, /countStatus === "NOT_FOUND"/);
   assert.match(workerRoute, /Potwierdź stan każdej pozycji/);
+  assert.match(inventoryData, /when \$\{inventoryStageItems\.expectedQuantity\} > 0 then 0/);
+  assert.match(inventoryData, /orderBy\(asc\(expectedStockPriority\), asc\(inventoryStageItems\.productName\)\)/);
+  assert.match(workerStyles, /\.inventory-count-item > header \{[\s\S]*height: auto;[\s\S]*color: var\(--i-navy\)/);
+  assert.match(workerStyles, /\.inventory-count-photo img \{[\s\S]*object-fit: contain;[\s\S]*object-position: center/);
   assert.match(workerScreen, /Dodaj inne miejsce/);
   assert.match(workerScreen, /Pełne butelki/);
   assert.match(workerScreen, /Dostępne kieliszki/);
