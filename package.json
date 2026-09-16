@@ -15,7 +15,8 @@
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "wine:migrate": "node scripts/migrate-wine-glasses.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

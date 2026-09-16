@@ -24,6 +24,25 @@
   font-weight: 800;
 }
 
+.inventory-location-row.is-wine {
+  grid-template-columns: minmax(180px, 1.2fr) 125px 145px minmax(150px, 1fr) 40px;
+}
+
+.inventory-wine-rule {
+  color: #8b421f !important;
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .inventory-location-row.is-wine {
+    grid-template-columns: 1fr 110px;
+  }
+
+  .inventory-location-row.is-wine label:last-of-type {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 580px) {
   .inventory-count-expected {
     min-width: 0;

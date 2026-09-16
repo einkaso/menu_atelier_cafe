@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { reportPaymentTotals, snapshotDelta } from "../lib/cash-day.ts";
-import { cleanInventoryLocation, inventoryDifference, millisToQuantity, quantityToMillis } from "../lib/inventory.ts";
+import { cleanInventoryLocation, inventoryDifference, millisToQuantity, nonNegativeWholeNumber, quantityToMillis, wineBottleQuantityMillis } from "../lib/inventory.ts";
 import { moneyToCents, settlementTotals } from "../lib/waiter-settlement.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -134,6 +134,9 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(workerRoute, /countStatus === "NOT_FOUND"/);
   assert.match(workerRoute, /Potwierdź stan każdej pozycji/);
   assert.match(workerScreen, /Dodaj inne miejsce/);
+  assert.match(workerScreen, /Pełne butelki/);
+  assert.match(workerScreen, /Dostępne kieliszki/);
+  assert.match(workerScreen, /Sprzedaż wyłącznie całych butelek/);
   assert.match(workerScreen, /EAN:/);
   assert.match(workerScreen, /waiterSessionHeaders/);
   assert.match(workerScreen, /4 \* 60 \* 1000/);
@@ -152,6 +155,24 @@ test("normalizes inventory quantities and location labels without floating point
   assert.equal(millisToQuantity(-1001), "-1.001");
   assert.equal(inventoryDifference("5", "4.25"), -750);
   assert.equal(cleanInventoryLocation("  Lodówka   barowa  "), "Lodówka barowa");
+  assert.equal(nonNegativeWholeNumber("7"), 7);
+  assert.equal(nonNegativeWholeNumber("1.5"), null);
+  assert.equal(wineBottleQuantityMillis(3, 2, 5), 3400);
+  assert.equal(wineBottleQuantityMillis(1, 1, 6), 1167);
+});
+
+test("guards the one-shot wine migration and preserves the agreed bottle and glass rules", async () => {
+  const source = await read("scripts/migrate-wine-glasses.mjs");
+  assert.match(source, /DOTYKACKA_WINE_MIGRATION_WRITE_ENABLED === "true"/);
+  assert.match(source, /process\.argv\.includes\("--apply"\)/);
+  assert.ok(source.indexOf("backupSnapshot(config") < source.indexOf('method: "POST", body: toCreate'));
+  assert.match(source, /new Set\(\["WIN14", "WIN64", "WIN65"\]\)/);
+  assert.match(source, /new Set\(\["WIN02", "WIN19", "WIN44", "WIN46"\]\)/);
+  assert.match(source, /\["wave bianco", 110\]/);
+  assert.match(source, /\["yellow tail sauvignon blanc", 110\]/);
+  assert.match(source, /const divisor = sparkling \? 5 : 4/);
+  assert.match(source, /sparkling \? 1 \/ 6 : 0\.2/);
+  assert.match(source, /przed migracją/);
 });
 
 test("places configurable survey answers before order submission", async () => {

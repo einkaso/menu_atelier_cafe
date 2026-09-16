@@ -20,6 +20,19 @@ export function quantityToMillis(value: unknown) {
   return Number.isSafeInteger(result) && result >= 0 ? result : null;
 }
 
+export function nonNegativeWholeNumber(value: unknown) {
+  const normalized = typeof value === "number" ? String(value) : typeof value === "string" ? value.trim() : "";
+  if (!/^\d{1,9}$/.test(normalized)) return null;
+  const result = Number(normalized);
+  return Number.isSafeInteger(result) ? result : null;
+}
+
+export function wineBottleQuantityMillis(wholeBottles: number, looseGlasses: number, glassesPerBottle: number) {
+  if (!Number.isSafeInteger(wholeBottles) || wholeBottles < 0 || !Number.isSafeInteger(looseGlasses) || looseGlasses < 0) return null;
+  if (!Number.isSafeInteger(glassesPerBottle) || glassesPerBottle < 2 || glassesPerBottle > 12) return null;
+  return wholeBottles * 1000 + Math.round(looseGlasses * 1000 / glassesPerBottle);
+}
+
 export function millisToQuantity(value: number) {
   const sign = value < 0 ? "-" : "";
   const absolute = Math.abs(value);

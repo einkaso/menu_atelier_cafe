@@ -18,6 +18,8 @@ export async function GET() {
       name: inventoryCatalogProducts.name,
       stockDeduct: inventoryCatalogProducts.stockDeduct,
       inventoryTracked: inventoryCatalogProducts.inventoryTracked,
+      inventoryCountingMode: inventoryCatalogProducts.inventoryCountingMode,
+      servingsPerContainer: inventoryCatalogProducts.servingsPerContainer,
       stockQuantity: inventoryCatalogProducts.stockQuantity,
       unit: inventoryCatalogProducts.unit,
       imageSourceUrl: inventoryCatalogProducts.imageSourceUrl,
@@ -73,6 +75,8 @@ export async function GET() {
       categoryName: categoryRows.find((category) => category.dotykackaId === product.categoryId)?.name ?? "Bez kategorii",
       name: product.name,
       inventoryTracked: product.inventoryTracked,
+      inventoryCountingMode: product.inventoryCountingMode,
+      servingsPerContainer: product.servingsPerContainer,
       stockQuantity: product.stockQuantity,
       unit: product.unit,
       imageSourceUrl: product.imageSourceUrl,
@@ -137,6 +141,8 @@ export async function POST(request: Request) {
         wineCode: product.wineCode,
         catalogCode: product.catalogCode,
         unit: product.unit || "szt.",
+        countingMode: product.inventoryCountingMode,
+        servingsPerContainer: product.servingsPerContainer,
         expectedQuantity: product.stockQuantity ?? "0",
         referencePrice: product.priceWithVat,
       };
@@ -150,11 +156,17 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const actor = await currentAdmin();
   if (!actor) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const body = await request.json().catch(() => ({})) as { action?: unknown; productDotykackaId?: unknown; inventoryTracked?: unknown };
-  if (body.action !== "SET_PRODUCT_TRACKING" || typeof body.productDotykackaId !== "string" || typeof body.inventoryTracked !== "boolean") {
+  const body = await request.json().catch(() => ({})) as { action?: unknown; productDotykackaId?: unknown; inventoryTracked?: unknown; servingsPerContainer?: unknown };
+  if (typeof body.productDotykackaId !== "string") return Response.json({ error: "Nieprawidłowy produkt magazynowy." }, { status: 400 });
+  let values: { inventoryTracked?: boolean; inventoryCountingMode?: string; servingsPerContainer?: number };
+  if (body.action === "SET_PRODUCT_TRACKING" && typeof body.inventoryTracked === "boolean") {
+    values = { inventoryTracked: body.inventoryTracked };
+  } else if (body.action === "SET_WINE_SERVINGS" && (body.servingsPerContainer === 5 || body.servingsPerContainer === 6)) {
+    values = { inventoryCountingMode: "WINE_BOTTLE", servingsPerContainer: body.servingsPerContainer };
+  } else {
     return Response.json({ error: "Nieprawidłowa zmiana produktu magazynowego." }, { status: 400 });
   }
-  const [updated] = await getDb().update(inventoryCatalogProducts).set({ inventoryTracked: body.inventoryTracked }).where(eq(inventoryCatalogProducts.dotykackaId, body.productDotykackaId)).returning({ id: inventoryCatalogProducts.id });
+  const [updated] = await getDb().update(inventoryCatalogProducts).set(values).where(eq(inventoryCatalogProducts.dotykackaId, body.productDotykackaId)).returning({ id: inventoryCatalogProducts.id });
   if (!updated) return Response.json({ error: "Produkt nie istnieje w katalogu magazynowym." }, { status: 404 });
   return Response.json({ ok: true });
 }

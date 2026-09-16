@@ -16,7 +16,7 @@ export function detectSparklingType(...values: Array<string | null | undefined>)
   if (/\b(naturalnie musuj\w*|pet[ -]?nat\w*|petillant naturel|methode ancestrale|metoda ancestrale|ancestral\w*)\b/.test(value)) {
     return "NATURALLY_SPARKLING";
   }
-  if (/\b(musuj\w*|sparkling|prosecco|cava|frizzante|spumante|sekt|champagne|szampan\w*)\b/.test(value)) {
+  if (/\b(musuj\w*|sparkling|prosecco|cava|frizzante|spumante|sekt|champagne|szampan\w*|moscato d['’ ]?asti)\b/.test(value)) {
     return "SPARKLING";
   }
   return null;

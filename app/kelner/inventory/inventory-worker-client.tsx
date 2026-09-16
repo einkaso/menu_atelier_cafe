@@ -6,10 +6,10 @@ import "./inventory-worker.css";
 import "./inventory-worker-enhancements.css";
 
 type StageSummary = { id: number; title: string; status: string; categoryName: string; dueAt: string | null; adminNote: string | null; totalItems: number; countedItems: number };
-type Entry = { id: number; location: string; quantity: string; note: string | null };
-type Item = { id: number; productName: string; productDotykackaId: string; imagePath: string | null; eanCodes: string[]; pluCodes: string[]; wineCode: string | null; catalogCode: string | null; unit: string; expectedQuantity: string; countedQuantity: string | null; countStatus: string; reasonCode: string | null; workerNote: string | null; entries: Entry[] };
+type Entry = { id: number; location: string; quantity: string; wholeContainers: number | null; looseServings: number | null; note: string | null };
+type Item = { id: number; productName: string; productDotykackaId: string; imagePath: string | null; eanCodes: string[]; pluCodes: string[]; wineCode: string | null; catalogCode: string | null; unit: string; countingMode: string; servingsPerContainer: number | null; expectedQuantity: string; countedQuantity: string | null; countStatus: string; reasonCode: string | null; workerNote: string | null; entries: Entry[] };
 type StageDetail = StageSummary & { locations: string[]; expectedSnapshotAt: string; workerNote: string | null; items: Item[] };
-type LocationRow = { key: string; location: string; quantity: string; note: string };
+type LocationRow = { key: string; location: string; quantity: string; wholeContainers: string; looseServings: string; note: string };
 
 const statusLabels: Record<string, string> = { ASSIGNED: "Nowe zadanie", IN_PROGRESS: "Liczenie trwa", CHANGES_REQUESTED: "Do poprawy", SUBMITTED: "Czeka na akceptację", APPROVED: "Zatwierdzone", SENDING: "Wysyłanie", PROCESSING: "Przetwarzanie", FINISHED: "Zakończone", FAILED: "Błąd", UNKNOWN: "Status niepewny" };
 const reasons = [["BRAK", "Brak"], ["NADWYZKA", "Nadwyżka"], ["ZEPSUCIE", "Zepsucie"], ["STLUCZENIE", "Stłuczenie"], ["PRZETERMINOWANIE", "Przeterminowanie"], ["ZUZYCIE_WEWNETRZNE", "Zużycie wewnętrzne"], ["BLAD_DOSTAWY", "Błąd dostawy"], ["BLAD_EWIDENCJI", "Błąd ewidencji"], ["INNE", "Inne"]];
@@ -19,14 +19,27 @@ const unitLabel = (value: string) => value.toLocaleLowerCase() === "kilogram" ? 
 const rowKey = () => typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
 function ItemEditor({ item, places, disabled, busy, onSave }: { item: Item; places: string[]; disabled: boolean; busy: boolean; onSave: (payload: Record<string, unknown>) => Promise<void> }) {
+  const wineCounting = item.countingMode === "WINE_BOTTLE" && Boolean(item.servingsPerContainer);
+  const bottleOnlyCounting = item.countingMode === "BOTTLE_ONLY";
+  const splitBottleQuantity = (entry: Entry) => {
+    if (entry.wholeContainers != null && entry.looseServings != null) return { wholeContainers: String(entry.wholeContainers), looseServings: String(entry.looseServings) };
+    const quantity = Number(entry.quantity);
+    const wholeContainers = Math.floor(quantity);
+    return { wholeContainers: String(wholeContainers), looseServings: String(Math.round((quantity - wholeContainers) * (item.servingsPerContainer ?? 5))) };
+  };
   const initialRows = () => item.entries.length
-    ? item.entries.map((entry) => ({ key: rowKey(), location: entry.location, quantity: entry.quantity, note: entry.note ?? "" }))
-    : [{ key: rowKey(), location: places[0] ?? "", quantity: "", note: "" }];
+    ? item.entries.map((entry) => ({ key: rowKey(), location: entry.location, quantity: entry.quantity, ...splitBottleQuantity(entry), note: entry.note ?? "" }))
+    : [{ key: rowKey(), location: places[0] ?? "", quantity: "", wholeContainers: "", looseServings: "", note: "" }];
   const [rows, setRows] = useState<LocationRow[]>(initialRows);
   const [reasonCode, setReasonCode] = useState(item.reasonCode ?? "");
   const [note, setNote] = useState(item.workerNote ?? "");
   const [notFound, setNotFound] = useState(item.countStatus === "NOT_FOUND");
-  const counted = notFound ? 0 : rows.reduce((sum, row) => sum + (Number(String(row.quantity).replace(",", ".")) || 0), 0);
+  const countedWholeContainers = notFound ? 0 : rows.reduce((sum, row) => sum + (Number(row.wholeContainers) || 0), 0);
+  const countedLooseServings = notFound ? 0 : rows.reduce((sum, row) => sum + (Number(row.looseServings) || 0), 0);
+  const counted = notFound ? 0 : wineCounting
+    ? Math.round((countedWholeContainers + countedLooseServings / (item.servingsPerContainer ?? 5)) * 1000) / 1000
+    : bottleOnlyCounting ? countedWholeContainers
+    : rows.reduce((sum, row) => sum + (Number(String(row.quantity).replace(",", ".")) || 0), 0);
   const difference = counted - Number(item.expectedQuantity);
   const identifiers = [item.wineCode, item.catalogCode, ...item.pluCodes].filter(Boolean).filter((value, index, list) => list.indexOf(value) === index);
 
@@ -39,18 +52,18 @@ function ItemEditor({ item, places, disabled, busy, onSave }: { item: Item; plac
     await onSave({
       itemId: item.id,
       countStatus: notFound ? "NOT_FOUND" : "COUNTED",
-      entries: notFound ? [] : rows.map(({ location, quantity, note: rowNote }) => ({ location, quantity, note: rowNote })),
+      entries: notFound ? [] : rows.map(({ location, quantity, wholeContainers, looseServings, note: rowNote }) => ({ location, quantity, wholeContainers, looseServings, note: rowNote })),
       reasonCode: difference === 0 ? null : reasonCode,
       note,
     });
   }
 
   return <article className={`inventory-count-item ${item.countStatus !== "PENDING" ? "is-counted" : ""} ${difference ? "has-difference" : ""}`}>
-    <header><div className="inventory-count-photo">{item.imagePath ? <img src={item.imagePath} alt={`Produkt ${item.productName}`}/> : <span>{item.productName.slice(0, 2)}</span>}</div><div className="inventory-count-identity"><small>{item.countStatus === "PENDING" ? "Produkt do policzenia" : "Zapisano"}</small><h3>{item.productName}</h3><p>{identifiers.join(" · ") || `ID produktu ${item.productDotykackaId}`}</p>{item.eanCodes.length > 0 && <p>EAN: {item.eanCodes.join(", ")}</p>}</div><div className="inventory-count-expected"><span>Stan zapisany w Dotykačce</span><b>{formatQuantity(item.expectedQuantity)} {unitLabel(item.unit)}</b><small>Policz rzeczywisty stan poniżej</small></div></header>
+    <header><div className="inventory-count-photo">{item.imagePath ? <img src={item.imagePath} alt={`Produkt ${item.productName}`}/> : <span>{item.productName.slice(0, 2)}</span>}</div><div className="inventory-count-identity"><small>{item.countStatus === "PENDING" ? "Produkt do policzenia" : "Zapisano"}</small><h3>{item.productName}</h3><p>{identifiers.join(" · ") || `ID produktu ${item.productDotykackaId}`}</p>{item.eanCodes.length > 0 && <p>EAN: {item.eanCodes.join(", ")}</p>}{wineCounting && <p className="inventory-wine-rule">1 butelka = {item.servingsPerContainer} kieliszków</p>}{bottleOnlyCounting && <p className="inventory-wine-rule">Sprzedaż wyłącznie całych butelek</p>}</div><div className="inventory-count-expected"><span>Stan zapisany w Dotykačce</span><b>{formatQuantity(item.expectedQuantity)} {wineCounting || bottleOnlyCounting ? "but." : unitLabel(item.unit)}</b><small>Policz rzeczywisty stan poniżej</small></div></header>
     <form onSubmit={submit}>
       <label className="inventory-not-found"><input type="checkbox" checked={notFound} disabled={disabled} onChange={(event) => { setNotFound(event.target.checked); if (event.target.checked && !reasonCode) setReasonCode("BRAK"); }}/><span>Nie znalazłem produktu — stan 0</span></label>
-      {!notFound && <div className="inventory-location-list">{rows.map((row) => <div className="inventory-location-row" key={row.key}><label>Miejsce<input list={`places-${item.id}`} value={row.location} onChange={(event) => updateRow(row.key, "location", event.target.value)} placeholder="np. Lodówka barowa" required disabled={disabled}/></label><label>Ilość<input inputMode="decimal" value={row.quantity} onChange={(event) => updateRow(row.key, "quantity", event.target.value)} placeholder="0" required disabled={disabled}/></label><label>Notatka<input value={row.note} onChange={(event) => updateRow(row.key, "note", event.target.value)} placeholder="opcjonalnie" maxLength={300} disabled={disabled}/></label>{rows.length > 1 && <button type="button" className="inventory-remove-place" onClick={() => setRows((current) => current.filter((entry) => entry.key !== row.key))} disabled={disabled} aria-label="Usuń miejsce">×</button>}</div>)}<datalist id={`places-${item.id}`}>{places.map((place) => <option key={place} value={place}/>)}</datalist><button type="button" className="inventory-add-place" onClick={() => setRows((current) => [...current, { key: rowKey(), location: "", quantity: "", note: "" }])} disabled={disabled}>+ Dodaj inne miejsce</button></div>}
-      <div className="inventory-item-result"><span>Razem fizycznie: <b>{formatQuantity(counted)} {unitLabel(item.unit)}</b></span><span className={difference ? "is-difference" : ""}>Różnica: <b>{difference > 0 ? "+" : ""}{formatQuantity(difference)} {unitLabel(item.unit)}</b></span></div>
+      {!notFound && <div className="inventory-location-list">{rows.map((row) => <div className={`inventory-location-row${wineCounting || bottleOnlyCounting ? " is-wine" : ""}`} key={row.key}><label>Miejsce<input list={`places-${item.id}`} value={row.location} onChange={(event) => updateRow(row.key, "location", event.target.value)} placeholder="np. Lodówka barowa" required disabled={disabled}/></label>{wineCounting ? <><label>Pełne butelki<input type="number" min="0" step="1" inputMode="numeric" value={row.wholeContainers} onChange={(event) => updateRow(row.key, "wholeContainers", event.target.value)} placeholder="0" required disabled={disabled}/></label><label>Dostępne kieliszki<input type="number" min="0" step="1" inputMode="numeric" value={row.looseServings} onChange={(event) => updateRow(row.key, "looseServings", event.target.value)} placeholder="0" required disabled={disabled}/></label></> : bottleOnlyCounting ? <label>Pełne butelki<input type="number" min="0" step="1" inputMode="numeric" value={row.wholeContainers} onChange={(event) => updateRow(row.key, "wholeContainers", event.target.value)} placeholder="0" required disabled={disabled}/></label> : <label>Ilość<input inputMode="decimal" value={row.quantity} onChange={(event) => updateRow(row.key, "quantity", event.target.value)} placeholder="0" required disabled={disabled}/></label>}<label>Notatka<input value={row.note} onChange={(event) => updateRow(row.key, "note", event.target.value)} placeholder="opcjonalnie" maxLength={300} disabled={disabled}/></label>{rows.length > 1 && <button type="button" className="inventory-remove-place" onClick={() => setRows((current) => current.filter((entry) => entry.key !== row.key))} disabled={disabled} aria-label="Usuń miejsce">×</button>}</div>)}<datalist id={`places-${item.id}`}>{places.map((place) => <option key={place} value={place}/>)}</datalist><button type="button" className="inventory-add-place" onClick={() => setRows((current) => [...current, { key: rowKey(), location: "", quantity: "", wholeContainers: "", looseServings: "", note: "" }])} disabled={disabled}>+ Dodaj inne miejsce</button></div>}
+      <div className="inventory-item-result"><span>Razem fizycznie: <b>{wineCounting ? `${countedWholeContainers} but. + ${countedLooseServings} kiel.` : bottleOnlyCounting ? `${countedWholeContainers} but.` : `${formatQuantity(counted)} ${unitLabel(item.unit)}`}</b></span>{wineCounting && <span>Stan przeliczeniowy: <b>{formatQuantity(counted)} but.</b></span>}<span className={difference ? "is-difference" : ""}>Różnica: <b>{difference > 0 ? "+" : ""}{formatQuantity(difference)} {wineCounting || bottleOnlyCounting ? "but." : unitLabel(item.unit)}</b></span></div>
       {difference !== 0 && <label>Przyczyna różnicy<select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)} required disabled={disabled}><option value="">Wybierz przyczynę</option>{reasons.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
       <label>Uwagi do produktu<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={1000} placeholder="np. otwarte opakowanie, produkt znaleziony na zapleczu" disabled={disabled}/></label>
       {!disabled && <button className="inventory-save-item" disabled={busy}>{busy ? "Zapisuję…" : item.countStatus === "PENDING" ? "Zapisz policzony stan" : "Zapisz zmianę"}</button>}

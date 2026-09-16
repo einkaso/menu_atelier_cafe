@@ -8,6 +8,17 @@ Samo ustawienie Dotykački „pomniejszaj magazyn” nie oznacza, że pozycja je
 
 Administrator jawnie zaznacza w panelu „Produkty podlegające inwentaryzacji” wyłącznie fizyczne towary i składniki. Nowe zadanie zawiera tylko zaznaczone produkty. Ustawienie jest zachowywane między synchronizacjami Dotykački.
 
+### Wina: butelki i dostępne kieliszki
+
+Wino bazowe jest ewidencjonowane jako jedna butelka (`Piece`), natomiast produkt sprzedażowy „kieliszek” nie podlega osobnemu liczeniu. Dla każdego wina pracownik podaje w każdym miejscu dwie liczby:
+
+- pełne butelki;
+- liczbę kieliszków, które można jeszcze nalać z otwartych butelek.
+
+System zachowuje obie wartości w protokole i dopiero do porównania oraz eksportu oblicza stan butelkowy. Dla win spokojnych jedna butelka odpowiada 5 kieliszkom po 150 ml, a dla zwykłych win musujących 6 kieliszkom po 125 ml. Wina naturalnie musujące są sprzedawane wyłącznie jako całe butelki, dlatego pracownik wpisuje dla nich tylko liczbę pełnych butelek. Przykładowo 3 pełne butelki i 2 dostępne kieliszki wina spokojnego dają stan `3 + 2/5 = 3,4` butelki. Klasyfikacja sposobu liczenia jest utrwalana razem z pozycją etapu, aby późniejsza zmiana produktu nie zmieniła historycznego wyniku.
+
+Kontrolowana migracja wariantów kieliszkowych jest dostępna jako `npm run wine:migrate` (domyślnie tylko audyt). Zapis wymaga równocześnie flagi `--apply` i jednorazowej bramki `DOTYKACKA_WINE_MIGRATION_WRITE_ENABLED=true`. Przed pierwszym zapisem skrypt tworzy prywatną kopię produktów, receptur i stanów magazynowych.
+
 ## Wniosek
 
 API pozwala ustawić absolutny stan wybranych produktów w magazynie przez:

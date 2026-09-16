@@ -126,8 +126,13 @@ export async function syncDotykackaMenu() {
     }
 
     const inventorySyncedAt = new Date();
-    const existingInventoryTracking = await db.select({ dotykackaId: inventoryCatalogProducts.dotykackaId, inventoryTracked: inventoryCatalogProducts.inventoryTracked }).from(inventoryCatalogProducts);
-    const inventoryTrackingByProduct = new Map(existingInventoryTracking.map((product) => [product.dotykackaId, product.inventoryTracked]));
+    const existingInventorySettings = await db.select({
+      dotykackaId: inventoryCatalogProducts.dotykackaId,
+      inventoryTracked: inventoryCatalogProducts.inventoryTracked,
+      inventoryCountingMode: inventoryCatalogProducts.inventoryCountingMode,
+      servingsPerContainer: inventoryCatalogProducts.servingsPerContainer,
+    }).from(inventoryCatalogProducts);
+    const inventorySettingsByProduct = new Map(existingInventorySettings.map((product) => [product.dotykackaId, product]));
     const inventoryCategoryRows = categories.map((category) => ({
       dotykackaId: String(category.id),
       name: category.name,
@@ -140,6 +145,12 @@ export async function syncDotykackaMenu() {
     const inventoryProductRows = products.map((product) => {
       const productId = String(product.id);
       const parsedCodes = parseProductCodes(product.plu);
+      const categoryName = categoryNames.get(String(product._categoryId ?? "")) ?? "";
+      const isWineBottle = categoryName.trim().toLocaleUpperCase("pl") === "WINA" && !/(kieliszek|glass)/i.test(product.name);
+      const isWineGlass = categoryName.trim().toLocaleUpperCase("pl") === "WINA" && /(kieliszek|glass)/i.test(product.name);
+      const previousSettings = inventorySettingsByProduct.get(productId);
+      const sparklingType = detectSparklingType(product.name, product.description, ...(product.features ?? []), ...(product.tags ?? []));
+      const detectedServings = sparklingType ? 6 : 5;
       return {
         dotykackaId: productId,
         categoryDotykackaId: product._categoryId == null ? null : String(product._categoryId),
@@ -147,7 +158,13 @@ export async function syncDotykackaMenu() {
         display: product.display !== false,
         deleted: product.deleted === true,
         stockDeduct: product.stockDeduct === true,
-        inventoryTracked: inventoryTrackingByProduct.get(productId) ?? false,
+        inventoryTracked: isWineGlass ? false : previousSettings?.inventoryTracked ?? false,
+        inventoryCountingMode: isWineBottle
+          ? previousSettings?.inventoryCountingMode ?? (sparklingType === "NATURALLY_SPARKLING" ? "BOTTLE_ONLY" : "WINE_BOTTLE")
+          : previousSettings?.inventoryCountingMode ?? "QUANTITY",
+        servingsPerContainer: isWineBottle && sparklingType !== "NATURALLY_SPARKLING"
+          ? previousSettings?.servingsPerContainer ?? detectedServings
+          : null,
         stockQuantity: stockByProduct.get(productId) == null ? null : String(stockByProduct.get(productId)),
         unit: stockDetailsByProduct.get(productId)?.unit ?? product.unit ?? null,
         priceWithVat: product.priceWithVat == null ? null : String(product.priceWithVat),
