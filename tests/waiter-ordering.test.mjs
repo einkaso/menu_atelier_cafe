@@ -138,7 +138,9 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(inventoryData, /when \$\{inventoryStageItems\.expectedQuantity\} > 0 then 0/);
   assert.match(inventoryData, /orderBy\(asc\(expectedStockPriority\), asc\(inventoryStageItems\.productName\)\)/);
   assert.match(workerStyles, /\.inventory-count-item > header \{[\s\S]*height: auto;[\s\S]*color: var\(--i-navy\)/);
-  assert.match(workerStyles, /\.inventory-count-photo img \{[\s\S]*object-fit: contain;[\s\S]*object-position: center/);
+  assert.match(workerStyles, /\.inventory-worker-layout \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(workerStyles, /\.inventory-worker-stages \{[\s\S]*display: flex;[\s\S]*overflow-x: auto/);
+  assert.match(workerStyles, /\.inventory-count-photo img \{[\s\S]*width: auto;[\s\S]*max-height: 100%;[\s\S]*object-fit: scale-down;[\s\S]*object-position: center/);
   assert.match(workerScreen, /Dodaj inne miejsce/);
   assert.match(workerScreen, /Pełne butelki/);
   assert.match(workerScreen, /Dostępne kieliszki/);

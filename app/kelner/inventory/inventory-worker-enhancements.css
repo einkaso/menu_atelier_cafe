@@ -1,7 +1,53 @@
+.inventory-worker-layout {
+  grid-template-columns: minmax(0, 1fr);
+  width: min(1680px, 98vw);
+  padding-top: 14px;
+}
+
+.inventory-worker-stages {
+  display: flex;
+  align-items: stretch;
+  gap: 9px;
+  margin-bottom: 14px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.inventory-worker-stages > span {
+  display: none;
+}
+
+.inventory-worker-stages > h1 {
+  align-self: center;
+  flex: 0 0 auto;
+  margin: 0 10px 0 2px;
+  font-size: 1.25rem;
+  white-space: nowrap;
+}
+
+.inventory-worker-stages > button {
+  min-width: 245px;
+  flex: 0 0 245px;
+  margin: 0;
+}
+
+.inventory-worker-stage > header {
+  height: auto;
+  min-height: 0;
+  align-items: center;
+  padding: 18px 22px;
+  color: var(--i-navy);
+}
+
+.inventory-worker-stage > header h2 {
+  margin-block: 4px;
+  font-size: 2rem;
+}
+
 .inventory-count-item > header {
   height: auto;
-  min-height: 164px;
-  grid-template-columns: 112px minmax(0, 1fr) auto;
+  min-height: 180px;
+  grid-template-columns: 118px minmax(0, 1fr) auto;
   align-items: center;
   color: var(--i-navy);
 }
@@ -13,8 +59,8 @@
 }
 
 .inventory-count-photo {
-  width: 112px;
-  height: 132px;
+  width: 118px;
+  height: 150px;
   padding: 8px;
   border: 1px solid #d8dfdc;
   background: #fff;
@@ -22,9 +68,11 @@
 
 .inventory-count-photo img {
   display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: scale-down;
   object-position: center;
 }
 
@@ -74,14 +122,32 @@
 }
 
 @media (max-width: 580px) {
+  .inventory-worker-layout {
+    width: 100%;
+  }
+
+  .inventory-worker-stages > h1 {
+    display: none;
+  }
+
+  .inventory-worker-stages > button {
+    min-width: 215px;
+    flex-basis: 215px;
+  }
+
+  .inventory-worker-stage > header {
+    min-height: 0;
+    align-items: flex-start;
+  }
+
   .inventory-count-item > header {
-    min-height: 132px;
-    grid-template-columns: 78px minmax(0, 1fr);
+    min-height: 148px;
+    grid-template-columns: 82px minmax(0, 1fr);
   }
 
   .inventory-count-photo {
-    width: 78px;
-    height: 104px;
+    width: 82px;
+    height: 116px;
     padding: 5px;
   }
 
