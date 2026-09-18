@@ -1,13 +1,13 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
-import { adminUsers, waiterEmployees, waiterSurveyQuestions, waiterTables } from "../../../../../db/schema";
+import { adminUsers, waiterEmployees, waiterEmployeeThankYouMedia, waiterSurveyQuestions, waiterTables } from "../../../../../db/schema";
 import { isAdmin } from "../../../../../lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!(await isAdmin())) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  const [employees, administrators, tables, surveyQuestions] = await Promise.all([
+  const [employees, administrators, tables, surveyQuestions, thankYouMedia] = await Promise.all([
     getDb().select({
       dotykackaId: waiterEmployees.dotykackaId,
       name: waiterEmployees.name,
@@ -31,8 +31,16 @@ export async function GET() {
       syncedAt: waiterTables.syncedAt,
     }).from(waiterTables).orderBy(asc(waiterTables.name)),
     getDb().select().from(waiterSurveyQuestions).orderBy(asc(waiterSurveyQuestions.sortOrder), asc(waiterSurveyQuestions.id)),
+    getDb().select({
+      id: waiterEmployeeThankYouMedia.id,
+      employeeDotykackaId: waiterEmployeeThankYouMedia.employeeDotykackaId,
+      mediaPath: waiterEmployeeThankYouMedia.mediaPath,
+      mediaType: waiterEmployeeThankYouMedia.mediaType,
+    }).from(waiterEmployeeThankYouMedia).orderBy(asc(waiterEmployeeThankYouMedia.id)),
   ]);
   const adminByEmployee = new Map(administrators.map((administrator) => [administrator.employeeDotykackaId, administrator]));
+  const mediaByEmployee = new Map<string, typeof thankYouMedia>();
+  for (const media of thankYouMedia) mediaByEmployee.set(media.employeeDotykackaId, [...(mediaByEmployee.get(media.employeeDotykackaId) ?? []), media]);
   return Response.json({
     employees: employees.map(({ pinHash, ...employee }) => {
       const administrator = adminByEmployee.get(employee.dotykackaId);
@@ -42,6 +50,7 @@ export async function GET() {
         adminConfigured: Boolean(administrator?.enabled),
         adminUsername: administrator?.username ?? null,
         adminLastLoginAt: administrator?.lastLoginAt ?? null,
+        thankYouMedia: mediaByEmployee.get(employee.dotykackaId) ?? [],
       };
     }),
     tables,

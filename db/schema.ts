@@ -102,8 +102,17 @@ export const productContent = pgTable("product_content", {
   veganStatus: text("vegan_status").notNull().default("UNKNOWN"),
   tastingNotes: text("tasting_notes"),
   attributes: jsonb("attributes").$type<Record<string, string>>().notNull().default({}),
+  staffInstructions: text("staff_instructions"),
+  staffMedia: jsonb("staff_media").$type<StaffManualMedia[]>().notNull().default([]),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("product_content_product_id_uq").on(table.productId)]);
+
+export type StaffManualMedia = {
+  id: string;
+  path: string;
+  type: "IMAGE" | "VIDEO";
+  name: string;
+};
 
 export type WineSourceProposal = {
   descriptionPl?: string | null;
@@ -204,6 +213,17 @@ export const waiterEmployees = pgTable("waiter_employees", {
   sourceVersion: timestamp("source_version", { withTimezone: true }),
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("waiter_employees_dotykacka_id_uq").on(table.dotykackaId)]);
+
+export const waiterEmployeeThankYouMedia = pgTable("waiter_employee_thank_you_media", {
+  id: serial("id").primaryKey(),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  mediaPath: text("media_path").notNull(),
+  mediaType: text("media_type").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("waiter_employee_thanks_employee_idx").on(table.employeeDotykackaId),
+  uniqueIndex("waiter_employee_thanks_media_path_uq").on(table.mediaPath),
+]);
 
 export const adminUsers = pgTable("admin_users", {
   id: serial("id").primaryKey(),

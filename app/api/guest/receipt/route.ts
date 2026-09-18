@@ -7,7 +7,7 @@ export async function GET() {
   const session = await currentGuestReceipt();
   if (!session) return Response.json({ error: "Brak aktywnego rachunku dla gościa." }, { status: 401 });
   try {
-    return Response.json({ receipt: await loadGuestReceipt(session.orderId) });
+    return Response.json({ receipt: await loadGuestReceipt(session.orderId, session.presentedBy) });
   } catch (error) {
     console.error("Guest receipt load failed", error instanceof Error ? error.message : "unknown error");
     return Response.json({ error: "Nie udało się odświeżyć rachunku." }, { status: 502 });

@@ -53,3 +53,66 @@ export function inventoryDifference(expected: string | number, counted: string |
   if (counted == null) return null;
   return (quantityToMillis(counted) ?? 0) - (quantityToMillis(expected) ?? 0);
 }
+
+type InventoryProductCandidate = {
+  dotykackaId: string;
+  stockQuantity: string | number | null;
+};
+
+type ApprovedInventoryResult = {
+  productDotykackaId: string;
+  countedQuantity: string | number | null;
+  approvedAt: Date | string | null;
+};
+
+type PositiveStockMovement = {
+  dotykackaProductId: string | null;
+  quantity: string | number | null;
+  occurredAt: Date | string | null;
+  receivedAt: Date | string;
+};
+
+function inventoryTimestamp(value: Date | string | null | undefined) {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value !== "string" || !value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+export function selectInventoryProducts<T extends InventoryProductCandidate>(
+  products: T[],
+  approvedResults: ApprovedInventoryResult[],
+  positiveMovements: PositiveStockMovement[],
+) {
+  const latestApprovedResult = new Map<string, { countedQuantity: number; approvedAt: number }>();
+  for (const result of approvedResults) {
+    const approvedAt = inventoryTimestamp(result.approvedAt);
+    const countedQuantity = Number(result.countedQuantity);
+    if (approvedAt == null || !Number.isFinite(countedQuantity)) continue;
+    const previous = latestApprovedResult.get(result.productDotykackaId);
+    if (!previous || approvedAt > previous.approvedAt) latestApprovedResult.set(result.productDotykackaId, { countedQuantity, approvedAt });
+  }
+
+  const latestPositiveMovement = new Map<string, number>();
+  for (const movement of positiveMovements) {
+    if (!movement.dotykackaProductId || Number(movement.quantity) <= 0) continue;
+    const occurredAt = inventoryTimestamp(movement.occurredAt) ?? inventoryTimestamp(movement.receivedAt);
+    if (occurredAt == null) continue;
+    const previous = latestPositiveMovement.get(movement.dotykackaProductId);
+    if (previous == null || occurredAt > previous) latestPositiveMovement.set(movement.dotykackaProductId, occurredAt);
+  }
+
+  const included: T[] = [];
+  const skippedConfirmedZero: T[] = [];
+  for (const product of products) {
+    const currentQuantity = Number(product.stockQuantity);
+    const previous = latestApprovedResult.get(product.dotykackaId);
+    const positiveMovementAt = latestPositiveMovement.get(product.dotykackaId);
+    const safelyStillZero = currentQuantity === 0
+      && previous?.countedQuantity === 0
+      && (positiveMovementAt == null || positiveMovementAt <= previous.approvedAt);
+    if (safelyStillZero) skippedConfirmedZero.push(product);
+    else included.push(product);
+  }
+  return { included, skippedConfirmedZero };
+}

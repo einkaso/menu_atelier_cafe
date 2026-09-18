@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   const orderId = typeof body.orderId === "string" ? body.orderId : "";
   if (!/^\d+$/.test(orderId)) return Response.json({ error: "Wybierz prawidłowy rachunek." }, { status: 400 });
   try {
-    const receipt = await loadGuestReceipt(orderId);
+    const receipt = await loadGuestReceipt(orderId, employee.dotykackaId);
     const token = createGuestReceiptToken({ orderId: receipt.orderId, documentNumber: receipt.documentNumber, tableId: receipt.tableId }, employee.dotykackaId);
     const response = Response.json({ receipt });
     response.headers.append("Set-Cookie", httpOnlyCookie(guestReceiptCookie.name, token, guestReceiptCookie.maxAge));

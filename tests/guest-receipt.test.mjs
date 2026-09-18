@@ -36,3 +36,35 @@ test("keeps pre-order and post-receipt surveys separate", async () => {
   assert.match(waiter, /Dalej: krótka ankieta/);
   assert.match(guest, /JUŻ PO RACHUNKU/);
 });
+
+test("shows a random personal thank-you animation from a three-item employee gallery", async () => {
+  const [schema, migration, server, guest, picker, orientation, guestStyles, admin, mediaRoute] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0031_violet_alex_wilder.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/guest-receipt-server.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/kelner/guest-receipt-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/kelner/guest-receipt-picker.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/kelner/guest-orientation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/kelner/waiter.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/admin/waiters/waiter-admin-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/waiter/employees/[dotykackaId]/thanks/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(schema, /waiterEmployeeThankYouMedia = pgTable\("waiter_employee_thank_you_media"/);
+  assert.match(migration, /CREATE TABLE "waiter_employee_thank_you_media"/);
+  assert.match(server, /Math\.floor\(Math\.random\(\) \* thankYouMedia\.length\)/);
+  assert.match(guest, /Dziękuję i zapraszam ponownie!/);
+  assert.match(guest, /autoPlay loop muted playsInline/);
+  assert.match(guest, /fetch\(servedBy\.mediaUrl, \{ credentials: "same-origin", cache: "no-store" \}\)/);
+  assert.match(guest, /URL\.createObjectURL\(blob\)/);
+  assert.match(guest, /onCanPlay=\{playVideo\}/);
+  assert.match(guest, /Obróć tablet pionowo/);
+  assert.match(picker, /lockGuestPortraitOrientation\(\)/);
+  assert.match(orientation, /orientation\.lock\("portrait"\)/);
+  assert.match(orientation, /orientation\.unlock\(\)/);
+  assert.match(guestStyles, /\.guest-personal-thanks-media\.has-media:before/);
+  assert.match(guestStyles, /\.guest-personal-thanks-clip\{/);
+  assert.match(guestStyles, /@media\(orientation:landscape\) and \(pointer:coarse\)/);
+  assert.match(guestStyles, /@keyframes guest-thanks-pop/);
+  assert.match(admin, /employee\.thankYouMedia\.length >= 3/);
+  assert.match(mediaRoute, /existingMedia\.length >= 3/);
+});

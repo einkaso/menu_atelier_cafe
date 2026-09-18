@@ -65,6 +65,8 @@ export async function GET() {
       veganStatus: productContent.veganStatus,
       tastingNotes: productContent.tastingNotes,
       attributes: productContent.attributes,
+      staffInstructions: productContent.staffInstructions,
+      staffMedia: productContent.staffMedia,
     }).from(menuProducts)
       .leftJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
       .leftJoin(productContent, eq(menuProducts.id, productContent.productId))

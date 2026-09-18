@@ -67,6 +67,8 @@ export async function GET(request: Request) {
       sweetness: productContent.sweetness,
       veganStatus: productContent.veganStatus,
       attributes: productContent.attributes,
+      staffInstructions: productContent.staffInstructions,
+      staffMedia: productContent.staffMedia,
     }).from(menuProducts)
       .innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
       .leftJoin(productContent, eq(menuProducts.id, productContent.productId))
@@ -137,11 +139,15 @@ export async function GET(request: Request) {
         attributes,
         outsideMenu: false,
         image: productImageUrl(product.imagePath),
+        staffManual: product.staffInstructions?.trim() || product.staffMedia?.length ? {
+          instructions: product.staffInstructions?.trim() ?? "",
+          media: product.staffMedia ?? [],
+        } : null,
         addonGroups: Array.from(addonGroupsByProduct.get(product.dotykackaId)?.values() ?? []),
       };
     }), ...extraProducts.filter((product) => regularProductStockIsAvailable(
       product.stockDeduct, product.stockOverdraft, product.stockQuantity,
-    )).map((product) => ({ ...product, kind: "other", serving: null, country: null, wineStyle: null, wineColor: null, sparklingType: null, sweetness: null, veganStatus: "UNKNOWN", vegan: false, alcoholFree: false, attributes: {}, outsideMenu: true, image: null, addonGroups: [] }))],
+    )).map((product) => ({ ...product, kind: "other", serving: null, country: null, wineStyle: null, wineColor: null, sparklingType: null, sweetness: null, veganStatus: "UNKNOWN", vegan: false, alcoholFree: false, attributes: {}, outsideMenu: true, image: null, staffManual: null, addonGroups: [] }))],
     surveyQuestions,
     posActionsEnabled: process.env.WAITER_POS_ACTIONS_ENABLED === "true",
   });

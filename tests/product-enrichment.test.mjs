@@ -283,3 +283,15 @@ test("places Polish product sources before foreign results", async () => {
   assert.equal(results[1].url, "https://merchant.example.com/pl/chianti");
   assert.equal(results[2].url, "https://producer.example.com/wines/chianti");
 });
+
+test("requests a different provider page for each subsequent product search", async () => {
+  const { productSearchPageEndpoints } = await vite.ssrLoadModule("/lib/product-enrichment.ts");
+  const first = productSearchPageEndpoints('"Chianti" wino', 0);
+  const second = productSearchPageEndpoints('"Chianti" wino', 1);
+
+  assert.equal(first.brave.searchParams.get("offset"), null);
+  assert.equal(second.brave.searchParams.get("offset"), "1");
+  assert.equal(first.bing.searchParams.get("first"), null);
+  assert.equal(second.bing.searchParams.get("first"), "9");
+  assert.equal(second.brave.searchParams.get("q"), '"Chianti" wino');
+});

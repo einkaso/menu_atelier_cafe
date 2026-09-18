@@ -7,6 +7,7 @@ export type GuestReceipt = GuestReceiptListItem & {
   payments: Array<{ id: string; label: string; amount: string; currency: string; tip: string }>;
   surveyQuestions: GuestSurveyQuestion[];
   reviewUrl: string | null;
+  servedBy: { name: string; mediaUrl: string | null; mediaType: "GIF" | "VIDEO" | null } | null;
 };
 
 const decimal = (value: unknown, fallback = 0) => {
@@ -50,7 +51,7 @@ function paymentLabel(id: unknown) {
   return "Płatność";
 }
 
-export function buildGuestReceipt(order: DotykackaOrder, orderItems: DotykackaOrderItem[], moneyLogs: DotykackaMoneyLog[], tableNames: Map<string, string>): Omit<GuestReceipt, "surveyQuestions" | "reviewUrl"> {
+export function buildGuestReceipt(order: DotykackaOrder, orderItems: DotykackaOrderItem[], moneyLogs: DotykackaMoneyLog[], tableNames: Map<string, string>): Omit<GuestReceipt, "surveyQuestions" | "reviewUrl" | "servedBy"> {
   const base = receiptListItem(order, tableNames);
   const items = orderItems.filter((item) => !item.canceledDate && decimal(item.quantity) !== 0).map((item) => {
     const quantity = decimal(item.quantity, 1);

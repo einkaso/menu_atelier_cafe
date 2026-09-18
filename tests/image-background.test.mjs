@@ -56,3 +56,17 @@ test("keeps an existing transparent cutout byte-for-byte", async () => {
   assert.equal(result.backgroundRemoved, false);
   assert.deepEqual(result.bytes, source);
 });
+
+test("shrinks an oversized product photo for application use", async () => {
+  const { optimizeProductImage } = await vite.ssrLoadModule("/lib/image-background.ts");
+  const source = await sharp({
+    create: { width: 2_600, height: 1_900, channels: 3, background: { r: 94, g: 63, b: 128 } },
+  }).png({ compressionLevel: 0 }).toBuffer();
+
+  const optimized = await optimizeProductImage(source);
+  const metadata = await sharp(optimized).metadata();
+  assert.ok((metadata.width ?? Infinity) <= 1_600);
+  assert.ok((metadata.height ?? Infinity) <= 1_600);
+  assert.ok(optimized.length <= 2_400_000);
+  assert.equal(metadata.format, "webp");
+});

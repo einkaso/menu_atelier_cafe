@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { reportPaymentTotals, snapshotDelta } from "../lib/cash-day.ts";
-import { cleanInventoryLocation, inventoryDifference, millisToQuantity, nonNegativeWholeNumber, quantityToMillis, wineBottleQuantityMillis } from "../lib/inventory.ts";
+import { cleanInventoryLocation, inventoryDifference, millisToQuantity, nonNegativeWholeNumber, quantityToMillis, selectInventoryProducts, wineBottleQuantityMillis } from "../lib/inventory.ts";
 import { moneyToCents, settlementTotals } from "../lib/waiter-settlement.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -127,9 +127,13 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(sync, /await tx\.delete\(inventoryCatalogProducts\)/);
   assert.match(adminRoute, /eq\(inventoryCatalogProducts\.inventoryTracked, true\)/);
   assert.match(adminRoute, /SET_PRODUCT_TRACKING/);
+  assert.match(adminRoute, /selectInventoryProducts/);
+  assert.match(adminRoute, /skippedConfirmedZeroCount/);
   assert.match(adminStageRoute, /process\.env\.DOTYKACKA_INVENTORY_WRITE_ENABLED !== "true"/);
   assert.ok(adminStageRoute.indexOf("DOTYKACKA_INVENTORY_WRITE_ENABLED") < adminStageRoute.indexOf("createStockTaking(payload)"));
   assert.match(adminStageRoute, /stage\.status !== "APPROVED"/);
+  assert.match(adminStageRoute, /ADMIN_EDITABLE_STATUSES\.includes\(stage\.status\)/);
+  assert.match(adminStageRoute, /acceptedExpectedCount/);
   assert.match(adminStageRoute, /stockTakingDates/);
   assert.match(client, /createStockTaking/);
   assert.match(client, /\/stock-takings/);
@@ -148,10 +152,41 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(workerScreen, /EAN:/);
   assert.match(workerScreen, /waiterSessionHeaders/);
   assert.match(workerScreen, /4 \* 60 \* 1000/);
+  assert.match(workerScreen, /function InventorySearch/);
+  assert.match(workerScreen, /field\.addEventListener\("keydown", onKeyDown\)/);
+  assert.match(workerScreen, /field\.addEventListener\("beforeinput", onBeforeInput\)/);
+  assert.match(workerScreen, /event\.inputType !== "deleteContentBackward"/);
+  assert.match(workerScreen, /field\.setRangeText\("", start === end \? start - 1 : start, end, "end"\)/);
+  assert.doesNotMatch(workerScreen, /value=\{search\} onChange=/);
   assert.match(workerScreen, /Zakończenie tego etapu nie wymaga przeliczenia innych kategorii/);
   assert.match(adminScreen, /Cofnij do poprawy/);
+  assert.match(adminScreen, /Zatwierdź bez czekania na zakończenie przez pracownika/);
+  assert.match(adminScreen, /zer pominiętych/);
   assert.match(adminScreen, /Powtarzające się odchylenia/);
   assert.match(panel, /href="\/admin\/inventory"/);
+});
+
+test("omits a repeatedly confirmed zero until a positive stock movement occurs", () => {
+  const products = [
+    { dotykackaId: "still-zero", stockQuantity: "0" },
+    { dotykackaId: "received", stockQuantity: "0" },
+    { dotykackaId: "positive", stockQuantity: "4" },
+    { dotykackaId: "latest-was-positive", stockQuantity: "0" },
+    { dotykackaId: "never-counted", stockQuantity: "0" },
+  ];
+  const approvedResults = [
+    { productDotykackaId: "still-zero", countedQuantity: "0", approvedAt: "2026-09-10T10:00:00Z" },
+    { productDotykackaId: "received", countedQuantity: "0", approvedAt: "2026-09-10T10:00:00Z" },
+    { productDotykackaId: "latest-was-positive", countedQuantity: "0", approvedAt: "2026-09-09T10:00:00Z" },
+    { productDotykackaId: "latest-was-positive", countedQuantity: "2", approvedAt: "2026-09-11T10:00:00Z" },
+  ];
+  const movements = [
+    { dotykackaProductId: "still-zero", quantity: "3", occurredAt: "2026-09-09T12:00:00Z", receivedAt: "2026-09-09T12:01:00Z" },
+    { dotykackaProductId: "received", quantity: "6", occurredAt: "2026-09-12T12:00:00Z", receivedAt: "2026-09-12T12:01:00Z" },
+  ];
+  const selection = selectInventoryProducts(products, approvedResults, movements);
+  assert.deepEqual(selection.skippedConfirmedZero.map((product) => product.dotykackaId), ["still-zero"]);
+  assert.deepEqual(selection.included.map((product) => product.dotykackaId), ["received", "positive", "latest-was-positive", "never-counted"]);
 });
 
 test("normalizes inventory quantities and location labels without floating point drift", () => {
@@ -282,6 +317,60 @@ test("gives waiters the guest drink filters and operational serving information"
   assert.match(client, /servingLabel\(product\)/);
   assert.match(css, /\.waiter-drink-filters/);
   assert.match(css, /\.waiter-filter-chips button\.is-selected/);
+});
+
+test("keeps a staff-only preparation manual behind three product-photo taps", async () => {
+  const [schema, migration, admin, catalog, client, css, uploadRoute, mediaRoute] = await Promise.all([
+    read("db/schema.ts"),
+    read("drizzle/0032_overjoyed_newton_destine.sql"),
+    read("app/admin/admin-panel.tsx"),
+    read("app/api/waiter/catalog/route.ts"),
+    read("app/kelner/waiter-client.tsx"),
+    read("app/kelner/waiter.css"),
+    read("app/api/admin/products/[id]/staff-media/route.ts"),
+    read("app/api/staff-manual-media/[filename]/route.ts"),
+  ]);
+  assert.match(schema, /staffInstructions: text\("staff_instructions"\)/);
+  assert.match(schema, /staffMedia: jsonb\("staff_media"\)/);
+  assert.match(migration, /ADD COLUMN "staff_instructions" text/);
+  assert.match(migration, /ADD COLUMN "staff_media" jsonb DEFAULT '\[\]'::jsonb NOT NULL/);
+  assert.match(admin, /Instrukcja przygotowania/);
+  assert.match(admin, /name="staffInstructions"/);
+  assert.match(admin, /name="staffMediaFiles"/);
+  assert.match(admin, /product\.staffMedia\?\.length \?\? 0\) >= 8/);
+  assert.match(catalog, /staffManual:/);
+  assert.match(catalog, /instructions: product\.staffInstructions/);
+  assert.match(client, /function StaffManualDialog/);
+  assert.match(client, /manualTaps\.current/);
+  assert.match(client, /if \(count < 3\) return/);
+  assert.match(client, /className="waiter-product-manual-hotspot"/);
+  assert.match(css, /\.waiter-manual-backdrop/);
+  assert.match(css, /\.waiter-manual-media img,\.waiter-manual-media video/);
+  assert.match(uploadRoute, /isAdmin\(\)/);
+  assert.match(uploadRoute, /MAX_MEDIA_ITEMS = 8/);
+  assert.match(mediaRoute, /isAdmin\(\)/);
+  assert.match(mediaRoute, /currentWaiter\(request\)/);
+  assert.match(mediaRoute, /Content-Range/);
+});
+
+test("lets admins remove product images and optimizes oversized files", async () => {
+  const [admin, imageRoute, imageImport, imageBackground] = await Promise.all([
+    read("app/admin/admin-panel.tsx"),
+    read("app/api/admin/products/[id]/image/route.ts"),
+    read("lib/image-import.ts"),
+    read("lib/image-background.ts"),
+  ]);
+  assert.match(admin, /async function removeProductImage\(\)/);
+  assert.match(admin, /method: "DELETE"/);
+  assert.match(admin, />Usuń zdjęcie<\/button>/);
+  assert.match(imageRoute, /export async function DELETE/);
+  assert.match(imageRoute, /imagePath: null, imageSourceUrl: null/);
+  assert.match(imageRoute, /removeImageWhenUnused/);
+  assert.match(imageImport, /optimizeProductImage\(prepared\.bytes\)/);
+  assert.match(imageImport, /removeProductImageFile/);
+  assert.match(imageBackground, /MAX_STORED_BYTES = 2_400_000/);
+  assert.match(imageBackground, /maxSide: 1_600, quality: 86/);
+  assert.match(imageBackground, /maxSide: 1_000, quality: 62/);
 });
 
 test("keeps waiter search responsive on the POS tablet", async () => {

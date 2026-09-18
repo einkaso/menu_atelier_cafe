@@ -218,6 +218,20 @@
       "when": 1789603200000,
       "tag": "0030_wine_inventory_counting",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789606800000,
+      "tag": "0031_violet_alex_wilder",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789741767257,
+      "tag": "0032_overjoyed_newton_destine",
+      "breakpoints": true
     }
   ]
 }

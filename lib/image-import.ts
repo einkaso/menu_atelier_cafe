@@ -1,11 +1,11 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import path from "node:path";
 
-import { removeLightImageBackground } from "./image-background";
+import { optimizeProductImage, removeLightImageBackground } from "./image-background";
 
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 2_500_000;
@@ -28,13 +28,14 @@ function detectedImageType(bytes: Buffer) {
 
 async function storeProductImage(productId: number, bytes: Buffer) {
   const prepared = await removeLightImageBackground(bytes).catch(() => ({ bytes, backgroundRemoved: false }));
-  const detected = detectedImageType(prepared.bytes);
+  const optimized = await optimizeProductImage(prepared.bytes);
+  const detected = detectedImageType(optimized);
   if (!detected || !contentTypes[detected.mime]) throw new Error("Plik nie jest prawidłowym zdjęciem JPG, PNG, WebP lub AVIF.");
-  const fingerprint = createHash("sha256").update(prepared.bytes).digest("hex").slice(0, 16);
+  const fingerprint = createHash("sha256").update(optimized).digest("hex").slice(0, 16);
   const filename = `${productId}-${fingerprint}.${detected.extension}`;
   const directory = productImageDirectory();
   await mkdir(directory, { recursive: true });
-  await writeFile(path.join(directory, filename), prepared.bytes, { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
+  await writeFile(path.join(directory, filename), optimized, { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "EEXIST") throw error;
   });
   return `/api/product-images/${filename}`;
@@ -53,6 +54,14 @@ export function productImageFilename(storedPath: string | null | undefined) {
 export function productImageUrl(storedPath: string | null | undefined) {
   const filename = productImageFilename(storedPath);
   return filename ? `/api/product-images/${filename}` : null;
+}
+
+export async function removeProductImageFile(storedPath: string | null | undefined) {
+  const filename = productImageFilename(storedPath);
+  if (!filename) return;
+  await unlink(path.join(productImageDirectory(), filename)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+  });
 }
 
 function isPrivateAddress(address: string) {

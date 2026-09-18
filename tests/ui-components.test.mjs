@@ -295,6 +295,7 @@ test("uses exact cake photos in image-led cards without a section-wide banner", 
   assert.doesNotMatch(source, /cakeShowcase=/);
   assert.match(source, /cakeLayout&&!p\.image&&<div className="product-image cake-image-placeholder"/);
   assert.match(source, /cakeLayout&&p\.cakePartner==="capuccino-cafe"&&<img className="cake-card-logo"/);
+  assert.match(source, /product\.cakePartner==="capuccino-cafe"&&<img className="featured-cake-logo"/);
   assert.match(source, /function cakePresentation\(/);
   assert.match(source, /className="cake-taste-line"/);
   assert.match(source, /className="cake-read-more"/);
@@ -305,6 +306,7 @@ test("uses exact cake photos in image-led cards without a section-wide banner", 
   assert.match(css, /\.motif-cakes \.product\.is-cake-card \.product-info>p\{[^}]*min-height:2\.8em;[^}]*max-height:2\.8em;[^}]*-webkit-line-clamp:2/);
   assert.match(css, /\.cake-card-footer\{[^}]*align-items:flex-start[^}]*margin-top:auto/);
   assert.match(css, /\.cake-card-logo\{[^}]*width:78px[^}]*object-position:left center/);
+  assert.match(css, /\.featured-cake-logo\{[^}]*width:128px[^}]*object-position:left center/);
   assert.match(css, /\.cake-taste-line\{[^}]*color:var\(--pink\)[^}]*text-transform:uppercase/);
   assert.match(css, /\.cake-detail-logo\{[^}]*width:135px[^}]*object-position:left center/);
 });

@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { inventoryCatalogCategories, inventoryCatalogProducts, inventoryEvents, inventoryStageItems, inventoryStages, menuProducts, productContent, waiterEmployees } from "../../../../db/schema";
+import { dotykackaStockEvents, inventoryCatalogCategories, inventoryCatalogProducts, inventoryEvents, inventoryStageItems, inventoryStages, menuProducts, productContent, waiterEmployees } from "../../../../db/schema";
 import { currentAdmin } from "../../../../lib/admin-auth";
-import { cleanInventoryLocation, inventoryDifference, millisToQuantity } from "../../../../lib/inventory";
+import { cleanInventoryLocation, inventoryDifference, millisToQuantity, selectInventoryProducts } from "../../../../lib/inventory";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!(await currentAdmin())) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const db = getDb();
-  const [categoryRows, catalogProducts, employees, stages, reportableStages, stageItems] = await Promise.all([
+  const [categoryRows, catalogProducts, employees, stages, reportableStages, stageItems, approvedResults, positiveMovements] = await Promise.all([
     db.select().from(inventoryCatalogCategories).where(eq(inventoryCatalogCategories.deleted, false)).orderBy(asc(inventoryCatalogCategories.sortOrder), asc(inventoryCatalogCategories.name)),
     db.select({
       dotykackaId: inventoryCatalogProducts.dotykackaId,
@@ -38,11 +38,32 @@ export async function GET() {
       countStatus: inventoryStageItems.countStatus,
       reasonCode: inventoryStageItems.reasonCode,
     }).from(inventoryStageItems).where(isNotNull(inventoryStageItems.countedQuantity)),
+    db.select({
+      productDotykackaId: inventoryStageItems.productDotykackaId,
+      countedQuantity: inventoryStageItems.countedQuantity,
+      approvedAt: inventoryStages.approvedAt,
+    }).from(inventoryStageItems)
+      .innerJoin(inventoryStages, eq(inventoryStageItems.stageId, inventoryStages.id))
+      .where(and(isNotNull(inventoryStages.approvedAt), isNotNull(inventoryStageItems.countedQuantity)))
+      .orderBy(desc(inventoryStages.approvedAt), desc(inventoryStageItems.id)),
+    db.select({
+      dotykackaProductId: dotykackaStockEvents.dotykackaProductId,
+      quantity: dotykackaStockEvents.quantity,
+      occurredAt: dotykackaStockEvents.occurredAt,
+      receivedAt: dotykackaStockEvents.receivedAt,
+    }).from(dotykackaStockEvents).where(and(isNotNull(dotykackaStockEvents.dotykackaProductId), gt(dotykackaStockEvents.quantity, "0"))),
   ]);
+  const trackedProducts = catalogProducts.filter((product) => product.categoryId && !product.deleted && product.inventoryTracked && product.stockQuantity != null);
+  const inventorySelection = selectInventoryProducts(trackedProducts, approvedResults, positiveMovements);
   const productCountByCategory = new Map<string, number>();
-  for (const product of catalogProducts) {
-    if (!product.categoryId || product.deleted || !product.inventoryTracked || product.stockQuantity == null) continue;
+  const skippedZeroCountByCategory = new Map<string, number>();
+  for (const product of inventorySelection.included) {
+    if (!product.categoryId) continue;
     productCountByCategory.set(product.categoryId, (productCountByCategory.get(product.categoryId) ?? 0) + 1);
+  }
+  for (const product of inventorySelection.skippedConfirmedZero) {
+    if (!product.categoryId) continue;
+    skippedZeroCountByCategory.set(product.categoryId, (skippedZeroCountByCategory.get(product.categoryId) ?? 0) + 1);
   }
   const itemStatsByStage = new Map<number, { counted: number; differences: number; total: number }>();
   const stageTotals = new Map<number, number>();
@@ -68,7 +89,11 @@ export async function GET() {
     anomalyByProduct.set(item.productDotykackaId, anomaly);
   }
   return Response.json({
-    categories: categoryRows.map((category) => ({ ...category, productCount: productCountByCategory.get(category.dotykackaId) ?? 0 })).filter((category) => category.productCount > 0),
+    categories: categoryRows.map((category) => ({
+      ...category,
+      productCount: productCountByCategory.get(category.dotykackaId) ?? 0,
+      skippedConfirmedZeroCount: skippedZeroCountByCategory.get(category.dotykackaId) ?? 0,
+    })).filter((category) => category.productCount > 0),
     products: catalogProducts.filter((product) => !product.deleted && product.stockDeduct && product.stockQuantity != null).map((product) => ({
       dotykackaId: product.dotykackaId,
       categoryDotykackaId: product.categoryId,
@@ -102,18 +127,35 @@ export async function POST(request: Request) {
   if (!categoryDotykackaId || !assignedEmployeeDotykackaId) return Response.json({ error: "Wybierz kategorię i pracownika." }, { status: 400 });
 
   const db = getDb();
-  const [[category], [employee], products, localProducts] = await Promise.all([
+  const [[category], [employee], products, localProducts, approvedResults, positiveMovements] = await Promise.all([
     db.select().from(inventoryCatalogCategories).where(and(eq(inventoryCatalogCategories.dotykackaId, categoryDotykackaId), eq(inventoryCatalogCategories.deleted, false))).limit(1),
     db.select({ dotykackaId: waiterEmployees.dotykackaId, name: waiterEmployees.name }).from(waiterEmployees).where(and(eq(waiterEmployees.dotykackaId, assignedEmployeeDotykackaId), eq(waiterEmployees.enabled, true), eq(waiterEmployees.deleted, false))).limit(1),
     db.select().from(inventoryCatalogProducts).where(and(eq(inventoryCatalogProducts.categoryDotykackaId, categoryDotykackaId), eq(inventoryCatalogProducts.deleted, false), eq(inventoryCatalogProducts.inventoryTracked, true), isNotNull(inventoryCatalogProducts.stockQuantity))).orderBy(asc(inventoryCatalogProducts.name)),
     db.select({ id: menuProducts.id, dotykackaId: menuProducts.dotykackaId, imagePath: productContent.imagePath }).from(menuProducts).leftJoin(productContent, eq(menuProducts.id, productContent.productId)),
+    db.select({
+      productDotykackaId: inventoryStageItems.productDotykackaId,
+      countedQuantity: inventoryStageItems.countedQuantity,
+      approvedAt: inventoryStages.approvedAt,
+    }).from(inventoryStageItems)
+      .innerJoin(inventoryStages, eq(inventoryStageItems.stageId, inventoryStages.id))
+      .where(and(isNotNull(inventoryStages.approvedAt), isNotNull(inventoryStageItems.countedQuantity)))
+      .orderBy(desc(inventoryStages.approvedAt), desc(inventoryStageItems.id)),
+    db.select({
+      dotykackaProductId: dotykackaStockEvents.dotykackaProductId,
+      quantity: dotykackaStockEvents.quantity,
+      occurredAt: dotykackaStockEvents.occurredAt,
+      receivedAt: dotykackaStockEvents.receivedAt,
+    }).from(dotykackaStockEvents).where(and(isNotNull(dotykackaStockEvents.dotykackaProductId), gt(dotykackaStockEvents.quantity, "0"))),
   ]);
   if (!category) return Response.json({ error: "Kategoria nie istnieje w katalogu magazynowym." }, { status: 404 });
   if (!employee) return Response.json({ error: "Pracownik nie istnieje lub jest nieaktywny w Dotykačce." }, { status: 404 });
   if (!products.length) return Response.json({ error: "Ta kategoria nie ma aktywnych produktów ze śledzeniem stanu." }, { status: 400 });
+  const inventorySelection = selectInventoryProducts(products, approvedResults, positiveMovements);
+  const productsToCount = inventorySelection.included;
+  if (!productsToCount.length) return Response.json({ error: "Wszystkie śledzone produkty w tej kategorii mają wcześniej potwierdzony stan zero i od tamtej pory nie zarejestrowano przyjęcia. Nie ma pozycji do ponownego liczenia." }, { status: 409 });
   const localByDotykackaId = new Map(localProducts.map((product) => [product.dotykackaId, product]));
   const now = new Date();
-  const expectedSnapshotAt = products.reduce((oldest, product) => product.syncedAt < oldest ? product.syncedAt : oldest, products[0].syncedAt);
+  const expectedSnapshotAt = productsToCount.reduce((oldest, product) => product.syncedAt < oldest ? product.syncedAt : oldest, productsToCount[0].syncedAt);
   const [created] = await db.transaction(async (tx) => {
     const [stage] = await tx.insert(inventoryStages).values({
       externalId: randomUUID(),
@@ -128,7 +170,7 @@ export async function POST(request: Request) {
       createdBy: actor.username,
       updatedAt: now,
     }).returning();
-    await tx.insert(inventoryStageItems).values(products.map((product) => {
+    await tx.insert(inventoryStageItems).values(productsToCount.map((product) => {
       const local = localByDotykackaId.get(product.dotykackaId);
       return {
         stageId: stage.id,
@@ -147,10 +189,10 @@ export async function POST(request: Request) {
         referencePrice: product.priceWithVat,
       };
     }));
-    await tx.insert(inventoryEvents).values({ stageId: stage.id, actorType: "ADMIN", actorId: actor.username, actorName: actor.employeeName ?? actor.username, action: "CREATED", details: { category: category.name, assignedTo: employee.name, productCount: products.length, locations: locations.length ? locations : ["Główne miejsce"] } });
+    await tx.insert(inventoryEvents).values({ stageId: stage.id, actorType: "ADMIN", actorId: actor.username, actorName: actor.employeeName ?? actor.username, action: "CREATED", details: { category: category.name, assignedTo: employee.name, productCount: productsToCount.length, skippedConfirmedZeroCount: inventorySelection.skippedConfirmedZero.length, locations: locations.length ? locations : ["Główne miejsce"] } });
     return [stage];
   });
-  return Response.json({ ok: true, stageId: created.id }, { status: 201 });
+  return Response.json({ ok: true, stageId: created.id, skippedConfirmedZeroCount: inventorySelection.skippedConfirmedZero.length }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {

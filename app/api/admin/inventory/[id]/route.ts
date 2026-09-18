@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../../db";
 import { inventoryCountEntries, inventoryEvents, inventoryExports, inventoryStageItems, inventoryStages } from "../../../../../db/schema";
 import { currentAdmin } from "../../../../../lib/admin-auth";
@@ -9,6 +9,7 @@ import { DotykackaClient } from "../../../../../lib/dotykacka/client";
 import { getDotykackaConfig } from "../../../../../lib/dotykacka/config";
 
 export const dynamic = "force-dynamic";
+const ADMIN_EDITABLE_STATUSES = ["ASSIGNED", "IN_PROGRESS", "CHANGES_REQUESTED", "SUBMITTED"];
 
 function stageIdFrom(value: string) {
   const id = Number(value);
@@ -37,7 +38,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
 
   if (action === "ADJUST_ITEM") {
-    if (stage.status !== "SUBMITTED") return Response.json({ error: "Pozycje można poprawiać dopiero po zakończeniu etapu przez pracownika." }, { status: 409 });
+    if (!ADMIN_EDITABLE_STATUSES.includes(stage.status)) return Response.json({ error: "Ten etap jest już zamknięty do korekt administratora." }, { status: 409 });
     const itemId = Number(body.itemId);
     const countedMillis = quantityToMillis(body.countedQuantity);
     if (!Number.isInteger(itemId) || countedMillis == null) return Response.json({ error: "Podaj prawidłową ilość." }, { status: 400 });
@@ -67,16 +68,35 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 
   if (action === "APPROVE") {
-    if (stage.status !== "SUBMITTED") return Response.json({ error: "Ten etap nie czeka na zatwierdzenie." }, { status: 409 });
+    if (!ADMIN_EDITABLE_STATUSES.includes(stage.status)) return Response.json({ error: "Tego etapu nie można już zatwierdzić." }, { status: 409 });
     const items = await db.select().from(inventoryStageItems).where(eq(inventoryStageItems.stageId, stageId));
-    if (!items.length || items.some((item) => item.countStatus === "PENDING" || item.countedQuantity == null)) return Response.json({ error: "Każda pozycja musi mieć potwierdzony stan." }, { status: 409 });
-    const missingReasons = items.filter((item) => inventoryDifference(item.expectedQuantity, item.countedQuantity) && !item.reasonCode);
+    if (!items.length) return Response.json({ error: "Etap nie zawiera żadnych pozycji." }, { status: 409 });
+    const pendingItems = items.filter((item) => item.countStatus === "PENDING" || item.countedQuantity == null);
+    if (pendingItems.length && !note) return Response.json({ error: `Aby zatwierdzić trwający etap, wpisz notatkę. ${pendingItems.length} niepoliczonych pozycji zostanie przyjętych według stanu oczekiwanego z Dotykački.` }, { status: 400 });
+    const missingReasons = items.filter((item) => item.countStatus !== "PENDING" && inventoryDifference(item.expectedQuantity, item.countedQuantity) && !item.reasonCode);
     if (missingReasons.length) return Response.json({ error: `Uzupełnij przyczynę różnicy dla: ${missingReasons.slice(0, 3).map((item) => item.productName).join(", ")}.` }, { status: 409 });
+    const now = new Date();
     await db.transaction(async (tx) => {
-      await tx.update(inventoryStages).set({ status: "APPROVED", approvedAt: new Date(), approvedBy: actor.username, adminNote: note || stage.adminNote, updatedAt: new Date() }).where(eq(inventoryStages.id, stageId));
-      await tx.insert(inventoryEvents).values({ stageId, actorType: "ADMIN", actorId: actor.username, actorName, action: "APPROVED", details: { note, differences: items.filter((item) => inventoryDifference(item.expectedQuantity, item.countedQuantity)).length } });
+      if (pendingItems.length) {
+        const pendingIds = pendingItems.map((item) => item.id);
+        await tx.delete(inventoryCountEntries).where(inArray(inventoryCountEntries.itemId, pendingIds));
+        await tx.insert(inventoryCountEntries).values(pendingItems.map((item) => ({
+          itemId: item.id,
+          location: "Stan oczekiwany zaakceptowany przez administratora",
+          quantity: item.expectedQuantity,
+          note,
+          createdByName: actorName,
+          createdAt: now,
+          updatedAt: now,
+        })));
+        for (const item of pendingItems) {
+          await tx.update(inventoryStageItems).set({ countedQuantity: item.expectedQuantity, countStatus: "COUNTED", reasonCode: null, adminNote: note, countedAt: now, updatedAt: now }).where(eq(inventoryStageItems.id, item.id));
+        }
+      }
+      await tx.update(inventoryStages).set({ status: "APPROVED", approvedAt: now, approvedBy: actor.username, adminNote: note || stage.adminNote, updatedAt: now }).where(eq(inventoryStages.id, stageId));
+      await tx.insert(inventoryEvents).values({ stageId, actorType: "ADMIN", actorId: actor.username, actorName, action: "APPROVED", details: { note, previousStatus: stage.status, acceptedExpectedCount: pendingItems.length, differences: items.filter((item) => item.countStatus !== "PENDING" && inventoryDifference(item.expectedQuantity, item.countedQuantity)).length } });
     });
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, acceptedExpectedCount: pendingItems.length });
   }
 
   if (action === "SEND") {

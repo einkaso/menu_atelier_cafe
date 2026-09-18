@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clearWaiterSessionToken, saveWaiterSessionToken, waiterSessionHeaders } from "../waiter-session-client";
 import "./inventory-worker.css";
 import "./inventory-worker-enhancements.css";
@@ -17,6 +17,52 @@ const editable = (status: string) => ["ASSIGNED", "IN_PROGRESS", "CHANGES_REQUES
 const formatQuantity = (value: string | number | null) => value == null ? "—" : new Intl.NumberFormat("pl-PL", { maximumFractionDigits: 3 }).format(Number(value));
 const unitLabel = (value: string) => value.toLocaleLowerCase() === "kilogram" ? "kg" : value.toLocaleLowerCase() === "piece" ? "szt." : value;
 const rowKey = () => typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+const INVENTORY_SEARCH_DELAY_MS = 120;
+
+function InventorySearch({ onQueryChange }: { onQueryChange: (query: string) => void }) {
+  const input = useRef<HTMLInputElement | null>(null);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    const field = input.current;
+    if (!field) return;
+    const scheduleSearch = () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => onQueryChange(field.value), INVENTORY_SEARCH_DELAY_MS);
+    };
+    const deleteBackward = () => {
+      const start = field.selectionStart ?? field.value.length;
+      const end = field.selectionEnd ?? start;
+      if (start === end && start === 0) return;
+      field.setRangeText("", start === end ? start - 1 : start, end, "end");
+      scheduleSearch();
+    };
+    let handledKeydownAt = 0;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Backspace" && event.keyCode !== 8) return;
+      event.preventDefault();
+      handledKeydownAt = Date.now();
+      deleteBackward();
+    };
+    const onBeforeInput = (event: InputEvent) => {
+      if (event.inputType !== "deleteContentBackward" || !event.cancelable) return;
+      event.preventDefault();
+      if (Date.now() - handledKeydownAt < 50) return;
+      deleteBackward();
+    };
+    field.addEventListener("input", scheduleSearch);
+    field.addEventListener("keydown", onKeyDown);
+    field.addEventListener("beforeinput", onBeforeInput);
+    return () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      field.removeEventListener("input", scheduleSearch);
+      field.removeEventListener("keydown", onKeyDown);
+      field.removeEventListener("beforeinput", onBeforeInput);
+    };
+  }, [onQueryChange]);
+
+  return <label className="inventory-worker-search">Szukaj produktu, EAN lub kodu<input ref={input} type="text" defaultValue="" placeholder="Zacznij wpisywać…" autoComplete="off" autoCorrect="off" spellCheck={false}/></label>;
+}
 
 function ItemEditor({ item, places, disabled, busy, onSave }: { item: Item; places: string[]; disabled: boolean; busy: boolean; onSave: (payload: Record<string, unknown>) => Promise<void> }) {
   const wineCounting = item.countingMode === "WINE_BOTTLE" && Boolean(item.servingsPerContainer);
@@ -132,6 +178,6 @@ export default function InventoryWorkerClient() {
   return <main className="inventory-worker"><header className="inventory-worker-top"><a href="/kelner"><img src="/logo-cafe.png" alt="Atelier Café"/></a><div><span>Inwentaryzacja</span><b>{employeeName || "Pracownik"}</b></div><a href="/kelner">Wróć do zamówień</a></header>
     {(message || error) && <div className={error ? "inventory-worker-message is-error" : "inventory-worker-message"}>{error || message}</div>}
     <div className="inventory-worker-layout"><aside className="inventory-worker-stages"><span>Moje zadania</span><h1>Etapy liczenia</h1>{stages.map((stage) => <button className={selectedId === stage.id ? "is-active" : ""} key={stage.id} onClick={() => setSelectedId(stage.id)}><b>{stage.title}</b><small>{stage.categoryName}</small><span>{stage.countedItems}/{stage.totalItems} pozycji</span><em data-status={stage.status}>{statusLabels[stage.status] ?? stage.status}</em></button>)}{!stages.length && <p>Nie masz obecnie przydzielonych zadań.</p>}</aside>
-      <section className="inventory-worker-stage">{!detail ? <div className="inventory-worker-empty"><h2>Wybierz etap</h2><p>Przydzielone przez administratora zadania pojawią się po lewej.</p></div> : <><header><div><span>{detail.categoryName}</span><h2>{detail.title}</h2><p>Stan oczekiwany zapisano {new Date(detail.expectedSnapshotAt).toLocaleString("pl-PL")}. Licz fizyczny stan, nie przepisuj wartości systemowej.</p></div><em data-status={detail.status}>{statusLabels[detail.status] ?? detail.status}</em></header>{detail.adminNote && <div className="inventory-admin-request"><b>Informacja od administratora</b><p>{detail.adminNote}</p></div>}{detail.status === "ASSIGNED" && <button className="inventory-start" disabled={busy !== ""} onClick={() => void action("START")}>Rozpocznij liczenie</button>}<div className="inventory-worker-progress"><div><span>Postęp etapu</span><b>{detail.items.length - missing} / {detail.items.length}</b></div><progress value={detail.items.length - missing} max={detail.items.length || 1}/><span>{missing ? `Pozostało ${missing} pozycji` : "Wszystkie pozycje potwierdzone"}</span></div><label className="inventory-worker-search">Szukaj produktu, EAN lub kodu<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zacznij wpisywać…"/></label><div className="inventory-count-list">{visibleItems.map((item) => <ItemEditor key={`${item.id}:${item.countedQuantity}:${item.countStatus}`} item={item} places={detail.locations} disabled={!canEdit} busy={busy === `item:${item.id}`} onSave={(payload) => action("SAVE_ITEM", payload, `item:${item.id}`)}/>)}</div>{canEdit && <section className="inventory-submit-stage"><label>Uwagi do całego etapu<textarea value={stageNote} onChange={(event) => setStageNote(event.target.value)} maxLength={1000} placeholder="Co administrator powinien wiedzieć?"/></label><button disabled={missing > 0 || busy !== ""} onClick={() => void action("SUBMIT", { note: stageNote })}>{missing ? `Najpierw potwierdź ${missing} pozycji` : "Zakończ etap i wyślij do akceptacji"}</button><p>Zakończenie tego etapu nie wymaga przeliczenia innych kategorii ani całego magazynu.</p></section>}</>}</section></div>
+      <section className="inventory-worker-stage">{!detail ? <div className="inventory-worker-empty"><h2>Wybierz etap</h2><p>Przydzielone przez administratora zadania pojawią się po lewej.</p></div> : <><header><div><span>{detail.categoryName}</span><h2>{detail.title}</h2><p>Stan oczekiwany zapisano {new Date(detail.expectedSnapshotAt).toLocaleString("pl-PL")}. Licz fizyczny stan, nie przepisuj wartości systemowej.</p></div><em data-status={detail.status}>{statusLabels[detail.status] ?? detail.status}</em></header>{detail.adminNote && <div className="inventory-admin-request"><b>Informacja od administratora</b><p>{detail.adminNote}</p></div>}{detail.status === "ASSIGNED" && <button className="inventory-start" disabled={busy !== ""} onClick={() => void action("START")}>Rozpocznij liczenie</button>}<div className="inventory-worker-progress"><div><span>Postęp etapu</span><b>{detail.items.length - missing} / {detail.items.length}</b></div><progress value={detail.items.length - missing} max={detail.items.length || 1}/><span>{missing ? `Pozostało ${missing} pozycji` : "Wszystkie pozycje potwierdzone"}</span></div><InventorySearch onQueryChange={setSearch}/><div className="inventory-count-list">{visibleItems.map((item) => <ItemEditor key={`${item.id}:${item.countedQuantity}:${item.countStatus}`} item={item} places={detail.locations} disabled={!canEdit} busy={busy === `item:${item.id}`} onSave={(payload) => action("SAVE_ITEM", payload, `item:${item.id}`)}/>)}</div>{canEdit && <section className="inventory-submit-stage"><label>Uwagi do całego etapu<textarea value={stageNote} onChange={(event) => setStageNote(event.target.value)} maxLength={1000} placeholder="Co administrator powinien wiedzieć?"/></label><button disabled={missing > 0 || busy !== ""} onClick={() => void action("SUBMIT", { note: stageNote })}>{missing ? `Najpierw potwierdź ${missing} pozycji` : "Zakończ etap i wyślij do akceptacji"}</button><p>Zakończenie tego etapu nie wymaga przeliczenia innych kategorii ani całego magazynu.</p></section>}</>}</section></div>
   </main>;
 }

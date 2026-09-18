@@ -278,30 +278,35 @@ export function preferPolishSearchCandidates<T extends { url: string; title?: st
     .map(({ candidate }) => candidate);
 }
 
-export async function searchProductCandidates(query: string): Promise<ProductSearchCandidate[]> {
+export function productSearchPageEndpoints(query: string, page = 0) {
+  const safePage = Number.isInteger(page) ? Math.max(0, Math.min(page, 9)) : 0;
+  const brave = new URL("https://search.brave.com/search");
+  brave.searchParams.set("q", query);
+  brave.searchParams.set("source", "web");
+  brave.searchParams.set("country", "pl");
+  brave.searchParams.set("search_lang", "pl");
+  brave.searchParams.set("ui_lang", "pl-PL");
+  if (safePage > 0) brave.searchParams.set("offset", String(safePage));
+
+  const bing = new URL("https://www.bing.com/search");
+  bing.searchParams.set("q", query);
+  bing.searchParams.set("cc", "pl");
+  bing.searchParams.set("setlang", "pl-PL");
+  if (safePage > 0) bing.searchParams.set("first", String(safePage * 8 + 1));
+  return { brave, bing };
+}
+
+export async function searchProductCandidates(query: string, page = 0): Promise<ProductSearchCandidate[]> {
+  const endpoints = productSearchPageEndpoints(query, page);
   const providers = [
     {
       name: "Brave",
-      endpoint: () => {
-        const endpoint = new URL("https://search.brave.com/search");
-        endpoint.searchParams.set("q", query);
-        endpoint.searchParams.set("source", "web");
-        endpoint.searchParams.set("country", "pl");
-        endpoint.searchParams.set("search_lang", "pl");
-        endpoint.searchParams.set("ui_lang", "pl-PL");
-        return endpoint;
-      },
+      endpoint: () => endpoints.brave,
       extract: extractBraveSearchCandidates,
     },
     {
       name: "Bing",
-      endpoint: () => {
-        const endpoint = new URL("https://www.bing.com/search");
-        endpoint.searchParams.set("q", query);
-        endpoint.searchParams.set("cc", "pl");
-        endpoint.searchParams.set("setlang", "pl-PL");
-        return endpoint;
-      },
+      endpoint: () => endpoints.bing,
       extract: extractBingSearchCandidates,
     },
   ];

@@ -5,6 +5,8 @@ import { sectionFor } from "../../lib/menu-categories";
 import { manualProductSearchUrl, productSearchTitle } from "../../lib/manual-product-search";
 import { hasTag, isShelfProduct, shelfHasPositiveStock } from "../../lib/menu-tags";
 
+type StaffManualMedia = { id: string; path: string; type: "IMAGE" | "VIDEO"; name: string };
+
 type Product = {
   id: number;
   dotykackaId: string;
@@ -61,6 +63,8 @@ type Product = {
   veganStatus: "YES" | "NO" | "UNKNOWN";
   tastingNotes: string | null;
   attributes: Record<string, string> | null;
+  staffInstructions: string | null;
+  staffMedia: StaffManualMedia[] | null;
 };
 
 type WineSource = {
@@ -162,7 +166,7 @@ type HistoricalImportResult = {
   warnings: string[];
 };
 
-const editable = ["nameEn", "descriptionPl", "descriptionEn", "imageSourceUrl", "country", "region", "grapes", "wineStyle", "wineColor", "sparklingType", "sweetness", "veganStatus", "tastingNotes"] as const;
+const editable = ["nameEn", "descriptionPl", "descriptionEn", "imageSourceUrl", "country", "region", "grapes", "wineStyle", "wineColor", "sparklingType", "sweetness", "veganStatus", "tastingNotes", "staffInstructions"] as const;
 const attributeKeys = ["alcoholPercentage", "beerStyle", "origin", "teaType", "brewTemperature", "brewTime", "coffeeOrigin", "coffeeProfile", "coffeeModifiers", "producer", "dietaryInfo", "cocktailBase", "tasteProfile", "volume", "spiritType", "spiritStyle", "ageStatement", "caskType"] as const;
 
 const MAX_LOCAL_IMAGE_BYTES = 15 * 1024 * 1024;
@@ -735,6 +739,7 @@ export default function AdminPanel() {
     setError("");
     const form = new FormData(event.currentTarget);
     const localImage = form.get("imageFile");
+    const staffMediaFiles = form.getAll("staffMediaFiles").filter((item): item is File => item instanceof File && item.size > 0);
     const payload: Record<string, unknown> = {};
     for (const key of editable) payload[key] = String(form.get(key) ?? "").trim() || null;
     // Non-wine forms do not render this select. Sending null used to make the
@@ -773,8 +778,24 @@ export default function AdminPanel() {
           setError(`Pozostałe zmiany zostały zapisane, ale zdjęcie nie: ${imageError instanceof Error ? imageError.message : "nieznany błąd"}`);
         }
       }
-      if (!localImage || !(localImage instanceof File) || !localImage.size || imageSaved) {
-        const suffix = imageSaved ? " Zdjęcie zostało zmniejszone i zapisane na serwerze." : "";
+      let staffMediaSaved = 0;
+      if (staffMediaFiles.length > 0) {
+        try {
+          const upload = new FormData();
+          for (const file of staffMediaFiles) {
+            const prepared = file.type.startsWith("image/") && file.type !== "image/gif" ? await prepareLocalImage(file) : file;
+            upload.append("media", prepared);
+          }
+          const mediaResponse = await fetch(`/api/admin/products/${selected.id}/staff-media`, { method: "POST", body: upload });
+          const mediaBody = await mediaResponse.json().catch(() => ({})) as { error?: string };
+          if (!mediaResponse.ok) throw new Error(mediaBody.error ?? "Nie udało się przesłać materiałów instrukcji.");
+          staffMediaSaved = staffMediaFiles.length;
+        } catch (mediaError) {
+          setError(`Tekst instrukcji i pozostałe zmiany zostały zapisane, ale jej pliki nie: ${mediaError instanceof Error ? mediaError.message : "nieznany błąd"}`);
+        }
+      }
+      if ((!localImage || !(localImage instanceof File) || !localImage.size || imageSaved) && (!staffMediaFiles.length || staffMediaSaved > 0)) {
+        const suffix = `${imageSaved ? " Zdjęcie produktu zostało zmniejszone i zapisane na serwerze." : ""}${staffMediaSaved ? ` Dodano ${staffMediaSaved} plików instrukcji.` : ""}`;
         setMessage(body.warning ? `Zapisano: ${selected.name}. ${body.warning}${suffix}` : `Zapisano: ${selected.name}.${suffix}`);
       }
       await loadProducts(selected.id);
@@ -802,6 +823,42 @@ export default function AdminPanel() {
       await loadProducts(selected.id);
     } catch (imageError) {
       setError(imageError instanceof Error ? imageError.message : "Nie udało się pobrać zdjęcia.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeProductImage() {
+    if (!selected || !window.confirm(`Usunąć zdjęcie produktu „${selected.name}”?`)) return;
+    setSaving(true); setMessage(""); setError("");
+    try {
+      const response = await fetch(`/api/admin/products/${selected.id}/image`, { method: "DELETE" });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Nie udało się usunąć zdjęcia produktu.");
+      setMessage(`Usunięto zdjęcie produktu ${selected.name}.`);
+      await loadProducts(selected.id);
+    } catch (imageError) {
+      setError(imageError instanceof Error ? imageError.message : "Nie udało się usunąć zdjęcia produktu.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeStaffMedia(mediaId: string) {
+    if (!selected) return;
+    setSaving(true); setMessage(""); setError("");
+    try {
+      const response = await fetch(`/api/admin/products/${selected.id}/staff-media`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mediaId }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Nie udało się usunąć pliku instrukcji.");
+      setMessage(`Usunięto plik z instrukcji produktu ${selected.name}.`);
+      await loadProducts(selected.id);
+    } catch (mediaError) {
+      setError(mediaError instanceof Error ? mediaError.message : "Nie udało się usunąć pliku instrukcji.");
     } finally {
       setSaving(false);
     }
@@ -1146,7 +1203,7 @@ export default function AdminPanel() {
 
         <section className="admin-editor">
           {!selected && <div className="admin-empty"><h2>Wybierz produkt</h2><p>Po lewej pojawią się towary oznaczone w Dotykačce atrybutem „menu”.</p></div>}
-          {selected && <ProductForm key={`${selected.id}-${selected.syncedAt}-${selected.contentUpdatedAt ?? "new"}`} product={selected} wineSources={wineSources} saving={saving} discovering={enriching} feedback={error || message} feedbackIsError={Boolean(error)} onSubmit={save} onImageImport={importImageFromUrl} onDiscover={discoverProductInformation} onDecision={decideWineSource} />}
+          {selected && <ProductForm key={`${selected.id}-${selected.syncedAt}-${selected.contentUpdatedAt ?? "new"}`} product={selected} wineSources={wineSources} saving={saving} discovering={enriching} feedback={error || message} feedbackIsError={Boolean(error)} onSubmit={save} onImageImport={importImageFromUrl} onRemoveImage={removeProductImage} onRemoveStaffMedia={removeStaffMedia} onDiscover={discoverProductInformation} onDecision={decideWineSource} />}
         </section>
       </section> : view === "categories" ? <section className="admin-category-workspace">
         <div className="admin-category-heading">
@@ -1424,7 +1481,7 @@ function sourceHostname(value: string) {
   try { return new URL(value).hostname; } catch { return "źródło internetowe"; }
 }
 
-function ProductForm({ product, wineSources, saving, discovering, feedback, feedbackIsError, onSubmit, onImageImport, onDiscover, onDecision }: {
+function ProductForm({ product, wineSources, saving, discovering, feedback, feedbackIsError, onSubmit, onImageImport, onRemoveImage, onRemoveStaffMedia, onDiscover, onDecision }: {
   product: Product;
   wineSources: WineSource[];
   saving: boolean;
@@ -1433,6 +1490,8 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
   feedbackIsError: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onImageImport: (sourceUrl: string) => Promise<void>;
+  onRemoveImage: () => Promise<void>;
+  onRemoveStaffMedia: (mediaId: string) => Promise<void>;
   onDiscover: (sourceUrl?: string, sourceText?: string) => void;
   onDecision: (sourceId: number, decision: "KEEP_CURRENT" | "FILL_MISSING" | "REPLACE", imageSourceUrl?: string) => void;
 }) {
@@ -1447,6 +1506,9 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
   const [manualSearchResults, setManualSearchResults] = useState<ProductSearchCandidate[]>([]);
   const [manualSearchBusy, setManualSearchBusy] = useState(false);
   const [manualSearchError, setManualSearchError] = useState("");
+  const [manualSearchNextPage, setManualSearchNextPage] = useState(0);
+  const [manualSearchKey, setManualSearchKey] = useState("");
+  const [manualSearchResultPage, setManualSearchResultPage] = useState(0);
   const productKind = product.wineCode ? "wine" : sectionFor(product.category);
   const attributes = product.attributes ?? {};
   const informationDiscoveryEnabled = true;
@@ -1462,28 +1524,33 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
     document.documentElement.dataset.adminFormDirty = "true";
   }
 
-  async function runManualSearch() {
+  async function runManualSearch(firstPage?: number) {
     const query = manualSearchQuery.trim();
     if (!query || manualSearchBusy) return;
+    const searchKey = `"${query}" ${searchKind}`;
+    const page = firstPage ?? (manualSearchKey === searchKey ? manualSearchNextPage : 0);
     setManualSearchBusy(true);
     setManualSearchError("");
     try {
-      const response = await fetch(`/api/admin/product-search?q=${encodeURIComponent(`"${query}" ${searchKind}`)}`, {
+      const response = await fetch(`/api/admin/product-search?q=${encodeURIComponent(searchKey)}&page=${page}`, {
         cache: "no-store",
         credentials: "same-origin",
       });
       const body = await response.json().catch(() => ({})) as { results?: ProductSearchCandidate[]; error?: string };
       if (!response.ok) {
-        setManualSearchResults([]);
+        if (page === 0) setManualSearchResults([]);
         setManualSearchError(body.error ?? (response.status === 401
           ? "Sesja administratora wygasła. Odśwież panel i zaloguj się ponownie."
-          : "Nie udało się wyszukać produktu."));
+          : page > 0 ? "Nie znaleziono kolejnej strony wyników." : "Nie udało się wyszukać produktu."));
       } else {
         setManualSearchResults(body.results ?? []);
-        if (!body.results?.length) setManualSearchError("Nie znaleziono wyników. Zmień zapytanie i spróbuj ponownie.");
+        setManualSearchKey(searchKey);
+        setManualSearchNextPage(page + 1);
+        setManualSearchResultPage(page);
+        if (!body.results?.length) setManualSearchError(page > 0 ? "Nie znaleziono kolejnych wyników." : "Nie znaleziono wyników. Zmień zapytanie i spróbuj ponownie.");
       }
     } catch (searchError) {
-      setManualSearchResults([]);
+      if (page === 0) setManualSearchResults([]);
       setManualSearchError(`Nie udało się połączyć z wyszukiwarką. ${searchError instanceof Error ? searchError.message : "Spróbuj ponownie."}`);
     } finally {
       setManualSearchBusy(false);
@@ -1492,7 +1559,11 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
 
   function openManualSearch() {
     setManualSearchOpen(true);
-    window.setTimeout(() => { void runManualSearch(); }, 0);
+    setManualSearchResults([]);
+    setManualSearchNextPage(0);
+    setManualSearchKey("");
+    setManualSearchResultPage(0);
+    window.setTimeout(() => { void runManualSearch(0); }, 0);
   }
 
   function chooseManualSearchResult(result: ProductSearchCandidate) {
@@ -1607,15 +1678,16 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
         <section className="admin-search-dialog" role="dialog" aria-modal="true" aria-labelledby="manual-product-search-title">
           <header><div><span className="admin-eyebrow">Wyszukiwanie produktu</span><h3 id="manual-product-search-title">Znajdź właściwe źródło</h3><p>Najpierw pokazujemy polskie strony, a następnie pozostałe źródła.</p></div><button type="button" onClick={() => setManualSearchOpen(false)} aria-label="Zamknij wyszukiwanie">×</button></header>
           <div className="admin-search-dialog-form">
-            <input autoFocus value={manualSearchQuery} onChange={(event) => setManualSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void runManualSearch(); } }} aria-label="Zapytanie wyszukiwania" />
-            <button type="button" className="admin-primary" disabled={manualSearchBusy || !manualSearchQuery.trim()} onClick={() => void runManualSearch()}>{manualSearchBusy ? "Szukam…" : "Szukaj"}</button>
+            <input autoFocus value={manualSearchQuery} onChange={(event) => { setManualSearchQuery(event.target.value); setManualSearchResults([]); setManualSearchNextPage(0); setManualSearchKey(""); setManualSearchResultPage(0); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void runManualSearch(); } }} aria-label="Zapytanie wyszukiwania" />
+            <button type="button" className="admin-primary" disabled={manualSearchBusy || !manualSearchQuery.trim()} onClick={() => void runManualSearch()}>{manualSearchBusy ? "Szukam…" : manualSearchResults.length ? "Kolejne wyniki" : "Szukaj"}</button>
           </div>
           {manualSearchError && <p className="admin-search-dialog-error">{manualSearchError}</p>}
           <div className="admin-search-results">
+            {manualSearchResults.length > 0 && <p className="admin-search-results-page">Strona wyników {manualSearchResultPage + 1}</p>}
             {manualSearchResults.map((result) => <article key={result.url}>
-              {result.imageUrl && <img src={result.imageUrl} alt="" />}
+              <div className="admin-search-result-image">{result.imageUrl ? <img src={result.imageUrl} alt="" /> : <span>WWW</span>}</div>
               <div><small>{sourceHostname(result.url)}</small><h4>{result.title}</h4>{result.description && <p>{result.description}</p>}<code>{result.url}</code></div>
-              <button type="button" className="admin-secondary" disabled={discovering || saving} onClick={() => chooseManualSearchResult(result)}>Użyj tego źródła</button>
+              <button type="button" className="admin-secondary" disabled={discovering || saving} onClick={() => chooseManualSearchResult(result)}>Wybierz</button>
             </article>)}
           </div>
           <footer>Po wybraniu wyniku okno zamknie się, a propozycja pojawi się w strefie roboczej produktu. Gdy bezpłatna wyszukiwarka ma chwilowy limit, <a href={manualProductSearchUrl(manualSearchQuery, productKind === "wine" ? "wine" : productKind === "beer" ? "beer" : "product")} target="_blank" rel="noreferrer">otwórz wyniki Google</a>, a następnie wklej adres właściwej karty produktu.</footer>
@@ -1626,7 +1698,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
       <header className="admin-publish-heading"><span>Treść publicznego menu</span><div><h3>Dane publikacyjne</h3><p>Te pola odpowiadają temu, co zobaczy gość. Po zaakceptowaniu propozycji z wyszukiwania wartości pojawiają się tutaj automatycznie; możesz je jeszcze poprawić i zapisać.</p></div></header>
       {(product.imagePath || product.imageSourceUrl) && <div className="admin-image-preview">
         <img src={product.imagePath ?? product.imageSourceUrl ?? ""} alt={`Podgląd: ${product.name}`} />
-        <span>{product.imagePath ? "Własna kopia zdjęcia zapisana na serwerze" : "Podgląd zdjęcia źródłowego"}</span>
+        <div><span>{product.imagePath ? "Własna kopia zdjęcia zapisana na serwerze" : "Podgląd zdjęcia źródłowego"}</span><button type="button" className="admin-image-remove" disabled={saving} onClick={() => void onRemoveImage()}>Usuń zdjęcie</button></div>
       </div>}
 
       <fieldset className="admin-content-fields">
@@ -1674,6 +1746,13 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
       </fieldset>}
 
       {productKind !== "wine" && <ProductFeatureFields kind={productKind} attributes={attributes} />}
+
+      <section className="admin-staff-manual-zone">
+        <header><span>TYLKO DLA PERSONELU</span><div><h3>Instrukcja przygotowania</h3><p>Ta treść nie pojawia się w menu gościa. Pracownik otworzy ją trzema szybkimi dotknięciami zdjęcia produktu w ekranie zamówień.</p></div></header>
+        <label>Opis, manual i wskazówki<textarea name="staffInstructions" rows={8} defaultValue={product.staffInstructions ?? ""} maxLength={12000} placeholder={"Przykład:\n• szkło: highball\n• lód: 5 dużych kostek\n• kolejność składników i proporcje\n• dekoracja oraz sposób podania"}/></label>
+        {(product.staffMedia?.length ?? 0) > 0 && <div className="admin-staff-media-gallery">{product.staffMedia?.map((media) => <figure key={media.id}>{media.type === "IMAGE" ? <img src={media.path} alt={media.name}/> : <video src={media.path} muted playsInline controls preload="metadata"/>}<figcaption>{media.name}</figcaption><button type="button" aria-label={`Usuń ${media.name}`} disabled={saving} onClick={() => void onRemoveStaffMedia(media.id)}>×</button></figure>)}</div>}
+        <label className="admin-staff-media-upload">Dodaj zdjęcia lub filmy<input name="staffMediaFiles" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif,image/gif,video/mp4,video/webm,.jpg,.jpeg,.png,.webp,.avif,.gif,.mp4,.webm" disabled={(product.staffMedia?.length ?? 0) >= 8}/><small>Do 8 plików na produkt. Zdjęcia zostaną zmniejszone; film MP4 lub WebM może mieć maksymalnie 25 MB.</small></label>
+      </section>
 
       <div className="admin-savebar">
         <div className={`admin-save-state ${feedbackIsError ? "is-error" : saving ? "is-saving" : hasUnsavedChanges ? "is-dirty" : "is-saved"}`} aria-live="polite">

@@ -10,6 +10,7 @@ type Employee = {
   adminConfigured: boolean;
   adminUsername: string | null;
   adminLastLoginAt: string | null;
+  thankYouMedia: Array<{ id: number; mediaPath: string; mediaType: "GIF" | "VIDEO" }>;
 };
 type Table = { dotykackaId: string; name: string; display: boolean; deleted: boolean };
 type SurveyQuestion = { id?: number; prompt: string; kind: "YES_NO" | "SINGLE_CHOICE"; options: string[]; required: boolean; active: boolean };
@@ -84,6 +85,31 @@ export default function WaiterAdminClient() {
     setBusy("");
   }
 
+  async function uploadThankYouMedia(event: FormEvent<HTMLFormElement>, employee: Employee) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setBusy(`thanks:${employee.dotykackaId}`); setError(""); setMessage("");
+    const response = await fetch(`/api/admin/waiter/employees/${encodeURIComponent(employee.dotykackaId)}/thanks`, { method: "PUT", body: form });
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) setError(body.error ?? "Nie udało się zapisać animacji.");
+    else { formElement.reset(); setMessage(`Dodano animację z podziękowaniem dla ${employee.name}.`); await load(); }
+    setBusy("");
+  }
+
+  async function removeThankYouMedia(employee: Employee, mediaId: number) {
+    setBusy(`thanks:${employee.dotykackaId}`); setError(""); setMessage("");
+    const response = await fetch(`/api/admin/waiter/employees/${encodeURIComponent(employee.dotykackaId)}/thanks`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mediaId }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) setError(body.error ?? "Nie udało się usunąć animacji.");
+    else { setMessage(`Usunięto animację pracownika ${employee.name}.`); await load(); }
+    setBusy("");
+  }
+
   function updateQuestion(index: number, patch: Partial<SurveyQuestion>) {
     setQuestions((current) => current.map((question, questionIndex) => questionIndex === index ? { ...question, ...patch } : question));
   }
@@ -109,6 +135,7 @@ export default function WaiterAdminClient() {
         <div className="waiter-access-grid">
           <section className="waiter-access-card"><header><div><b>Strefa kelnera</b><small>Krótki PIN do zamówień i rozliczeń</small></div><span className={`waiter-admin-state ${employee.pinConfigured ? "is-ready" : ""}`}>{employee.pinConfigured ? "Aktywny" : "Brak PIN-u"}</span></header><form className="waiter-pin-form" onSubmit={(event) => savePin(event, employee)}><input name="pin" inputMode="numeric" pattern="[0-9]{4,8}" minLength={4} maxLength={8} autoComplete="new-password" placeholder="••••" aria-label={`Nowy PIN dla ${employee.name}`} required/><button className="admin-primary" disabled={busy === `pin:${employee.dotykackaId}`}>{employee.pinConfigured ? "Zmień PIN" : "Nadaj PIN"}</button>{employee.pinConfigured && <button type="button" className="admin-secondary" disabled={busy === `pin:${employee.dotykackaId}`} onClick={() => clearPin(employee)}>Wyłącz</button>}</form></section>
           <section className="waiter-access-card is-admin"><header><div><b>Administrator menu</b><small>{employee.adminLastLoginAt ? `Ostatnie logowanie: ${new Date(employee.adminLastLoginAt).toLocaleString("pl-PL")}` : "Dostęp do panelu /admin"}</small></div><span className={`waiter-admin-state ${employee.adminConfigured ? "is-ready" : ""}`}>{employee.adminConfigured ? "Aktywny" : "Wyłączony"}</span></header><form className="waiter-admin-login-form" onSubmit={(event) => saveAdminAccess(event, employee)}><label>Login<input name="username" defaultValue={employee.adminUsername ?? ""} minLength={3} maxLength={50} pattern="[a-z0-9._-]+" autoComplete="off" placeholder="np. anna.nowak" required/></label><label>{employee.adminConfigured ? "Nowe hasło (opcjonalnie)" : "Hasło"}<input name="password" type="password" minLength={10} maxLength={128} autoComplete="new-password" placeholder={employee.adminConfigured ? "pozostaw puste bez zmiany" : "minimum 10 znaków"} required={!employee.adminConfigured}/></label><div><button className="admin-primary" disabled={busy === `admin:${employee.dotykackaId}`}>{employee.adminConfigured ? "Zapisz zmiany" : "Nadaj dostęp"}</button>{employee.adminConfigured && <button type="button" className="admin-secondary" disabled={busy === `admin:${employee.dotykackaId}`} onClick={() => disableAdminAccess(employee)}>Wyłącz</button>}</div></form></section>
+          <section className="waiter-access-card waiter-thanks-card"><header><div><b>Podziękowanie na rachunku</b><small>Do 3 animacji; jedna zostanie wybrana losowo dla gościa</small></div><span className={`waiter-admin-state ${employee.thankYouMedia.length ? "is-ready" : ""}`}>{employee.thankYouMedia.length}/3</span></header>{employee.thankYouMedia.length > 0 && <div className="waiter-thanks-gallery">{employee.thankYouMedia.map((media) => <figure key={media.id}>{media.mediaType === "GIF" ? <img src={media.mediaPath} alt={`Animacja ${employee.name}`}/> : <video src={media.mediaPath} autoPlay loop muted playsInline/>}<button type="button" aria-label={`Usuń animację ${employee.name}`} disabled={busy === `thanks:${employee.dotykackaId}`} onClick={() => void removeThankYouMedia(employee, media.id)}>×</button></figure>)}</div>}<form className="waiter-thanks-form" onSubmit={(event) => uploadThankYouMedia(event, employee)}><input name="media" type="file" accept="video/mp4,video/webm,image/gif,.mp4,.webm,.gif" required disabled={employee.thankYouMedia.length >= 3 || busy === `thanks:${employee.dotykackaId}`}/><button className="admin-primary" disabled={employee.thankYouMedia.length >= 3 || busy === `thanks:${employee.dotykackaId}`}>{employee.thankYouMedia.length >= 3 ? "Limit 3 animacji" : "Dodaj animację"}</button></form></section>
         </div>
       </article>)}{!employees.length && <p className="admin-muted">Brak aktywnych pracowników. Uruchom synchronizację z Dotykačką w głównym panelu.</p>}</section>
       <section className="waiter-survey-admin"><div className="waiter-admin-intro"><div><span className="admin-eyebrow">Przed wysłaniem zamówienia</span><h2>Krótka ankieta dla gościa</h2><p>Pytania pojawiają się kelnerowi po sprawdzeniu koszyka. Odpowiedzi są przypisane do zamówienia, bez zapisywania danych osobowych gościa.</p></div><button className="admin-secondary" onClick={() => setQuestions((current) => [...current, { prompt: "", kind: "YES_NO", options: ["Tak", "Nie"], required: false, active: true }])}>Dodaj pytanie</button></div><div className="waiter-survey-list">{questions.map((question, index) => <article key={question.id ?? `new-${index}`}><div className="waiter-survey-order"><button disabled={index === 0} onClick={() => setQuestions((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })}>↑</button><button disabled={index === questions.length - 1} onClick={() => setQuestions((current) => { const next = [...current]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next; })}>↓</button></div><label>Treść pytania<input value={question.prompt} maxLength={240} onChange={(event) => updateQuestion(index, { prompt: event.target.value })}/></label><label>Rodzaj<select value={question.kind} onChange={(event) => updateQuestion(index, { kind: event.target.value as SurveyQuestion["kind"], options: event.target.value === "YES_NO" ? ["Tak", "Nie"] : question.options })}><option value="YES_NO">Tak / nie</option><option value="SINGLE_CHOICE">Wybór jednej odpowiedzi</option></select></label>{question.kind === "SINGLE_CHOICE" && <label className="waiter-survey-options">Odpowiedzi (oddzielone przecinkami)<input value={question.options.join(", ")} onChange={(event) => updateQuestion(index, { options: event.target.value.split(",").map((item) => item.trim()) })}/></label>}<label className="waiter-survey-check"><input type="checkbox" checked={question.required} onChange={(event) => updateQuestion(index, { required: event.target.checked })}/> obowiązkowe</label><label className="waiter-survey-check"><input type="checkbox" checked={question.active} onChange={(event) => updateQuestion(index, { active: event.target.checked })}/> aktywne</label><button className="admin-secondary" onClick={() => setQuestions((current) => current.filter((_, questionIndex) => questionIndex !== index))}>Usuń</button></article>)}</div><div className="waiter-survey-save"><button className="admin-primary" disabled={busy === "survey"} onClick={saveQuestions}>{busy === "survey" ? "Zapisuję…" : "Zapisz ankietę"}</button></div></section>

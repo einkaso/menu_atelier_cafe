@@ -2,8 +2,33 @@ import sharp from "sharp";
 
 const MAX_SIDE = 1_600;
 const MAX_INPUT_PIXELS = 32_000_000;
+const MAX_STORED_BYTES = 2_400_000;
 
 type BackgroundRemovalResult = { bytes: Buffer; backgroundRemoved: boolean };
+
+export async function optimizeProductImage(bytes: Buffer, maxBytes = MAX_STORED_BYTES) {
+  const metadata = await sharp(bytes, { limitInputPixels: MAX_INPUT_PIXELS }).metadata();
+  const fitsDimensions = (metadata.width ?? 0) <= MAX_SIDE && (metadata.height ?? 0) <= MAX_SIDE;
+  if (bytes.length <= maxBytes && fitsDimensions) return bytes;
+
+  let smallest: Buffer | null = null;
+  for (const attempt of [
+    { maxSide: 1_600, quality: 86 },
+    { maxSide: 1_400, quality: 78 },
+    { maxSide: 1_200, quality: 70 },
+    { maxSide: 1_000, quality: 62 },
+  ]) {
+    const output = await sharp(bytes, { limitInputPixels: MAX_INPUT_PIXELS })
+      .rotate()
+      .resize({ width: attempt.maxSide, height: attempt.maxSide, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: attempt.quality, alphaQuality: 92, effort: 4 })
+      .toBuffer();
+    if (!smallest || output.length < smallest.length) smallest = output;
+    if (output.length <= maxBytes) return output;
+  }
+  if (smallest && smallest.length < bytes.length) return smallest;
+  throw new Error("Nie udało się bezpiecznie zmniejszyć zdjęcia do rozmiaru odpowiedniego dla aplikacji.");
+}
 
 export async function removeLightImageBackground(bytes: Buffer): Promise<BackgroundRemovalResult> {
   const { data, info } = await sharp(bytes, { limitInputPixels: MAX_INPUT_PIXELS })
