@@ -190,6 +190,9 @@ test("separates wine colour, bubbles, serving and independent features", async (
   assert.match(source, /!zeroOnly\|\|p\.alcoholFree/);
   assert.doesNotMatch(admin, /<option>Musujące<\/option>/);
   assert.match(admin, /name="sparklingType"/);
+  assert.match(source, /const bottleOnly=offers\.some\(offer=>offer\.kind==="bottle"\)&&!offers\.some\(offer=>offer\.kind==="glass"\)/);
+  assert.match(source, /L\("tylko butelka","bottle only"\)/);
+  assert.match(admin, /Brak poprawnie powiązanego wariantu „na kieliszki” oznacza sprzedaż tylko całej butelki/);
 });
 
 test("uses the available shelf-card height before pinning the details link to the image bottom", async () => {
@@ -291,7 +294,8 @@ test("uses exact cake photos in image-led cards with a company-story intro", asy
   assert.match(source, /cakeLayout=\{activeKind==="cakes"\}/);
   assert.match(source, /activeKind==="cakes"\?setCakeProduct/);
   assert.match(source, /<CakeDetailDialog product=\{cakeProduct\}/);
-  assert.match(source, /<CakePartnerIntro lang=\{lang\}/);
+  assert.match(source, /activeKind==="cakes"&&isCapuccinoBannerCategory\(cat\)&&<CakePartnerIntro lang=\{lang\}/);
+  assert.match(source, /function isCapuccinoBannerCategory\(category:Category\|undefined\)/);
   assert.match(source, /<CakePartnerDialog open=\{capuccinoOpen\}/);
   assert.doesNotMatch(source, /<CakeShowcase/);
   assert.doesNotMatch(source, /cakeShowcase=/);

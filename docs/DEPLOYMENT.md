@@ -42,13 +42,14 @@ Należy wykonywać codzienny `pg_dump` bazy `menu` oraz kopię wolumenu `menu_up
 
 ## Faktyczne wdrożenie produkcyjne (systemd)
 
-1. Przygotować i przetestować `/opt/banaszek-menu-next` jako `menuapp`, bez kopiowania sekretów z `/etc/banaszek-menu/menu.env`.
-2. Zatrzymać `banaszek-menu-sync.timer` i poczekać na koniec ewentualnego oneshotu.
-3. Zatrzymać `banaszek-menu.service`.
-4. Wykonać świeży `pg_dump --format=custom menu`, archiwum `/var/lib/banaszek-menu/uploads` i zweryfikować je przez `pg_restore -l` oraz `gzip -t`.
-5. Zachować pełną kopię `/opt/banaszek-menu` jako wersję rollback z datą UTC.
-6. Z katalogu staged, z env usługi, wykonać `npm run db:migrate`.
-7. Atomowo zamienić katalog staged z bieżącym, uruchomić usługę i sprawdzić `http://127.0.0.1:8080/api/health` oraz publiczną domenę.
-8. Dopiero po poprawnych healthcheckach ponownie uruchomić timer synchronizacji.
+1. Uruchomić jako `root` skrypt `ops/prepare-persistent-storage.sh`. Tworzy on trwałe katalogi zdjęć produktów, instrukcji pracowniczych i animacji oraz nadaje je użytkownikowi `menuapp`.
+2. Przygotować i przetestować `/opt/banaszek-menu-next` jako `menuapp`, bez kopiowania sekretów z `/etc/banaszek-menu/menu.env`.
+3. Zatrzymać `banaszek-menu-sync.timer` i poczekać na koniec ewentualnego oneshotu.
+4. Zatrzymać `banaszek-menu.service`.
+5. Wykonać świeży `pg_dump --format=custom menu`, archiwum `/var/lib/banaszek-menu/uploads` i zweryfikować je przez `pg_restore -l` oraz `gzip -t`.
+6. Zachować pełną kopię `/opt/banaszek-menu` jako wersję rollback z datą UTC.
+7. Z katalogu staged, z env usługi, wykonać `npm run db:migrate`.
+8. Atomowo zamienić katalog staged z bieżącym, uruchomić usługę i sprawdzić `http://127.0.0.1:8080/api/health` oraz publiczną domenę.
+9. Dopiero po poprawnych healthcheckach ponownie uruchomić timer synchronizacji.
 
 Migracje dla prowadzenia kasy i kont administratorów są addytywne. Rollback kodu nie wymaga cofania bazy. Odtworzenie bazy usuwa późniejsze dane i wymaga osobnej decyzji.

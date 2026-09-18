@@ -3,7 +3,7 @@ export type ManualSearchKind = "wine" | "whisky" | "beer" | "product";
 export function productSearchTitle(name: string) {
   return name
     .replace(/\b(?:WIN|WHI|GIN|VOD)\s*[-_]?\s*\d+\b/gi, " ")
-    .replace(/\s*[-—_/]?\s*\b(?:kieliszek|butelka|glass|bottle)\b.*$/i, "")
+    .replace(/\s*[-—_/]?\s*\b(?:(?:na\s+)?kielisz(?:ek|ki)|butelka|glass|bottle)\b.*$/i, "")
     .replace(/\s+\d{2,4}\s*(?:ml|cl|l)\b.*$/i, "")
     .replace(/\s{2,}/g, " ")
     .trim();

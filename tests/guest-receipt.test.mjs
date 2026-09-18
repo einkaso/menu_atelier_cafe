@@ -60,6 +60,9 @@ test("shows a random personal thank-you animation from a three-item employee gal
   assert.doesNotMatch(guest, /URL\.createObjectURL\(blob\)/);
   assert.match(guest, /onCanPlay=\{playVideo\}/);
   assert.match(guest, /className="guest-receipt-meta"/);
+  assert.match(guest, /disabled=\{finishing\}/);
+  assert.doesNotMatch(guest, /disabled=\{finishing \|\| !requiredComplete\}/);
+  assert.match(guest, /Pomiń ankietę i zamknij/);
   assert.match(picker, /guest-receipt-picker-screen/);
   assert.doesNotMatch(guest, /Obróć tablet pionowo/);
   assert.match(guest, /guest-receipt-rotated/);
@@ -82,4 +85,16 @@ test("shows a random personal thank-you animation from a three-item employee gal
   assert.match(waiterStyles, /@keyframes guest-thanks-pop/);
   assert.match(admin, /employee\.thankYouMedia\.length >= 3/);
   assert.match(mediaRoute, /existingMedia\.length >= 3/);
+});
+
+test("keeps the guest media cookie usable on HTTP tablets and secure on HTTPS", async () => {
+  const [auth, handoff, receiptRoute] = await Promise.all([
+    readFile(new URL("../lib/guest-receipt-auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/waiter/guest-receipts/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/guest/receipt/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(auth, /requestUsesHttps\(request: Request\)/);
+  assert.match(auth, /forwardedProtocol === "https"/);
+  assert.match(handoff, /httpOnlyCookie\(guestReceiptCookie\.name, token, guestReceiptCookie\.maxAge, secureCookie\)/);
+  assert.match(receiptRoute, /httpOnlyCookie\(guestReceiptCookie\.name, "", 0, requestUsesHttps\(request\)\)/);
 });

@@ -169,18 +169,39 @@ type HistoricalImportResult = {
 const editable = ["nameEn", "descriptionPl", "descriptionEn", "imageSourceUrl", "country", "region", "grapes", "wineStyle", "wineColor", "sparklingType", "sweetness", "veganStatus", "tastingNotes", "staffInstructions"] as const;
 const attributeKeys = ["alcoholPercentage", "beerStyle", "origin", "teaType", "brewTemperature", "brewTime", "coffeeOrigin", "coffeeProfile", "coffeeModifiers", "producer", "dietaryInfo", "cocktailBase", "tasteProfile", "volume", "spiritType", "spiritStyle", "ageStatement", "caskType"] as const;
 
-const MAX_LOCAL_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_LOCAL_IMAGE_BYTES = 50 * 1024 * 1024;
 const MAX_STORED_IMAGE_BYTES = 2_400_000;
+const localImageTypes: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  avif: "image/avif",
+  heic: "image/heic",
+  heif: "image/heif",
+};
+
+function normalizedLocalImage(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const type = file.type || localImageTypes[extension];
+  if (!type || !Object.values(localImageTypes).includes(type)) throw new Error("Wybierz zdjęcie JPG, PNG, WebP, AVIF, HEIC lub HEIF.");
+  return file.type === type ? file : new File([file], file.name, { type });
+}
+
+function isPreparableLocalImage(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return (file.type.startsWith("image/") && file.type !== "image/gif") || Boolean(localImageTypes[extension]);
+}
 
 async function prepareLocalImage(file: File) {
-  if (!["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.type)) throw new Error("Wybierz zdjęcie JPG, PNG, WebP lub AVIF.");
-  if (file.size > MAX_LOCAL_IMAGE_BYTES) throw new Error("Plik źródłowy jest większy niż 15 MB.");
+  const source = normalizedLocalImage(file);
+  if (source.size > MAX_LOCAL_IMAGE_BYTES) throw new Error("Plik źródłowy jest większy niż 50 MB.");
 
   let bitmap: ImageBitmap;
   try {
-    bitmap = await createImageBitmap(file);
+    bitmap = await createImageBitmap(source);
   } catch {
-    throw new Error("Nie udało się odczytać tego zdjęcia. Zapisz je jako JPG lub PNG i spróbuj ponownie.");
+    return source;
   }
 
   try {
@@ -200,14 +221,14 @@ async function prepareLocalImage(file: File) {
       context.drawImage(bitmap, 0, 0, width, height);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", attempt.quality));
       if (blob && blob.size <= MAX_STORED_IMAGE_BYTES) {
-        const baseName = file.name.replace(/\.[^.]+$/, "") || "zdjecie";
+        const baseName = source.name.replace(/\.[^.]+$/, "") || "zdjecie";
         return new File([blob], `${baseName}.webp`, { type: "image/webp" });
       }
     }
   } finally {
     bitmap.close();
   }
-  throw new Error("Nie udało się zmniejszyć zdjęcia poniżej bezpiecznego limitu 2,5 MB.");
+  return source;
 }
 
 const ruleSections = [
@@ -318,12 +339,13 @@ const ruleSections = [
     lead: "Jedna czytelna karta trunku może łączyć kilka sposobów sprzedaży.",
     rules: [
       ["Dotykačka", "Butelkę i kieliszek tworzymy jako osobne produkty z osobnymi cenami; cena butelki nie wynika z iloczynu kieliszków ani shotów."],
-      ["Dotykačka", "Produkt butelkowy nazywamy samą nazwą wina. Tylko przy drugim produkcie dopisujemy „kieliszek”, aby obsługa rozpoznawała go w POS."],
-      ["Dotykačka", "Produkt kieliszkowy oznaczamy tagiem KIELISZEK i łączymy recepturą z właściwą butelką."],
-      ["Automatycznie", "Produkty z tym samym kodem WIN są łączone w menu w jedną kartę. Nazwa i opis pochodzą z butelki, a produkt kieliszkowy dodaje wyłącznie ikonę i osobną cenę."],
+      ["Dotykačka", "Produkt butelkowy nazywamy samą nazwą wina. Tylko przy drugim produkcie dopisujemy „— na kieliszki”, aby obsługa rozpoznawała go w POS."],
+      ["Dotykačka", "Produkt kieliszkowy musi mieć dopisek „— na kieliszki”, tag KIELISZEK i ten sam kod WIN co właściwa butelka; oba produkty łączymy także recepturą."],
+      ["Automatycznie", "Produkty z tym samym kodem WIN są łączone w menu w jedną kartę. Nazwa i opis pochodzą z butelki, a poprawnie oznaczony produkt kieliszkowy dodaje wyłącznie ikonę i osobną cenę."],
+      ["Automatycznie", "Brak poprawnie powiązanego wariantu „na kieliszki” oznacza sprzedaż tylko całej butelki. Przy cenie system wyświetla wtedy „Tylko butelka”."],
       ["Automatycznie", "Dotknięcie wina otwiera na środku ekranu jego pełny opis, pochodzenie, szczep, styl, aromaty oraz ceny kieliszka i butelki."],
       ["Automatycznie", "Podgląd wina powtarza aktualne oznaczenia wynikające z reguł: „Wybór naszych gości”, „Polecamy”, „Na kieliszki”, „Wegańskie” i „0%”."],
-      ["Automatycznie", "Pozycja z „kieliszek” w nazwie jest zawsze ukrywana jako samodzielny produkt. Pojawi się przy butelce po uzupełnieniu wspólnego kodu WINxxx i tagu KIELISZEK; EAN jest pomocny, ale opcjonalny."],
+      ["Automatycznie", "Pozycja z „kieliszek” lub „na kieliszki” w nazwie jest zawsze ukrywana jako samodzielny produkt. Pojawi się przy butelce po uzupełnieniu wspólnego kodu WINxxx i tagu KIELISZEK; EAN jest pomocny, ale opcjonalny."],
       ["Nasz panel", "Przy winie przechowujemy: krótki opis, kraj, region, szczep, kolor, poziom słodyczy, styl, aromaty i potwierdzenie wegańskości."],
       ["Nasz panel", "Kolor wina i musowanie są niezależnymi cechami. Kolor wybieramy jako biały, czerwony, różowy albo pomarańczowy, natomiast musowanie osobno jako spokojne, musujące lub naturalnie musujące."],
       ["Automatycznie", "Po rozdzieleniu cech system przeniósł wcześniejsze oznaczenia „musujące” z nazwy, stylu i cech źródłowych do osobnego pola, nie zmieniając prawidłowo wpisanych kolorów."],
@@ -640,7 +662,7 @@ export default function AdminPanel() {
     if (product.descriptionPl?.trim() && !product.descriptionEn?.trim()) add("translation", "Brak angielskiego tłumaczenia opisu");
     if (kind === "wine" && !product.wineColor?.trim()) add("wine", "Brak koloru wina");
     if (/(?:^|[\s_\-/])kieliszek(?:$|[\s_\-/])/i.test(product.name) && !product.wineCode) add("wine", "Kieliszek jest ukryty: brak wspólnego kodu WINxxx w PLU");
-    if (/(?:^|[\s_\-/])kieliszek(?:$|[\s_\-/])/i.test(product.name) && !product.tags.some((tag) => tag.trim().toLocaleLowerCase("pl") === "kieliszek")) add("wine", "Kieliszek jest ukryty: brak tagu KIELISZEK");
+    if (/(?:^|[\s_\-/])kielisz(?:ek|ki)(?:$|[\s_\-/])/i.test(product.name) && !product.tags.some((tag) => tag.trim().toLocaleLowerCase("pl") === "kieliszek")) add("wine", "Kieliszek jest ukryty: brak tagu KIELISZEK");
     if (kind === "beer" && !product.attributes?.alcoholPercentage?.trim()) add("beer", "Brak zawartości alkoholu");
     if (kind === "whisky" && !product.attributes?.spiritType?.trim()) add("description", "Brak rodzaju trunku (whisky, bourbon, koniak lub brandy)");
     return issues;
@@ -784,7 +806,7 @@ export default function AdminPanel() {
         try {
           const upload = new FormData();
           for (const file of staffMediaFiles) {
-            const prepared = file.type.startsWith("image/") && file.type !== "image/gif" ? await prepareLocalImage(file) : file;
+            const prepared = isPreparableLocalImage(file) ? await prepareLocalImage(file) : file;
             upload.append("media", prepared);
           }
           const mediaResponse = await fetch(`/api/admin/products/${selected.id}/staff-media`, { method: "POST", body: upload });
@@ -1712,7 +1734,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
             <button type="button" className="admin-secondary" disabled={saving || !imageSourceUrl.trim()} onClick={() => void onImageImport(imageSourceUrl.trim())}>{saving ? "Pobieram…" : "Pobierz i zapisz zdjęcie"}</button>
             <small>Zdjęcie zapisuje się od razu w naszym zbiorze, niezależnie od pozostałych pól formularza.</small>
           </div>
-          <label className="admin-wide admin-file-field">Albo wybierz zdjęcie z dysku<input name="imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif" /><small>Maksymalnie 15 MB przed przygotowaniem. System zmniejszy zdjęcie do 1600 px i zapisze plik nie większy niż 2,5 MB.</small></label>
+          <label className="admin-wide admin-file-field">Albo wybierz zdjęcie z dysku<input name="imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>Zdjęcie źródłowe może mieć do 50 MB. System automatycznie zmniejszy je do 1600 px i zapisze plik nie większy niż około 2,4 MB.</small></label>
           {product.sourceDescription && <div className="admin-wide admin-description-proposal"><span className="admin-eyebrow">Propozycja z Dotykački</span><p>{product.sourceDescription}</p><button type="button" className="admin-secondary" onClick={() => { setDescriptionPl(product.sourceDescription ?? ""); markFormDirty(); }}>Użyj jako opisu w menu</button></div>}
           <label className="admin-wide">Opis polski<textarea name="descriptionPl" rows={4} value={descriptionPl} onChange={(event) => setDescriptionPl(event.target.value)} placeholder="Opis widoczny dla gościa — możesz go poprawić przed publikacją" /></label>
           <label className="admin-wide">Opis angielski<textarea name="descriptionEn" rows={4} defaultValue={product.descriptionEn ?? ""} /></label>
@@ -1752,7 +1774,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
         <header><span>TYLKO DLA PERSONELU</span><div><h3>Instrukcja przygotowania</h3><p>Ta treść nie pojawia się w menu gościa. Pracownik otworzy ją trzema szybkimi dotknięciami zdjęcia produktu w ekranie zamówień.</p></div></header>
         <label>Opis, manual i wskazówki<textarea name="staffInstructions" rows={8} defaultValue={product.staffInstructions ?? ""} maxLength={12000} placeholder={"Przykład:\n• szkło: highball\n• lód: 5 dużych kostek\n• kolejność składników i proporcje\n• dekoracja oraz sposób podania"}/></label>
         {(product.staffMedia?.length ?? 0) > 0 && <div className="admin-staff-media-gallery">{product.staffMedia?.map((media) => <figure key={media.id}>{media.type === "IMAGE" ? <img src={media.path} alt={media.name}/> : <video src={media.path} muted playsInline controls preload="metadata"/>}<figcaption>{media.name}</figcaption><button type="button" aria-label={`Usuń ${media.name}`} disabled={saving} onClick={() => void onRemoveStaffMedia(media.id)}>×</button></figure>)}</div>}
-        <label className="admin-staff-media-upload">Dodaj zdjęcia lub filmy<input name="staffMediaFiles" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif,image/gif,video/mp4,video/webm,.jpg,.jpeg,.png,.webp,.avif,.gif,.mp4,.webm" disabled={(product.staffMedia?.length ?? 0) >= 8}/><small>Do 8 plików na produkt. Zdjęcia zostaną zmniejszone; film MP4 lub WebM może mieć maksymalnie 25 MB.</small></label>
+        <label className="admin-staff-media-upload">Dodaj zdjęcia lub filmy<input name="staffMediaFiles" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,image/gif,video/mp4,video/webm,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif,.gif,.mp4,.webm" disabled={(product.staffMedia?.length ?? 0) >= 8}/><small>Do 8 plików na produkt. Zdjęcia zostaną zmniejszone; film MP4 lub WebM może mieć maksymalnie 25 MB.</small></label>
       </section>
 
       <div className="admin-savebar">

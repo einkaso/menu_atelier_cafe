@@ -18,6 +18,7 @@ test("builds a Google wine query from the product title", async () => {
 test("removes a POS-only glass suffix before searching", async () => {
   const { productSearchTitle } = await vite.ssrLoadModule("/lib/manual-product-search.ts");
   assert.equal(productSearchTitle("PALAU SOLA CAVA_ kieliszek"), "PALAU SOLA CAVA");
+  assert.equal(productSearchTitle("Martha's — na kieliszki"), "Martha's");
   assert.equal(productSearchTitle("WIN45 Gran Sasso — butelka"), "Gran Sasso");
   assert.equal(productSearchTitle("Pfitscher Gewurztraminer Stoas 750ml"), "Pfitscher Gewurztraminer Stoas");
 });

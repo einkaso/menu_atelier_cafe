@@ -47,6 +47,12 @@ export async function currentGuestReceipt() {
 
 export const guestReceiptCookie = { name: COOKIE_NAME, maxAge: SESSION_SECONDS };
 
-export function httpOnlyCookie(name: string, value: string, maxAge: number) {
-  return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`;
+export function requestUsesHttps(request: Request) {
+  const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  if (forwardedProtocol) return forwardedProtocol === "https";
+  return new URL(request.url).protocol === "https:";
+}
+
+export function httpOnlyCookie(name: string, value: string, maxAge: number, secure = process.env.NODE_ENV === "production") {
+  return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }

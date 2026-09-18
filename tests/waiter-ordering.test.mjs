@@ -335,7 +335,7 @@ test("gives waiters the guest drink filters and operational serving information"
 });
 
 test("keeps a staff-only preparation manual behind three product-photo taps", async () => {
-  const [schema, migration, admin, catalog, client, css, uploadRoute, mediaRoute] = await Promise.all([
+  const [schema, migration, admin, catalog, client, css, uploadRoute, mediaRoute, mediaStorage, storageSetup] = await Promise.all([
     read("db/schema.ts"),
     read("drizzle/0032_overjoyed_newton_destine.sql"),
     read("app/admin/admin-panel.tsx"),
@@ -344,6 +344,8 @@ test("keeps a staff-only preparation manual behind three product-photo taps", as
     read("app/kelner/waiter.css"),
     read("app/api/admin/products/[id]/staff-media/route.ts"),
     read("app/api/staff-manual-media/[filename]/route.ts"),
+    read("lib/staff-manual-media.ts"),
+    read("ops/prepare-persistent-storage.sh"),
   ]);
   assert.match(schema, /staffInstructions: text\("staff_instructions"\)/);
   assert.match(schema, /staffMedia: jsonb\("staff_media"\)/);
@@ -356,18 +358,24 @@ test("keeps a staff-only preparation manual behind three product-photo taps", as
   assert.match(catalog, /staffManual:/);
   assert.match(catalog, /instructions: product\.staffInstructions/);
   assert.match(client, /function StaffManualDialog/);
+  assert.match(client, /className="waiter-manual-close-icon"/);
   assert.match(client, /manualTaps\.current/);
   assert.match(client, /if \(count < 3\) return/);
   assert.match(client, /className="waiter-product-manual-hotspot"/);
   assert.match(client, /onPointerUp=\{\(\) => openProductManual\(product, Date\.now\(\)\)\}/);
   assert.match(client, /at - previous\.at <= 1100/);
   assert.match(css, /\.waiter-manual-backdrop/);
+  assert.match(css, /\.waiter-manual-close-icon\{display:block;width:19px;height:19px/);
   assert.match(css, /\.waiter-manual-media img,\.waiter-manual-media video/);
   assert.match(uploadRoute, /isAdmin\(\)/);
   assert.match(uploadRoute, /MAX_MEDIA_ITEMS = 8/);
   assert.match(mediaRoute, /isAdmin\(\)/);
   assert.match(mediaRoute, /currentWaiter\(request\)/);
   assert.match(mediaRoute, /Content-Range/);
+  assert.match(mediaStorage, /optimizeProductImage\(bytes/);
+  assert.match(mediaStorage, /MAX_IMAGE_BYTES = 50 \* 1024 \* 1024/);
+  assert.match(storageSetup, /uploads\/staff-manuals/);
+  assert.match(storageSetup, /-o menuapp -g menuapp/);
 });
 
 test("lets admins remove product images and optimizes oversized files", async () => {
@@ -383,7 +391,11 @@ test("lets admins remove product images and optimizes oversized files", async ()
   assert.match(imageRoute, /export async function DELETE/);
   assert.match(imageRoute, /imagePath: null, imageSourceUrl: null/);
   assert.match(imageRoute, /removeImageWhenUnused/);
-  assert.match(imageImport, /optimizeProductImage\(prepared\.bytes\)/);
+  assert.match(imageImport, /optimizeProductImage\(prepared\.bytes/);
+  assert.match(imageImport, /MAX_UPLOAD_BYTES = 50 \* 1024 \* 1024/);
+  assert.match(admin, /MAX_LOCAL_IMAGE_BYTES = 50 \* 1024 \* 1024/);
+  assert.match(admin, /return source;/);
+  assert.match(admin, /image\/heic/);
   assert.match(imageImport, /removeProductImageFile/);
   assert.match(imageBackground, /MAX_STORED_BYTES = 2_400_000/);
   assert.match(imageBackground, /maxSide: 1_600, quality: 86/);

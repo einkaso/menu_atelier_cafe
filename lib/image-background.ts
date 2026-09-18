@@ -1,15 +1,15 @@
 import sharp from "sharp";
 
 const MAX_SIDE = 1_600;
-const MAX_INPUT_PIXELS = 32_000_000;
+const MAX_INPUT_PIXELS = 64_000_000;
 const MAX_STORED_BYTES = 2_400_000;
 
 type BackgroundRemovalResult = { bytes: Buffer; backgroundRemoved: boolean };
 
-export async function optimizeProductImage(bytes: Buffer, maxBytes = MAX_STORED_BYTES) {
+export async function optimizeProductImage(bytes: Buffer, maxBytes = MAX_STORED_BYTES, forceReencode = false) {
   const metadata = await sharp(bytes, { limitInputPixels: MAX_INPUT_PIXELS }).metadata();
   const fitsDimensions = (metadata.width ?? 0) <= MAX_SIDE && (metadata.height ?? 0) <= MAX_SIDE;
-  if (bytes.length <= maxBytes && fitsDimensions) return bytes;
+  if (!forceReencode && bytes.length <= maxBytes && fitsDimensions) return bytes;
 
   let smallest: Buffer | null = null;
   for (const attempt of [

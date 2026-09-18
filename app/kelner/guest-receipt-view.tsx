@@ -44,12 +44,13 @@ export default function GuestReceiptView({ receipt }: { receipt: GuestReceipt })
   }, []);
 
   async function finish() {
-    if (!requiredComplete) return;
     setFinishing(true); setError("");
-    const save = await fetch("/api/guest/feedback", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }) }).catch(() => null);
-    if (!save?.ok) {
-      const body = await save?.json().catch(() => ({})) as { error?: string } | undefined;
-      setError(body?.error ?? "Nie udało się zapisać odpowiedzi. Spróbuj ponownie."); setFinishing(false); return;
+    if (requiredComplete && Object.keys(answers).length > 0) {
+      const save = await fetch("/api/guest/feedback", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }) }).catch(() => null);
+      if (!save?.ok) {
+        const body = await save?.json().catch(() => ({})) as { error?: string } | undefined;
+        setError(body?.error ?? "Nie udało się zapisać odpowiedzi. Spróbuj ponownie."); setFinishing(false); return;
+      }
     }
     await fetch("/api/guest/receipt", { method: "DELETE", credentials: "same-origin" }).catch(() => null);
     window.location.replace("/");
@@ -64,7 +65,7 @@ export default function GuestReceiptView({ receipt }: { receipt: GuestReceipt })
         <section className="guest-google-review"><h2>Podobało Ci się?</h2><p>Będzie nam bardzo miło, jeśli zostawisz opinię w Google. To naprawdę pomaga małym miejscom.</p>{qrUrl && receipt.reviewUrl ? <><a href={receipt.reviewUrl} target="_blank" rel="noreferrer"><img src={qrUrl} alt="Kod QR do wystawienia opinii w Google"/></a><a className="guest-google-button" href={receipt.reviewUrl} target="_blank" rel="noreferrer">Oceń nas w Google</a></> : <small>Link do opinii Google zostanie tu wyświetlony po jego skonfigurowaniu.</small>}</section>
         {error && <p className="waiter-error guest-receipt-error" role="alert">{error}</p>}
       </div>
-      <footer className="guest-receipt-finish"><button disabled={finishing || !requiredComplete} onClick={() => void finish()}>{finishing ? "Zapisuję…" : "Zakończ i wróć do menu"}</button></footer>
+      <footer className="guest-receipt-finish"><button disabled={finishing} onClick={() => void finish()}>{finishing ? "Zamykam…" : requiredComplete ? "Zakończ i wróć do menu" : "Pomiń ankietę i zamknij"}</button></footer>
     </div>
   </main>;
 }

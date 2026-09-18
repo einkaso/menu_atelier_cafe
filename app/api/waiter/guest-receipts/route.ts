@@ -3,7 +3,7 @@ import { getDb } from "../../../../db";
 import { waiterTables } from "../../../../db/schema";
 import { DotykackaClient } from "../../../../lib/dotykacka/client";
 import { getDotykackaConfig } from "../../../../lib/dotykacka/config";
-import { createGuestReceiptToken, guestReceiptCookie, httpOnlyCookie } from "../../../../lib/guest-receipt-auth";
+import { createGuestReceiptToken, guestReceiptCookie, httpOnlyCookie, requestUsesHttps } from "../../../../lib/guest-receipt-auth";
 import { isClosedReceipt, receiptListItem } from "../../../../lib/guest-receipt";
 import { loadGuestReceipt } from "../../../../lib/guest-receipt-server";
 import { currentWaiter, waiterCookie } from "../../../../lib/waiter-auth";
@@ -39,8 +39,9 @@ export async function POST(request: Request) {
     const receipt = await loadGuestReceipt(orderId, employee.dotykackaId);
     const token = createGuestReceiptToken({ orderId: receipt.orderId, documentNumber: receipt.documentNumber, tableId: receipt.tableId }, employee.dotykackaId);
     const response = Response.json({ receipt });
-    response.headers.append("Set-Cookie", httpOnlyCookie(guestReceiptCookie.name, token, guestReceiptCookie.maxAge));
-    response.headers.append("Set-Cookie", httpOnlyCookie(waiterCookie.name, "", 0));
+    const secureCookie = requestUsesHttps(request);
+    response.headers.append("Set-Cookie", httpOnlyCookie(guestReceiptCookie.name, token, guestReceiptCookie.maxAge, secureCookie));
+    response.headers.append("Set-Cookie", httpOnlyCookie(waiterCookie.name, "", 0, secureCookie));
     return response;
   } catch (error) {
     console.error("Guest receipt handoff failed", error instanceof Error ? error.message : "unknown error");

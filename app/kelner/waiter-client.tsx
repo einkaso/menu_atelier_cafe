@@ -144,7 +144,7 @@ function StaffManualDialog({ product, onClose }: { product: Product; onClose: ()
   if (!manual) return null;
   return <div className="waiter-manual-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section className="waiter-manual" role="dialog" aria-modal="true" aria-labelledby="waiter-manual-title">
-      <header><div><span>INSTRUKCJA DLA PERSONELU</span><h2 id="waiter-manual-title">{product.name}</h2></div><button type="button" onClick={onClose} aria-label="Zamknij instrukcję">×</button></header>
+      <header><div><span>INSTRUKCJA DLA PERSONELU</span><h2 id="waiter-manual-title">{product.name}</h2></div><button type="button" onClick={onClose} aria-label="Zamknij instrukcję"><svg className="waiter-manual-close-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4l12 12M16 4L4 16"/></svg></button></header>
       {manual.media.length > 0 && <div className="waiter-manual-media">{manual.media.map((media) => <figure key={media.id}>{media.type === "IMAGE" ? <img src={media.path} alt={media.name}/> : <video src={media.path} controls playsInline preload="metadata" aria-label={media.name}/>}</figure>)}</div>}
       {manual.instructions ? <div className="waiter-manual-copy">{manual.instructions}</div> : <p className="waiter-manual-empty">Instrukcja zawiera wyłącznie materiały wizualne.</p>}
       <footer><span>Podpowiedź otwiera się po trzech szybkich dotknięciach zdjęcia produktu.</span><button type="button" onClick={onClose}>Zamknij</button></footer>

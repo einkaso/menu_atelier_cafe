@@ -24,7 +24,7 @@ function categoryKey(id: number | null) {
 }
 
 function hasGlassName(name: string) {
-  return /(?:^|[\s_\-/])kieliszek(?:$|[\s_\-/])/i.test(name);
+  return /(?:^|[\s_\-/])kielisz(?:ek|ki)(?:$|[\s_\-/])/i.test(name);
 }
 
 function hasGlassTag(tags: string[]) {
@@ -32,8 +32,8 @@ function hasGlassTag(tags: string[]) {
 }
 
 function isByGlass(tags: string[], name = "") {
-  // A tag alone must never turn a bottle into a by-the-glass offer. Both
-  // deliberate signals are required to avoid exposing historical POS rows.
+  // Obowiązująca reguła: wariant kieliszkowy musi mieć zarówno właściwy dopisek
+  // w nazwie, jak i tag. Sam tag nie może ujawnić historycznej pozycji POS.
   return hasGlassName(name) && hasGlassTag(tags);
 }
 
@@ -64,7 +64,7 @@ function isAlcoholFree(tags: string[], licenseCodes: string[], name: string, sty
 function guestWineName(name: string) {
   return name
     .replace(/\bWIN\s*[-_]?\s*\d+\b/ig, "")
-    .replace(/\s*[-—]\s*(?:kieliszek|butelka|glass|bottle).*$/i, "")
+    .replace(/\s*[-—]\s*(?:(?:na\s+)?kielisz(?:ek|ki)|butelka|glass|bottle).*$/i, "")
     .replace(/\s{2,}/g, " ")
     .trim();
 }

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const MENU_TAG = process.env.DOTYKACKA_MENU_TAG?.trim() || "MENU";
 
 function hasGlassName(name: string) {
-  return /(?:^|[\s_\-/])kieliszek(?:$|[\s_\-/])/i.test(name);
+  return /(?:^|[\s_\-/])kielisz(?:ek|ki)(?:$|[\s_\-/])/i.test(name);
 }
 
 function hasGlassTag(tags: string[]) {

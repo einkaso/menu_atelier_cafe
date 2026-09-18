@@ -11,10 +11,10 @@
 
 .guest-receipt-paper > header {
   display: grid;
-  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  grid-template-columns: minmax(110px, 164px) minmax(0, 1fr);
   align-items: center;
-  gap: 22px;
-  padding: 25px 28px;
+  gap: clamp(10px, 3vw, 22px);
+  padding: 22px 24px;
   text-align: right;
 }
 
@@ -24,8 +24,12 @@
 
 .guest-receipt-paper > header h1 {
   justify-self: end;
-  max-width: 300px;
+  width: 100%;
+  max-width: none;
   margin: 0;
+  overflow: visible;
+  font-size: clamp(1.65rem, 5.2vw, 2.25rem);
+  line-height: 1.08;
   text-align: right;
 }
 
@@ -102,7 +106,7 @@
 
 @media (max-width: 520px) {
   .guest-receipt-paper > header {
-    grid-template-columns: 120px minmax(0, 1fr);
+    grid-template-columns: 108px minmax(0, 1fr);
     gap: 12px;
     padding-inline: 18px;
   }
@@ -112,7 +116,7 @@
   }
 
   .guest-receipt-paper > header h1 {
-    font-size: 2rem;
+    font-size: 1.72rem;
   }
 
   .guest-receipt-meta {

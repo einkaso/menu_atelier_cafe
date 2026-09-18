@@ -1,4 +1,4 @@
-import { currentGuestReceipt, guestReceiptCookie, httpOnlyCookie } from "../../../../lib/guest-receipt-auth";
+import { currentGuestReceipt, guestReceiptCookie, httpOnlyCookie, requestUsesHttps } from "../../../../lib/guest-receipt-auth";
 import { loadGuestReceipt } from "../../../../lib/guest-receipt-server";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +14,8 @@ export async function GET() {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   const response = Response.json({ status: "ok" });
-  response.headers.append("Set-Cookie", httpOnlyCookie(guestReceiptCookie.name, "", 0));
+  response.headers.append("Set-Cookie", httpOnlyCookie(guestReceiptCookie.name, "", 0, requestUsesHttps(request)));
   return response;
 }
