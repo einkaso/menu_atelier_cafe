@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { GuestReceipt, GuestReceiptListItem } from "../../lib/guest-receipt";
-import { lockAppLandscapeOrientation, lockGuestPortraitOrientation } from "./guest-orientation";
+import { lockAppLandscapeOrientation } from "./guest-orientation";
 import { waiterSessionHeaders } from "./waiter-session-client";
 
 const money = new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" });
@@ -28,7 +28,7 @@ export default function GuestReceiptPicker({ employeeName, onBack, onHandoff, on
   useEffect(() => { void load(); }, [load]);
 
   async function handoff(orderId: string) {
-    void lockGuestPortraitOrientation();
+    void lockAppLandscapeOrientation();
     setOpening(orderId); setError("");
     const response = await fetch("/api/waiter/guest-receipts", { method: "POST", credentials: "same-origin", headers: waiterSessionHeaders({ "content-type": "application/json" }), body: JSON.stringify({ orderId }) }).catch(() => null);
     const body = await response?.json().catch(() => ({})) as { receipt?: GuestReceipt; error?: string } | undefined;

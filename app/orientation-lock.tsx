@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { desiredAppOrientation, lockAppLandscapeOrientation, lockAppOrientation } from "./kelner/guest-orientation";
+import { lockAppLandscapeOrientation } from "./kelner/guest-orientation";
 
 export default function OrientationLock() {
   useEffect(() => {
     void lockAppLandscapeOrientation();
-    const reapply = () => { void lockAppOrientation(desiredAppOrientation()); };
+    const reapply = () => { void lockAppLandscapeOrientation(); };
     const onVisibilityChange = () => { if (document.visibilityState === "visible") reapply(); };
     window.addEventListener("orientationchange", reapply);
     window.addEventListener("pageshow", reapply);

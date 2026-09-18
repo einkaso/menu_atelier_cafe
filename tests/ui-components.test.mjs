@@ -284,13 +284,15 @@ test("opens Harney teas with official cup-and-leaf photography and the full Doty
   }
 });
 
-test("uses exact cake photos in image-led cards without a section-wide banner", async () => {
+test("uses exact cake photos in image-led cards with a company-story intro", async () => {
   const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
   const css = await readFile(path.join(root, "app/globals.css"), "utf8");
 
   assert.match(source, /cakeLayout=\{activeKind==="cakes"\}/);
   assert.match(source, /activeKind==="cakes"\?setCakeProduct/);
   assert.match(source, /<CakeDetailDialog product=\{cakeProduct\}/);
+  assert.match(source, /<CakePartnerIntro lang=\{lang\}/);
+  assert.match(source, /<CakePartnerDialog open=\{capuccinoOpen\}/);
   assert.doesNotMatch(source, /<CakeShowcase/);
   assert.doesNotMatch(source, /cakeShowcase=/);
   assert.match(source, /cakeLayout&&!p\.image&&<div className="product-image cake-image-placeholder"/);
@@ -309,6 +311,8 @@ test("uses exact cake photos in image-led cards without a section-wide banner", 
   assert.match(css, /\.featured-cake-logo\{[^}]*width:128px[^}]*object-position:left center/);
   assert.match(css, /\.cake-taste-line\{[^}]*color:var\(--pink\)[^}]*text-transform:uppercase/);
   assert.match(css, /\.cake-detail-logo\{[^}]*width:135px[^}]*object-position:left center/);
+  assert.match(css, /\.cake-partner-intro\{[^}]*grid-template-columns:[^}]*border-top:5px solid var\(--pink\)/);
+  assert.match(css, /\.cake-partner-copy \.cake-partner-link/);
 });
 
 test("places the featured marker over the left side of product photos", async () => {
