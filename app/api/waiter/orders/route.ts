@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { menuAddons, menuProducts, waiterExtraProducts, waiterOrders, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
 import { currentWaiter, waiterCookie } from "../../../../lib/waiter-auth";
-import { isAlternativeCoffeeBeanGroup } from "../../../../lib/coffee-addons";
+import { isAlternativeCoffeeBeanGroup, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
 import { menuProductIsAvailable, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
 import { DotykackaClient } from "../../../../lib/dotykacka/client";
 import { getDotykackaConfig } from "../../../../lib/dotykacka/config";
@@ -65,7 +65,8 @@ export async function POST(request: Request) {
     const selected = requestedIds.map((id) => allowedByParent.get(productId)?.get(id));
     if (selected.some((addon) => !addon)) return Response.json({ error: "Zamówienie zawiera niedostępny dodatek." }, { status: 400 });
     const selectedGroups = selected.map((addon) => addon?.groupName?.trim() || "Dodatki");
-    if (new Set(selectedGroups).size !== selectedGroups.length) return Response.json({ error: "W jednej grupie można wybrać tylko jeden wariant." }, { status: 400 });
+    const singleChoiceGroups = selectedGroups.filter((group) => !isCoffeeAddonGroup(group));
+    if (new Set(singleChoiceGroups).size !== singleChoiceGroups.length) return Response.json({ error: "W tej grupie można wybrać tylko jeden wariant." }, { status: 400 });
     const requiredGroups = new Set(allowedAddons.filter((addon) => addon.parentId === productId && isAlternativeCoffeeBeanGroup(addon.groupName)).map((addon) => addon.groupName?.trim() || "Dodatki"));
     if ([...requiredGroups].some((group) => !selectedGroups.includes(group))) return Response.json({ error: "Wybierz ziarno do kawy alternatywnej." }, { status: 400 });
   }

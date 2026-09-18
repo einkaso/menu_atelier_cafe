@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { GuestReceipt, GuestReceiptListItem } from "../../lib/guest-receipt";
-import { lockGuestPortraitOrientation } from "./guest-orientation";
+import { lockAppLandscapeOrientation, lockGuestPortraitOrientation } from "./guest-orientation";
 import { waiterSessionHeaders } from "./waiter-session-client";
 
 const money = new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" });
@@ -32,10 +32,13 @@ export default function GuestReceiptPicker({ employeeName, onBack, onHandoff, on
     setOpening(orderId); setError("");
     const response = await fetch("/api/waiter/guest-receipts", { method: "POST", credentials: "same-origin", headers: waiterSessionHeaders({ "content-type": "application/json" }), body: JSON.stringify({ orderId }) }).catch(() => null);
     const body = await response?.json().catch(() => ({})) as { receipt?: GuestReceipt; error?: string } | undefined;
-    if (!response?.ok || !body?.receipt) setError(body?.error ?? "Nie udało się otworzyć rachunku.");
+    if (!response?.ok || !body?.receipt) {
+      void lockAppLandscapeOrientation();
+      setError(body?.error ?? "Nie udało się otworzyć rachunku.");
+    }
     else onHandoff(body.receipt);
     setOpening(null);
   }
 
-  return <main className="waiter-app"><header className="waiter-header"><button onClick={onBack}>← Zamówienia</button><div><span>Rachunek dla gościa</span><strong>{employeeName}</strong></div><button onClick={onLogout}>Wyloguj</button></header><section className="guest-receipt-picker"><div className="waiter-review-title"><span>DOWOLNY TABLET · DOWOLNY STOLIK</span><h1>Wybierz rachunek</h1><p>Lista pokazuje zamknięte rachunki z ostatnich 12 godzin. Po wyborze tablet przejdzie w bezpieczny tryb dla gościa i wyloguje kelnera.</p></div><div className="guest-receipt-picker-actions"><button onClick={() => void load()} disabled={loading}>{loading ? "Odświeżam…" : "Odśwież listę"}</button></div>{error && <p className="waiter-error" role="alert">{error}</p>}{!loading && !receipts.length && <p className="waiter-empty">Brak zamkniętych rachunków do wyświetlenia.</p>}<div className="guest-receipt-list">{receipts.map((receipt) => <article key={receipt.orderId}><div><span>{receipt.tableName}</span><h2>{receipt.documentNumber}</h2><small>{date.format(new Date(receipt.completedAt))}</small></div><strong>{money.format(Number(receipt.total))}</strong><button disabled={opening !== null} onClick={() => void handoff(receipt.orderId)}>{opening === receipt.orderId ? "Otwieram…" : "Pokaż gościowi"}</button></article>)}</div></section></main>;
+  return <main className="waiter-app guest-receipt-picker-screen"><header className="waiter-header"><button onClick={onBack}>← Zamówienia</button><div><span>Rachunek dla gościa</span><strong>{employeeName}</strong></div><button onClick={onLogout}>Wyloguj</button></header><section className="guest-receipt-picker"><div className="waiter-review-title"><span>DOWOLNY TABLET · DOWOLNY STOLIK</span><h1>Wybierz rachunek</h1><p>Lista pokazuje zamknięte rachunki z ostatnich 12 godzin. Po wyborze tablet przejdzie w bezpieczny tryb dla gościa i wyloguje kelnera.</p></div><div className="guest-receipt-picker-actions"><button onClick={() => void load()} disabled={loading}>{loading ? "Odświeżam…" : "Odśwież listę"}</button></div>{error && <p className="waiter-error" role="alert">{error}</p>}{!loading && !receipts.length && <p className="waiter-empty">Brak zamkniętych rachunków do wyświetlenia.</p>}<div className="guest-receipt-list">{receipts.map((receipt) => <article key={receipt.orderId}><div><span>{receipt.tableName}</span><h2>{receipt.documentNumber}</h2><small>{date.format(new Date(receipt.completedAt))}</small></div><strong>{money.format(Number(receipt.total))}</strong><button disabled={opening !== null} onClick={() => void handoff(receipt.orderId)}>{opening === receipt.orderId ? "Otwieram…" : "Pokaż gościowi"}</button></article>)}</div></section></main>;
 }

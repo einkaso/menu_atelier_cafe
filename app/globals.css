@@ -4,6 +4,8 @@
 *{box-sizing:border-box}
 html{background:var(--navy-deep);scroll-behavior:smooth}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:"DM Sans",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.app-landscape-required{display:none}
+@media (orientation:portrait) and (pointer:coarse) and (min-width:600px){html:not([data-app-orientation="portrait"]) .app-landscape-required{position:fixed;z-index:2147483647;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:34px;background:#05252f;color:#fff;text-align:center}html:not([data-app-orientation="portrait"]) .app-landscape-required:before{content:"↻";display:grid;width:84px;height:84px;margin-bottom:12px;place-items:center;border:2px solid #ee764b;border-radius:22px;color:#ff9a6c;font-size:3rem}html:not([data-app-orientation="portrait"]) .app-landscape-required b{font:500 2rem Georgia,serif}html:not([data-app-orientation="portrait"]) .app-landscape-required span{max-width:360px;color:#bfd0d2;font-size:.8rem;line-height:1.5}}
 button,select{font:inherit}button{color:inherit}.app{min-height:100vh;background:var(--paper)}
 
 /* Identity and navigation */

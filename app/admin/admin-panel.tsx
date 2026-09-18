@@ -307,9 +307,10 @@ const ruleSections = [
       ["Dotykačka", "Chemex, AeroPress i Drip należą do podgrupy „Kawy alternatywne”. Dostępne ziarna przypisujemy do tych produktów jako dodatki z grupy „ZIARNA DO KAW ALTERNATYWNYCH”."],
       ["Automatycznie", "Wybór ziarna jest pokazany raz dla całej podgrupy kaw alternatywnych. Nazwy, profile smakowe, opisy i tłumaczenia są pobierane oraz aktualizowane systemowo."],
       ["Automatycznie", "W strefie kelnera dotknięcie „+” przy produkcie mającym dodatki otwiera wybór wariantu dla jednej właśnie dodawanej sztuki. Produkty bez dodatków trafiają do zamówienia od razu."],
+      ["Automatycznie", "Przy jednej kawie można połączyć dowolną liczbę modyfikacji z grupy „DODATKI DO KAWY”, na przykład inne mleko i dodatkowe espresso."],
       ["Automatycznie", "Każda konfiguracja jest osobną linią zamówienia. Dwie latte mogą więc wystąpić oddzielnie: jedna standardowa, a druga np. ze zmianą mleka na kokosowe."],
       ["Automatycznie", "Cena dodatku jest doliczana do ceny jednej skonfigurowanej pozycji. Nazwa wariantu oraz jego cena pochodzą z aktualnych połączeń produktów w Dotykačce."],
-      ["Zawsze", "Przy kawie alternatywnej wybór ziarna jest obowiązkowy. System nie pozwala dodać tej pozycji ani wysłać nieistniejącego dodatku lub dwóch wariantów z tej samej grupy."],
+      ["Zawsze", "Przy kawie alternatywnej wybór jednego ziarna jest obowiązkowy. System nie pozwala dodać tej pozycji ani wysłać nieistniejącego dodatku lub dwóch ziaren jednocześnie."],
     ],
   },
   {

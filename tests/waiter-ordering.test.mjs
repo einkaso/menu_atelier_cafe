@@ -134,6 +134,8 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(adminStageRoute, /stage\.status !== "APPROVED"/);
   assert.match(adminStageRoute, /ADMIN_EDITABLE_STATUSES\.includes\(stage\.status\)/);
   assert.match(adminStageRoute, /acceptedExpectedCount/);
+  assert.match(adminStageRoute, /countedQuantity: sql`\$\{inventoryStageItems\.expectedQuantity\}`/);
+  assert.doesNotMatch(adminStageRoute, /for \(const item of pendingItems\)/);
   assert.match(adminStageRoute, /stockTakingDates/);
   assert.match(client, /createStockTaking/);
   assert.match(client, /\/stock-takings/);
@@ -161,6 +163,10 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(workerScreen, /Zakończenie tego etapu nie wymaga przeliczenia innych kategorii/);
   assert.match(adminScreen, /Cofnij do poprawy/);
   assert.match(adminScreen, /Zatwierdź bez czekania na zakończenie przez pracownika/);
+  assert.match(adminScreen, /REQUEST_TIMEOUT_MS = 30_000/);
+  assert.match(adminScreen, /controller\.abort\(\)/);
+  assert.match(adminScreen, /finally \{[\s\S]*?setBusy\(""\)/);
+  assert.match(adminScreen, /Wpisz notatkę, aby aktywować przycisk zatwierdzania/);
   assert.match(adminScreen, /zer pominiętych/);
   assert.match(adminScreen, /Powtarzające się odchylenia/);
   assert.match(panel, /href="\/admin\/inventory"/);
@@ -234,10 +240,13 @@ test("keeps separately configured coffees as distinct order lines", async () => 
     read("app/kelner/waiter-client.tsx"), read("app/api/waiter/catalog/route.ts"), read("app/api/waiter/orders/route.ts"),
   ]);
   assert.match(client, /customizations\.map\(\(addon\) => addon\.id\)\.sort\(\)\.join/);
-  assert.match(client, /configuring\.addonGroups\.some\(\(group\) => group\.required/);
-  assert.match(catalog, /isAlternativeCoffeeBeanGroup\(groupName\)/);
+  assert.match(client, /Object\.values\(addonSelections\)\.flat\(\)/);
+  assert.match(client, /group\.multiple \? \(previous\.includes\(addon\.id\)/);
+  assert.match(client, /możesz wybrać kilka/);
+  assert.match(catalog, /multiple: isCoffeeAddonGroup\(groupName\)/);
   assert.match(orders, /Wybierz ziarno do kawy alternatywnej/);
-  assert.match(orders, /W jednej grupie można wybrać tylko jeden wariant/);
+  assert.match(orders, /selectedGroups\.filter\(\(group\) => !isCoffeeAddonGroup\(group\)\)/);
+  assert.match(orders, /W tej grupie można wybrać tylko jeden wariant/);
 });
 
 test("documents the complete waiter, coffee, wine, and whiskey rules in admin", async () => {
@@ -344,6 +353,8 @@ test("keeps a staff-only preparation manual behind three product-photo taps", as
   assert.match(client, /manualTaps\.current/);
   assert.match(client, /if \(count < 3\) return/);
   assert.match(client, /className="waiter-product-manual-hotspot"/);
+  assert.match(client, /onPointerUp=\{\(\) => openProductManual\(product, Date\.now\(\)\)\}/);
+  assert.match(client, /at - previous\.at <= 1100/);
   assert.match(css, /\.waiter-manual-backdrop/);
   assert.match(css, /\.waiter-manual-media img,\.waiter-manual-media video/);
   assert.match(uploadRoute, /isAdmin\(\)/);

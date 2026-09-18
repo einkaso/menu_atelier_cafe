@@ -38,14 +38,16 @@ test("keeps pre-order and post-receipt surveys separate", async () => {
 });
 
 test("shows a random personal thank-you animation from a three-item employee gallery", async () => {
-  const [schema, migration, server, guest, picker, orientation, guestStyles, admin, mediaRoute] = await Promise.all([
+  const [schema, migration, server, guest, picker, orientation, orientationLock, waiterStyles, guestStyles, admin, mediaRoute] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0031_violet_alex_wilder.sql", import.meta.url), "utf8"),
     readFile(new URL("../lib/guest-receipt-server.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/kelner/guest-receipt-view.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/kelner/guest-receipt-picker.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/kelner/guest-orientation.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/orientation-lock.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/kelner/waiter.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/kelner/tablet-fixes.css", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/waiters/waiter-admin-client.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/waiter/employees/[dotykackaId]/thanks/route.ts", import.meta.url), "utf8"),
   ]);
@@ -54,17 +56,23 @@ test("shows a random personal thank-you animation from a three-item employee gal
   assert.match(server, /Math\.floor\(Math\.random\(\) \* thankYouMedia\.length\)/);
   assert.match(guest, /Dziękuję i zapraszam ponownie!/);
   assert.match(guest, /autoPlay loop muted playsInline/);
-  assert.match(guest, /fetch\(servedBy\.mediaUrl, \{ credentials: "same-origin", cache: "no-store" \}\)/);
-  assert.match(guest, /URL\.createObjectURL\(blob\)/);
+  assert.match(guest, /src=\{servedBy\.mediaUrl!\}/);
+  assert.doesNotMatch(guest, /URL\.createObjectURL\(blob\)/);
   assert.match(guest, /onCanPlay=\{playVideo\}/);
+  assert.match(guest, /className="guest-receipt-meta"/);
+  assert.match(picker, /guest-receipt-picker-screen/);
   assert.match(guest, /Obróć tablet pionowo/);
   assert.match(picker, /lockGuestPortraitOrientation\(\)/);
-  assert.match(orientation, /orientation\.lock\("portrait"\)/);
+  assert.match(orientation, /lockAppOrientation\("portrait"\)/);
+  assert.match(orientation, /lockAppOrientation\("landscape"\)/);
   assert.match(orientation, /orientation\.unlock\(\)/);
-  assert.match(guestStyles, /\.guest-personal-thanks-media\.has-media:before/);
-  assert.match(guestStyles, /\.guest-personal-thanks-clip\{/);
-  assert.match(guestStyles, /@media\(orientation:landscape\) and \(pointer:coarse\)/);
-  assert.match(guestStyles, /@keyframes guest-thanks-pop/);
+  assert.match(orientationLock, /pointerup/);
+  assert.match(orientationLock, /desiredAppOrientation\(\)/);
+  assert.match(waiterStyles, /\.guest-personal-thanks-media\.has-media:before/);
+  assert.match(waiterStyles, /\.guest-personal-thanks-clip\{/);
+  assert.match(guestStyles, /data-app-orientation="portrait"/);
+  assert.match(guestStyles, /\.guest-receipt-picker-screen \+ \.waiter-inventory-floating/);
+  assert.match(waiterStyles, /@keyframes guest-thanks-pop/);
   assert.match(admin, /employee\.thankYouMedia\.length >= 3/);
   assert.match(mediaRoute, /existingMedia\.length >= 3/);
 });

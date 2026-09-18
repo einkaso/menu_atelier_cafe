@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import PwaUpdater from "./pwa-updater";
+import OrientationLock from "./orientation-lock";
 
 export const metadata: Metadata = {
   title: "Menu | Marta Banaszek atelier-café",
@@ -39,7 +40,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Menu Café" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
-      <body className="antialiased"><PwaUpdater />{children}</body>
+      <body className="antialiased"><PwaUpdater /><OrientationLock />{children}</body>
     </html>
   );
 }

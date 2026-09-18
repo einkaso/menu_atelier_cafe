@@ -3,7 +3,7 @@ import { getDb } from "../../../../db";
 import { menuAddons, menuCategories, menuProducts, productContent, waiterExtraProducts, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
 import { productImageUrl } from "../../../../lib/image-import";
 import { currentWaiter } from "../../../../lib/waiter-auth";
-import { isAlternativeCoffeeBeanGroup } from "../../../../lib/coffee-addons";
+import { isAlternativeCoffeeBeanGroup, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
 import { menuProductIsAvailable, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
 import { sectionFor } from "../../../../lib/menu-categories";
 import { isZeroAlcoholValue } from "../../../../lib/wine-characteristics";
@@ -97,11 +97,11 @@ export async function GET(request: Request) {
     db.select({ parentId: menuAddons.parentDotykackaId, id: menuAddons.addonDotykackaId, groupName: menuAddons.groupName, name: menuAddons.name, price: menuAddons.priceWithVat, currency: menuAddons.currency, sortOrder: menuAddons.sortOrder })
       .from(menuAddons).orderBy(asc(menuAddons.sortOrder), asc(menuAddons.name)),
   ]);
-  const addonGroupsByProduct = new Map<string, Map<string, { name: string; required: boolean; options: Array<{ id: string; name: string; price: string | null; currency: string }> }>>();
+  const addonGroupsByProduct = new Map<string, Map<string, { name: string; required: boolean; multiple: boolean; options: Array<{ id: string; name: string; price: string | null; currency: string }> }>>();
   for (const addon of addons) {
     const groupName = addon.groupName?.trim() || "Dodatki";
     const groups = addonGroupsByProduct.get(addon.parentId) ?? new Map();
-    const group = groups.get(groupName) ?? { name: groupName, required: isAlternativeCoffeeBeanGroup(groupName), options: [] };
+    const group = groups.get(groupName) ?? { name: groupName, required: isAlternativeCoffeeBeanGroup(groupName), multiple: isCoffeeAddonGroup(groupName), options: [] };
     group.options.push({ id: addon.id, name: addon.name, price: addon.price, currency: addon.currency });
     groups.set(groupName, group); addonGroupsByProduct.set(addon.parentId, groups);
   }

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../../../../../db";
 import { inventoryCountEntries, inventoryEvents, inventoryExports, inventoryStageItems, inventoryStages } from "../../../../../db/schema";
 import { currentAdmin } from "../../../../../lib/admin-auth";
@@ -89,9 +89,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           createdAt: now,
           updatedAt: now,
         })));
-        for (const item of pendingItems) {
-          await tx.update(inventoryStageItems).set({ countedQuantity: item.expectedQuantity, countStatus: "COUNTED", reasonCode: null, adminNote: note, countedAt: now, updatedAt: now }).where(eq(inventoryStageItems.id, item.id));
-        }
+        await tx.update(inventoryStageItems).set({
+          countedQuantity: sql`${inventoryStageItems.expectedQuantity}`,
+          countStatus: "COUNTED",
+          reasonCode: null,
+          adminNote: note,
+          countedAt: now,
+          updatedAt: now,
+        }).where(inArray(inventoryStageItems.id, pendingIds));
       }
       await tx.update(inventoryStages).set({ status: "APPROVED", approvedAt: now, approvedBy: actor.username, adminNote: note || stage.adminNote, updatedAt: now }).where(eq(inventoryStages.id, stageId));
       await tx.insert(inventoryEvents).values({ stageId, actorType: "ADMIN", actorId: actor.username, actorName, action: "APPROVED", details: { note, previousStatus: stage.status, acceptedExpectedCount: pendingItems.length, differences: items.filter((item) => item.countStatus !== "PENDING" && inventoryDifference(item.expectedQuantity, item.countedQuantity)).length } });
