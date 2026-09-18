@@ -178,6 +178,17 @@ test("shows wine style before the description and aligns detail rows", async () 
   assert.match(css, /\.wine-detail-copy dd\{align-self:baseline/);
 });
 
+test("opens savoury dishes with their description, price and allergens", async () => {
+  const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
+
+  assert.match(source, /const\[savoryProduct,setSavoryProduct\]=useState<Product\|null>\(null\)/);
+  assert.match(source, /showChef\?setSavoryProduct:undefined/);
+  assert.match(source, /<SavoryDetailDialog product=\{savoryProduct\}/);
+  assert.match(source, /function SavoryDetailDialog/);
+  assert.match(source, /L\("Poznaj naszą kuchnię","Discover our kitchen"\)/);
+  assert.match(source, /onAllergens\(product\)/);
+});
+
 test("separates wine colour, bubbles, serving and independent features", async () => {
   const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
   const admin = await readFile(path.join(root, "app/admin/admin-panel.tsx"), "utf8");
@@ -297,6 +308,10 @@ test("uses exact cake photos in image-led cards with a company-story intro", asy
   assert.match(source, /activeKind==="cakes"&&isCapuccinoBannerCategory\(cat\)&&<CakePartnerIntro lang=\{lang\}/);
   assert.match(source, /function isCapuccinoBannerCategory\(category:Category\|undefined\)/);
   assert.match(source, /<CakePartnerDialog open=\{capuccinoOpen\}/);
+  assert.match(source, /\/capuccino-wedding-cakes\.jpg/);
+  assert.match(source, /\/capuccino-occasion-cakes\.jpg/);
+  assert.match(source, /className="capuccino-story-footer"/);
+  assert.doesNotMatch(source, /href="https:\/\/capuccinocafe\.pl/);
   assert.doesNotMatch(source, /<CakeShowcase/);
   assert.doesNotMatch(source, /cakeShowcase=/);
   assert.match(source, /cakeLayout&&!p\.image&&<div className="product-image cake-image-placeholder"/);
@@ -316,7 +331,8 @@ test("uses exact cake photos in image-led cards with a company-story intro", asy
   assert.match(css, /\.cake-taste-line\{[^}]*color:var\(--pink\)[^}]*text-transform:uppercase/);
   assert.match(css, /\.cake-detail-logo\{[^}]*width:135px[^}]*object-position:left center/);
   assert.match(css, /\.cake-partner-intro\{[^}]*grid-template-columns:[^}]*border-top:5px solid var\(--pink\)/);
-  assert.match(css, /\.cake-partner-copy \.cake-partner-link/);
+  assert.doesNotMatch(css, /\.cake-partner-copy \.cake-partner-link/);
+  assert.match(css, /\.capuccino-story-banners img\{[^}]*object-fit:cover/);
 });
 
 test("places the featured marker over the left side of product photos", async () => {
