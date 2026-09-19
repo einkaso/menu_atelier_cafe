@@ -13,10 +13,15 @@ export const dynamic = "force-dynamic";
 const APP_BUILD_VERSION = process.env.NEXT_PUBLIC_APP_BUILD_VERSION ?? "development";
 const MENU_TAG = process.env.DOTYKACKA_MENU_TAG?.trim() || "MENU";
 const CAPUCCINO_CAFE_SUPPLIER = "FONTANNA SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ";
+const ARABICA_BAG_IMAGE = "/coffee-arabica-transparent.png";
 type PublicOffer = { kind: "glass" | "serving" | "bottle"; price: string; productId: number };
 
 function normalizedSupplier(value: string | null) {
   return (value ?? "").trim().replace(/\s+/g, " ").toLocaleUpperCase("pl");
+}
+
+function isArabicaBagProduct(name: string) {
+  return name.trim().toLocaleUpperCase("pl") === "KAWA ZIARNO 1KG ARABICA 100%";
 }
 
 function categoryKey(id: number | null) {
@@ -281,7 +286,7 @@ export async function GET() {
       sparklingType: item.sparklingType || undefined,
       sweetness: item.sweetness || undefined,
       grapes: item.grapes || undefined,
-      image: productImageUrl(item.imagePath) || undefined,
+      image: isArabicaBagProduct(item.name) ? ARABICA_BAG_IMAGE : productImageUrl(item.imagePath) || undefined,
       featured: standardMenuProduct ? item.featured || isPromo(item.tags) || undefined : undefined,
       promo: standardMenuProduct ? isPromo(item.tags) : false,
       promoOrder: item.featuredSortOrder ?? 2147483647,

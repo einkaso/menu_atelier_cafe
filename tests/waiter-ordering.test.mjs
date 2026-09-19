@@ -289,8 +289,8 @@ test("links cake provenance to the exact Dotykacka supplier and presents the men
   assert.match(client, /function CakePartnerDialog/);
   assert.match(client, /Poznaj legendę ciast Capuccino Cafe/);
   assert.match(client, /Rodzinna firma z historią sięgającą 2006 roku/);
-  assert.match(client, /W 2015 roku firma otworzyła własną pracownię tortów/);
-  assert.match(client, /href="https:\/\/capuccinocafe\.pl\/o-nas\/"/);
+  assert.match(client, /Od 2015 roku tworzy we własnej pracowni torty i słodkości/);
+  assert.doesNotMatch(client, /href="https:\/\/capuccinocafe\.pl\/o-nas\/"/);
   assert.doesNotMatch(client, /<CakeShowcase/);
   assert.doesNotMatch(client, /Wypiek od|Sopocka pracownia cukiernicza/);
   assert.match(client, /Andrzej Andrzejczak, znany jako Dr Meat/);

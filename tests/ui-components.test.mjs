@@ -189,6 +189,23 @@ test("opens savoury dishes with their description, price and allergens", async (
   assert.match(source, /onAllergens\(product\)/);
 });
 
+test("opens drinks with managed photos, descriptions and allergens", async () => {
+  const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
+  const admin = await readFile(path.join(root, "app/admin/admin-panel.tsx"), "utf8");
+  const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
+
+  assert.match(source, /const\[drinkProduct,setDrinkProduct\]=useState<Product\|null>\(null\)/);
+  assert.match(source, /activeKind==="cold"\?setDrinkProduct/);
+  assert.match(source, /<DrinkDetailDialog product=\{drinkProduct\}/);
+  assert.match(source, /function DrinkDetailDialog/);
+  assert.match(source, /Zobacz napój i pełny opis/);
+  assert.match(source, /Wróć do napojów/);
+  assert.match(admin, /Usuń zdjęcie/);
+  assert.match(admin, /Albo wybierz zdjęcie z dysku/);
+  assert.match(api, /productImageUrl\(item\.imagePath\)/);
+  assert.match(api, /isArabicaBagProduct\(item\.name\) \? ARABICA_BAG_IMAGE/);
+});
+
 test("separates wine colour, bubbles, serving and independent features", async () => {
   const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
   const admin = await readFile(path.join(root, "app/admin/admin-panel.tsx"), "utf8");
@@ -379,9 +396,39 @@ test("guides alternative coffee through beans, brewing method and product detail
   assert.match(source, /Wybierz ziarno/);
   assert.match(source, /Wybierz metodę parzenia/);
   assert.match(source, /selected&&selectedMethod&&<p className="alternative-selection-summary"/);
+  assert.match(source, /function isAeropressMethod/);
+  assert.match(source, /function isChemexMethod/);
+  assert.match(source, /function coffeeMethodImage/);
+  assert.match(source, /function coffeeMethodImageClass/);
+  assert.match(source, /function isDripMethod/);
+  assert.match(source, /coffee-methods\/chemex\.jpg/);
+  assert.match(source, /coffee-methods\/aeropress\.jpg/);
+  assert.match(source, /coffee-methods\/drip\.jpg/);
+  assert.match(source, /coffeeMethodImage\(method\)&&<img/);
+  assert.match(source, /isAeropressMethod\(method\)\|\|isChemexMethod\(method\)\|\|isDripMethod\(method\)/);
+  assert.match(source, /setMethodPreview\(method\)/);
+  assert.match(source, /Wybierz \$\{methodPreview\.pl\}/);
+  assert.match(source, /ponad 30 prototypach/);
+  assert.match(source, /Chemex zaprojektował i opatentował w 1941 roku/);
+  assert.match(source, /V60 to stożkowy dripper HARIO/);
+  assert.match(source, /"\/drip-demo\.mp4":chemexPreview\?"\/chemex-demo\.mp4":"\/aeropress-demo\.mp4"/);
+  assert.match(source, /"\/drip-demo-poster\.jpg":chemexPreview\?"\/chemex-demo-poster\.jpg":"\/aeropress-demo-poster\.jpg"/);
+  assert.match(source, /autoPlay muted loop playsInline/);
   assert.match(api, /inventoryCatalogProducts\.imageSourceUrl/);
   assert.match(api, /image: beanImages\.get\(item\.addonDotykackaId\)/);
   assert.match(css, /\.alternative-beans-picker\{display:grid/);
   assert.match(css, /\.alternative-method-picker\{display:grid/);
+  assert.match(css, /\.alternative-method-picker button\.has-image/);
+  assert.match(css, /button\.has-image:after/);
+  assert.match(css, /button\.has-image img\{position:absolute/);
+  assert.match(css, /\.alternative-method-video\{display:block/);
   assert.match(css, /\.coffee-detail-visual>img\{[^}]*object-fit:contain/);
+});
+
+test("uses the transparent product photo for the Arabica coffee bag", async () => {
+  const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
+
+  assert.match(api, /const ARABICA_BAG_IMAGE = "\/coffee-arabica-transparent\.png"/);
+  assert.match(api, /function isArabicaBagProduct/);
+  assert.match(api, /isArabicaBagProduct\(item\.name\) \? ARABICA_BAG_IMAGE/);
 });
