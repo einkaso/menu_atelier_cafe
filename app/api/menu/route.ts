@@ -28,6 +28,18 @@ function categoryKey(id: number | null) {
   return id ? `category-${id}` : "category-other";
 }
 
+function publicCategory(visualKind: string, categoryId: number | null): { id: string; pl?: string; en?: string } {
+  if (visualKind === "cakes") return { id: "cakes", pl: "NA SŁODKO", en: "SWEET" };
+  if (visualKind === "cocktails") return { id: "alco-bar", pl: "Alko Bar", en: "Alco Bar" };
+  return { id: categoryKey(categoryId) };
+}
+
+function usesAutomaticMenuGroup(suggestion: ReturnType<typeof suggestProductGroup>) {
+  return suggestion?.pl === "Kawy alternatywne" || [
+    "Spritze", "Koktajle", "Drinki 0%", "Shoty · 50 ml", "Wódka na butelki", "Pozostałe alkohole",
+  ].includes(suggestion?.pl ?? "");
+}
+
 function hasGlassName(name: string) {
   return /(?:^|[\s_\-/])kielisz(?:ek|ki)(?:$|[\s_\-/])/i.test(name);
 }
@@ -126,6 +138,7 @@ export async function GET() {
       wineStyleEn: productContent.wineStyleEn,
       tastingNotesEn: productContent.tastingNotesEn,
       imagePath: productContent.imagePath,
+      galleryPaths: productContent.galleryPaths,
       featured: productContent.featured,
       featuredSortOrder: productContent.featuredSortOrder,
       hideWhenOutOfStock: productContent.hideWhenOutOfStock,
@@ -178,17 +191,17 @@ export async function GET() {
     const groupOrder = new Map<string, number>();
     for (const item of visibleRows) {
       const suggestion = suggestProductGroup(item.category, item.name);
-      const group = suggestion?.pl === "Kawy alternatywne" ? suggestion.pl : item.menuGroup || suggestion?.pl || "";
+      const group = usesAutomaticMenuGroup(suggestion) ? suggestion?.pl ?? "" : item.menuGroup || suggestion?.pl || "";
       const key = `${item.categoryId ?? "other"}:${group}`;
-      const value = savedGroupOrder.get(key) ?? item.menuSortOrder ?? suggestion?.rank ?? 9999;
+      const value = savedGroupOrder.get(key) ?? (usesAutomaticMenuGroup(suggestion) ? suggestion?.rank : item.menuSortOrder ?? suggestion?.rank) ?? 9999;
       groupOrder.set(key, Math.min(groupOrder.get(key) ?? value, value));
     }
     const orderedRows = [...visibleRows].sort((a, b) => {
       if (a.categoryId !== b.categoryId) return 0;
       const aSuggestion = suggestProductGroup(a.category, a.name);
       const bSuggestion = suggestProductGroup(b.category, b.name);
-      const aGroup = aSuggestion?.pl === "Kawy alternatywne" ? aSuggestion.pl : a.menuGroup || aSuggestion?.pl || "";
-      const bGroup = bSuggestion?.pl === "Kawy alternatywne" ? bSuggestion.pl : b.menuGroup || bSuggestion?.pl || "";
+      const aGroup = usesAutomaticMenuGroup(aSuggestion) ? aSuggestion?.pl ?? "" : a.menuGroup || aSuggestion?.pl || "";
+      const bGroup = usesAutomaticMenuGroup(bSuggestion) ? bSuggestion?.pl ?? "" : b.menuGroup || bSuggestion?.pl || "";
       const aGroupOrder = groupOrder.get(`${a.categoryId ?? "other"}:${aGroup}`) ?? 9999;
       const bGroupOrder = groupOrder.get(`${b.categoryId ?? "other"}:${bGroup}`) ?? 9999;
       if (aGroup !== bGroup && aGroupOrder !== bGroupOrder) return aGroupOrder - bGroupOrder;
@@ -197,11 +210,12 @@ export async function GET() {
     const shelfRows = orderedRows.filter((item) => isShelfProduct(item.tags) && shelfHasPositiveStock(item.stockQuantity));
     const categories = Array.from(new Map(orderedRows.filter((item) => hasTag(item.tags, MENU_TAG)).map((item) => {
       const visualKind = sectionFor(item.category);
-      const id = categoryKey(item.categoryId);
+      const publicSection = publicCategory(visualKind, item.categoryId);
+      const id = publicSection.id;
       return [id, {
         id,
-        pl: item.category || "Pozostałe",
-        en: item.category ? (categoryTranslations[visualKind] ?? item.category) : "Other",
+        pl: publicSection.pl ?? (item.category || "Pozostałe"),
+        en: publicSection.en ?? (item.category ? (categoryTranslations[visualKind] ?? item.category) : "Other"),
         visualKind,
       }] as const;
     })).values());
@@ -234,7 +248,7 @@ export async function GET() {
           ? [{ kind: whiskyBottle ? "bottle" : "serving", price: price(item.price), productId: item.id }]
           : undefined;
       const suggestedGroup = suggestProductGroup(item.category, item.name);
-      const groupPl = suggestedGroup?.pl === "Kawy alternatywne" ? suggestedGroup.pl : item.menuGroup || suggestedGroup?.pl || undefined;
+      const groupPl = usesAutomaticMenuGroup(suggestedGroup) ? suggestedGroup?.pl : item.menuGroup || suggestedGroup?.pl || undefined;
       const alcoholFree = isAlcoholFree(item.tags, item.licenseCodes, item.name, item.wineStyle, item.attributes?.alcoholPercentage);
       const publicAttributes = productAttributesPl(item.attributes);
       const publicAttributesEn = productAttributesEn(item.attributes);
@@ -248,7 +262,7 @@ export async function GET() {
       ] : [];
       return {
       id: item.id,
-      category: standardMenuProduct ? categoryKey(item.categoryId) : "shelf",
+      category: standardMenuProduct ? publicCategory(visualKind, item.categoryId).id : "shelf",
       sourceCategory: item.category,
       sourceCategoryEn: item.category ? (shelfProduct ? item.category : categoryTranslations[visualKind] ?? item.category) : "Other",
       shelfGroupOrder: item.categoryShelfSortOrder ?? item.categorySourceSortOrder ?? 2147483647,
@@ -287,6 +301,10 @@ export async function GET() {
       sweetness: item.sweetness || undefined,
       grapes: item.grapes || undefined,
       image: isArabicaBagProduct(item.name) ? ARABICA_BAG_IMAGE : productImageUrl(item.imagePath) || undefined,
+      gallery: visualKind === "food" ? Array.from(new Set([item.imagePath, ...(item.galleryPaths ?? [])]))
+        .map((imagePath) => productImageUrl(imagePath))
+        .filter((imagePath): imagePath is string => Boolean(imagePath))
+        .slice(0, 5) : undefined,
       featured: standardMenuProduct ? item.featured || isPromo(item.tags) || undefined : undefined,
       promo: standardMenuProduct ? isPromo(item.tags) : false,
       promoOrder: item.featuredSortOrder ?? 2147483647,

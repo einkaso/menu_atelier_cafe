@@ -17,6 +17,11 @@ export function isAlternativeCoffeeBeanGroup(value: string | null | undefined) {
     && !/do\s+domu|opakowan|pacz/.test(normalized);
 }
 
+export function isAlternativeCoffeeMethod(value: string | null | undefined) {
+  const normalized = normalizeCoffeeOptionGroup(value);
+  return /(?:^|\s)(?:aero\s*press|chemex|drip|v\s*60)(?:\s|$)/.test(normalized);
+}
+
 export function isSupportedCoffeeOptionGroup(value: string | null | undefined) {
   return isCoffeeAddonGroup(value) || isAlternativeCoffeeBeanGroup(value);
 }

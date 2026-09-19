@@ -1,0 +1,1 @@
+ALTER TABLE "product_content" ADD COLUMN "gallery_paths" jsonb DEFAULT '[]'::jsonb NOT NULL;

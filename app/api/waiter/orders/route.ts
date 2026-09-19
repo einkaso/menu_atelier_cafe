@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { menuAddons, menuProducts, waiterExtraProducts, waiterOrders, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
 import { currentWaiter, waiterCookie } from "../../../../lib/waiter-auth";
-import { isAlternativeCoffeeBeanGroup, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
+import { isAlternativeCoffeeBeanGroup, isAlternativeCoffeeMethod, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
 import { menuProductIsAvailable, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
 import { DotykackaClient } from "../../../../lib/dotykacka/client";
 import { getDotykackaConfig } from "../../../../lib/dotykacka/config";
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       stockDeduct: waiterExtraProducts.stockDeduct, stockOverdraft: waiterExtraProducts.stockOverdraft, stockQuantity: waiterExtraProducts.stockQuantity,
     }).from(waiterExtraProducts).where(inArray(waiterExtraProducts.dotykackaId, productIds)),
     db.select({ id: waiterSurveyQuestions.id, prompt: waiterSurveyQuestions.prompt, options: waiterSurveyQuestions.options, required: waiterSurveyQuestions.required }).from(waiterSurveyQuestions).where(eq(waiterSurveyQuestions.active, true)),
-    db.select({ parentId: menuAddons.parentDotykackaId, customizationId: menuAddons.customizationDotykackaId, productId: menuAddons.addonDotykackaId, groupName: menuAddons.groupName, name: menuAddons.name, price: menuAddons.priceWithVat }).from(menuAddons).where(inArray(menuAddons.parentDotykackaId, productIds)),
+    db.select({ parentId: menuAddons.parentDotykackaId, customizationId: menuAddons.customizationDotykackaId, productId: menuAddons.addonDotykackaId, groupName: menuAddons.groupName, name: menuAddons.name, price: menuAddons.priceWithVat }).from(menuAddons),
   ]);
   const availableProducts = [...products.filter((product) => menuProductIsAvailable(
     product.tags, MENU_TAG, product.stockDeduct, product.stockOverdraft, product.stockQuantity,
@@ -59,24 +59,46 @@ export async function POST(request: Request) {
     const parent = allowedByParent.get(addon.parentId) ?? new Map();
     parent.set(addon.productId, addon); allowedByParent.set(addon.parentId, parent);
   }
+  const sharedBeans = new Map(allowedAddons.filter((addon) => isAlternativeCoffeeBeanGroup(addon.groupName)).map((addon) => [addon.productId, addon]));
+  const sharedCoffeeAddons = new Map(allowedAddons.filter((addon) => isCoffeeAddonGroup(addon.groupName)).map((addon) => [addon.productId, addon]));
+  const selectionsFor = (productId: string, requestedIds: string[]) => {
+    const direct = allowedByParent.get(productId) ?? new Map();
+    const alternative = isAlternativeCoffeeMethod(byId.get(productId)?.name);
+    const hasDirectBeans = Array.from(direct.values()).some((addon) => isAlternativeCoffeeBeanGroup(addon.groupName));
+    const hasDirectCoffeeAddons = Array.from(direct.values()).some((addon) => isCoffeeAddonGroup(addon.groupName));
+    return requestedIds.map((id) => {
+      const native = direct.get(id);
+      if (native) return { addon: native, fallback: null as "bean" | "addition" | null };
+      if (alternative && !hasDirectBeans && sharedBeans.has(id)) return { addon: sharedBeans.get(id)!, fallback: "bean" as const };
+      if (alternative && !hasDirectCoffeeAddons && sharedCoffeeAddons.has(id)) return { addon: sharedCoffeeAddons.get(id)!, fallback: "addition" as const };
+      return null;
+    });
+  };
   for (const item of items) {
     const productId = String(item.productId);
     const requestedIds = [...new Set((Array.isArray(item.customizations) ? item.customizations : []).map((value) => typeof value === "string" ? value : "").filter(Boolean))];
-    const selected = requestedIds.map((id) => allowedByParent.get(productId)?.get(id));
-    if (selected.some((addon) => !addon)) return Response.json({ error: "Zamówienie zawiera niedostępny dodatek." }, { status: 400 });
-    const selectedGroups = selected.map((addon) => addon?.groupName?.trim() || "Dodatki");
+    const resolved = selectionsFor(productId, requestedIds);
+    if (resolved.some((selection) => !selection)) return Response.json({ error: "Zamówienie zawiera niedostępny dodatek." }, { status: 400 });
+    const selectedGroups = resolved.map((selection) => selection?.addon.groupName?.trim() || "Dodatki");
     const singleChoiceGroups = selectedGroups.filter((group) => !isCoffeeAddonGroup(group));
     if (new Set(singleChoiceGroups).size !== singleChoiceGroups.length) return Response.json({ error: "W tej grupie można wybrać tylko jeden wariant." }, { status: 400 });
     const requiredGroups = new Set(allowedAddons.filter((addon) => addon.parentId === productId && isAlternativeCoffeeBeanGroup(addon.groupName)).map((addon) => addon.groupName?.trim() || "Dodatki"));
     if ([...requiredGroups].some((group) => !selectedGroups.includes(group))) return Response.json({ error: "Wybierz ziarno do kawy alternatywnej." }, { status: 400 });
+    if (isAlternativeCoffeeMethod(byId.get(productId)?.name) && !selectedGroups.some(isAlternativeCoffeeBeanGroup)) return Response.json({ error: "Wybierz ziarno do kawy alternatywnej." }, { status: 400 });
   }
   const normalizedItems = items.map((item) => {
     const product = byId.get(String(item.productId))!;
     const rawCustomizations = Array.isArray(item.customizations) ? item.customizations : [];
     const customizationIds = [...new Set(rawCustomizations.map((value) => typeof value === "string" ? value : "").filter(Boolean))];
-    const customizations = customizationIds.map((id) => allowedByParent.get(product.dotykackaId)?.get(id)).filter((addon): addon is NonNullable<typeof addon> => Boolean(addon));
-    const unitPrice = Number(product.price ?? 0) + customizations.reduce((sum, addon) => sum + Number(addon.price ?? 0), 0);
-    return { productId: product.dotykackaId, localProductId: product.id, name: product.name, quantity: Number(item.quantity), unitPrice: String(unitPrice), note: typeof item.note === "string" ? item.note.trim().slice(0, 500) || undefined : undefined, customizations: customizations.map((addon) => ({ customizationId: addon.customizationId ?? "", productId: addon.productId, name: addon.name, price: addon.price ?? "0" })) };
+    const selected = selectionsFor(product.dotykackaId, customizationIds).filter((selection): selection is NonNullable<typeof selection> => Boolean(selection));
+    const beanNotes = selected.filter((selection) => selection.fallback === "bean").map((selection) => `Ziarno: ${selection.addon.name}`);
+    const rawNote = typeof item.note === "string" ? item.note.trim().slice(0, 500) : "";
+    const note = [rawNote, ...beanNotes].filter(Boolean).join(" · ") || undefined;
+    const unitPrice = Number(product.price ?? 0) + selected.reduce((sum, selection) => sum + Number(selection.addon.price ?? 0), 0);
+    const customizations = selected.map(({ addon, fallback }) => ({ customizationId: fallback ? "" : addon.customizationId ?? "", productId: addon.productId, name: addon.name, price: addon.price ?? "0", fallback }));
+    const posCustomizations = customizations.filter((addon) => !addon.fallback);
+    const standaloneAddons = customizations.filter((addon) => addon.fallback === "addition");
+    return { productId: product.dotykackaId, localProductId: product.id, name: product.name, quantity: Number(item.quantity), unitPrice: String(unitPrice), note, customizations, posCustomizations, standaloneAddons };
   });
   const rawAnswers = body.surveyAnswers && typeof body.surveyAnswers === "object" ? body.surveyAnswers as Record<string, unknown> : {};
   const surveyAnswers = questions.flatMap((question) => {
@@ -84,7 +106,7 @@ export async function POST(request: Request) {
     return answer && question.options.includes(answer) ? [{ questionId: question.id, question: question.prompt, answer }] : [];
   });
   if (questions.some((question) => question.required && !surveyAnswers.some((answer) => answer.questionId === question.id))) return Response.json({ error: "Uzupełnij obowiązkowe pytania ankiety." }, { status: 400 });
-  if (normalizedItems.some((item) => item.customizations?.some((addon) => !Number.isSafeInteger(Number(addon.customizationId))))) return Response.json({ error: "Odśwież katalog — wariant produktu nie ma jeszcze identyfikatora Dotykački." }, { status: 409 });
+  if (normalizedItems.some((item) => item.posCustomizations.some((addon) => !Number.isSafeInteger(Number(addon.customizationId))))) return Response.json({ error: "Odśwież katalog — wariant produktu nie ma jeszcze identyfikatora Dotykački." }, { status: 409 });
   const externalId = randomUUID();
   const [localOrder] = await db.insert(waiterOrders).values({
     externalId, employeeDotykackaId: employee.dotykackaId, tableDotykackaId: tableId,
@@ -102,12 +124,12 @@ export async function POST(request: Request) {
       "table-id": Number(tableId),
       "guest-count": guestCount,
       note: typeof body.note === "string" ? body.note.trim().slice(0, 1000) || undefined : undefined,
-      items: normalizedItems.map((item) => ({
+      items: normalizedItems.flatMap((item) => [{
         id: Number(item.productId),
         qty: item.quantity,
         note: item.note,
-        ...(item.customizations?.length ? { customizations: item.customizations.map((addon) => ({ "product-customization-id": Number(addon.customizationId), "product-id": Number(addon.productId), qty: 1 })) } : {}),
-      })),
+        ...(item.posCustomizations.length ? { customizations: item.posCustomizations.map((addon) => ({ "product-customization-id": Number(addon.customizationId), "product-id": Number(addon.productId), qty: 1 })) } : {}),
+      }, ...item.standaloneAddons.map((addon) => ({ id: Number(addon.productId), qty: item.quantity, note: `Dodatek do: ${item.name}` }))]),
     });
     if (result.code !== 0 || !result.order?.id) {
       const message = result.localizedMessage || result.message || `Dotykačka odrzuciła zamówienie (kod ${result.code}).`;

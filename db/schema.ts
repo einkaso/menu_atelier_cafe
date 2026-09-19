@@ -86,6 +86,7 @@ export const productContent = pgTable("product_content", {
   autoTranslate: boolean("auto_translate").notNull().default(true),
   translationSourceHash: text("translation_source_hash"),
   imagePath: text("image_path"),
+  galleryPaths: jsonb("gallery_paths").$type<string[]>().notNull().default([]),
   imageSourceUrl: text("image_source_url"),
   featured: boolean("featured").notNull().default(false),
   featuredSortOrder: integer("featured_sort_order"),

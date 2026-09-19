@@ -4,6 +4,7 @@ import test from "node:test";
 import { reportPaymentTotals, snapshotDelta } from "../lib/cash-day.ts";
 import { cleanInventoryLocation, inventoryDifference, millisToQuantity, nonNegativeWholeNumber, quantityToMillis, selectInventoryProducts, wineBottleQuantityMillis } from "../lib/inventory.ts";
 import { moneyToCents, settlementTotals } from "../lib/waiter-settlement.ts";
+import { isAlcoholTakeawayRestrictionTime, isWholeVodkaBottleName, shouldShowAlcoholSaleWarning } from "../lib/alcohol-sale-warning.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -12,6 +13,25 @@ test("opens the hidden waiter login only after three logo taps", async () => {
   assert.match(source, /logoTaps>=2/);
   assert.match(source, /window\.location\.assign\("\/kelner"\)/);
   assert.match(source, /onClick=\{tapLogo\}/);
+});
+
+test("warns about whole-bottle alcohol sales during the Warsaw restriction window", async () => {
+  assert.equal(isAlcoholTakeawayRestrictionTime(new Date("2026-09-19T19:57:00Z")), false);
+  assert.equal(isAlcoholTakeawayRestrictionTime(new Date("2026-09-19T19:58:00Z")), true);
+  assert.equal(isAlcoholTakeawayRestrictionTime(new Date("2026-09-20T04:02:00Z")), true);
+  assert.equal(isAlcoholTakeawayRestrictionTime(new Date("2026-09-20T04:03:00Z")), false);
+  assert.equal(isWholeVodkaBottleName("WÓDKA Absolut 40% 0,7l"), true);
+  assert.equal(isWholeVodkaBottleName("WÓDKA Absolut 40% 50ml"), false);
+  const restrictedTime = new Date("2026-09-19T20:30:00Z");
+  assert.equal(shouldShowAlcoholSaleWarning({ name: "Wino", kind: "wine", serving: "bottle", alcoholFree: false }, restrictedTime), true);
+  assert.equal(shouldShowAlcoholSaleWarning({ name: "Piwo 0%", kind: "beer", serving: "bottle", alcoholFree: true }, restrictedTime), false);
+  assert.equal(shouldShowAlcoholSaleWarning({ name: "Wino na kieliszki", kind: "wine", serving: "glass", alcoholFree: false }, restrictedTime), false);
+  const [client, catalog, css] = await Promise.all([read("app/kelner/waiter-client.tsx"), read("app/api/waiter/catalog/route.ts"), read("app/kelner/waiter.css")]);
+  assert.match(catalog, /kind === "cocktails" && isWholeVodkaBottleName\(product\.name\) \? "bottle"/);
+  assert.match(client, /shouldShowAlcoholSaleWarning\(product\)/);
+  assert.match(client, /role="alertdialog"/);
+  assert.match(client, /OK - rozumiem/);
+  assert.match(css, /\.waiter-prohibition-backdrop/);
 });
 
 test("shows and authenticates only active Dotykacka employees", async () => {
@@ -236,8 +256,8 @@ test("places configurable survey answers before order submission", async () => {
 });
 
 test("keeps separately configured coffees as distinct order lines", async () => {
-  const [client, catalog, orders] = await Promise.all([
-    read("app/kelner/waiter-client.tsx"), read("app/api/waiter/catalog/route.ts"), read("app/api/waiter/orders/route.ts"),
+  const [client, catalog, orders, coffeeRules, css] = await Promise.all([
+    read("app/kelner/waiter-client.tsx"), read("app/api/waiter/catalog/route.ts"), read("app/api/waiter/orders/route.ts"), read("lib/coffee-addons.ts"), read("app/kelner/waiter.css"),
   ]);
   assert.match(client, /customizations\.map\(\(addon\) => addon\.id\)\.sort\(\)\.join/);
   assert.match(client, /Object\.values\(addonSelections\)\.flat\(\)/);
@@ -247,6 +267,16 @@ test("keeps separately configured coffees as distinct order lines", async () => 
   assert.match(orders, /Wybierz ziarno do kawy alternatywnej/);
   assert.match(orders, /selectedGroups\.filter\(\(group\) => !isCoffeeAddonGroup\(group\)\)/);
   assert.match(orders, /W tej grupie można wybrać tylko jeden wariant/);
+  assert.match(coffeeRules, /function isAlternativeCoffeeMethod/);
+  assert.match(catalog, /sharedBeanOptions/);
+  assert.match(catalog, /sharedCoffeeAddons/);
+  assert.match(catalog, /addonGroups: addonGroupsFor\(product\)/);
+  assert.match(client, /className="waiter-alternative-coffee"/);
+  assert.match(client, /KROK 2 · ZIARNO I DODATKI/);
+  assert.match(css, /\.waiter-alternative-coffee>div\{display:grid;grid-template-columns:repeat\(3/);
+  assert.match(orders, /fallback: "bean"/);
+  assert.match(orders, /standaloneAddons/);
+  assert.match(orders, /items: normalizedItems\.flatMap/);
 });
 
 test("documents the complete waiter, coffee, wine, and whiskey rules in admin", async () => {
@@ -438,7 +468,7 @@ test("shows the guest tea-detail photos directly in the waiter tea list", async 
     assert.match(waiter, new RegExp(`/tea/${image.replaceAll(".", "\\.")}`));
   }
   assert.match(waiter, /if \(product\.kind !== "tea"\) return product\.image/);
-  assert.match(waiter, /const image = waiterProductImage\(product\)/);
+  assert.match(waiter, /const image = alternative \? waiterAlternativeCoffeeImage\(product\) : waiterProductImage\(product\)/);
 });
 
 test("records an auditable cash day with opening, handover, closing, and live POS checkpoints", async () => {

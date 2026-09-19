@@ -50,6 +50,7 @@ export async function GET() {
       translationSourceHash: productContent.translationSourceHash,
       imageSourceUrl: productContent.imageSourceUrl,
       imagePath: productContent.imagePath,
+      galleryPaths: productContent.galleryPaths,
       featured: productContent.featured,
       featuredSortOrder: productContent.featuredSortOrder,
       contentApproved: productContent.contentApproved,
@@ -75,6 +76,7 @@ export async function GET() {
     return Response.json({ products: rows.map((row) => ({
       ...row,
       imagePath: productImageUrl(row.imagePath),
+      galleryPaths: (row.galleryPaths ?? []).map((imagePath) => productImageUrl(imagePath)).filter((imagePath): imagePath is string => Boolean(imagePath)),
       catalogCodeCandidates: parseProductCodes(row.pluCodes).catalogCodes,
     })) });
   } catch (error) {

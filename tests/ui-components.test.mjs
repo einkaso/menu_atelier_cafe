@@ -180,6 +180,8 @@ test("shows wine style before the description and aligns detail rows", async () 
 
 test("opens savoury dishes with their description, price and allergens", async () => {
   const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
+  const css = await readFile(path.join(root, "app/globals.css"), "utf8");
+  const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
 
   assert.match(source, /const\[savoryProduct,setSavoryProduct\]=useState<Product\|null>\(null\)/);
   assert.match(source, /showChef\?setSavoryProduct:undefined/);
@@ -187,12 +189,49 @@ test("opens savoury dishes with their description, price and allergens", async (
   assert.match(source, /function SavoryDetailDialog/);
   assert.match(source, /L\("Poznaj naszą kuchnię","Discover our kitchen"\)/);
   assert.match(source, /onAllergens\(product\)/);
+  assert.match(source, /product\?\.gallery\?\?\[\]/);
+  assert.match(source, /slice\(0,5\)/);
+  assert.match(source, /onTouchStart=/);
+  assert.match(source, /savory-gallery-dots/);
+  assert.match(source, /Poprzednie zdjęcie/);
+  assert.match(source, /Następne zdjęcie/);
+  assert.match(api, /galleryPaths: productContent\.galleryPaths/);
+  assert.match(api, /gallery: visualKind === "food"/);
+  assert.match(css, /\.savory-detail-dialog \.wine-detail-visual\{overflow:hidden;padding:0\}/);
+  assert.match(css, /\.savory-detail-dialog \.wine-detail-visual>img\{width:100%;height:100%;object-fit:cover/);
+  assert.match(css, /\.savory-gallery-dots\{/);
+  assert.match(css, /\.savory-gallery-arrow\{/);
+});
+
+test("lets admins manage up to five optimized savoury gallery images", async () => {
+  const [admin, adminApi, galleryRoute, imageRoute, schema, migration] = await Promise.all([
+    readFile(path.join(root, "app/admin/admin-panel.tsx"), "utf8"),
+    readFile(path.join(root, "app/api/admin/products/route.ts"), "utf8"),
+    readFile(path.join(root, "app/api/admin/products/[id]/gallery/route.ts"), "utf8"),
+    readFile(path.join(root, "app/api/admin/products/[id]/image/route.ts"), "utf8"),
+    readFile(path.join(root, "db/schema.ts"), "utf8"),
+    readFile(path.join(root, "drizzle/0033_gray_zuras.sql"), "utf8"),
+  ]);
+
+  assert.match(schema, /galleryPaths: jsonb\("gallery_paths"\).*default\(\[\]\)/);
+  assert.match(migration, /ADD COLUMN "gallery_paths" jsonb DEFAULT '\[\]'::jsonb NOT NULL/);
+  assert.match(adminApi, /galleryPaths: productContent\.galleryPaths/);
+  assert.match(admin, /name="galleryFiles" type="file" multiple/);
+  assert.match(admin, /Galeria „Na słono”/);
+  assert.match(admin, /async function removeGalleryImage/);
+  assert.match(galleryRoute, /MAX_GALLERY_IMAGES = 5/);
+  assert.match(galleryRoute, /sectionFor\(product\.category\) !== "food"/);
+  assert.match(galleryRoute, /importUploadedProductImage/);
+  assert.match(galleryRoute, /galleryPaths: combined\.slice\(1\)/);
+  assert.match(galleryRoute, /export async function DELETE/);
+  assert.match(imageRoute, /reference\.galleryPaths/);
 });
 
 test("opens drinks with managed photos, descriptions and allergens", async () => {
   const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
   const admin = await readFile(path.join(root, "app/admin/admin-panel.tsx"), "utf8");
   const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
+  const css = await readFile(path.join(root, "app/globals.css"), "utf8");
 
   assert.match(source, /const\[drinkProduct,setDrinkProduct\]=useState<Product\|null>\(null\)/);
   assert.match(source, /activeKind==="cold"\?setDrinkProduct/);
@@ -200,10 +239,34 @@ test("opens drinks with managed photos, descriptions and allergens", async () =>
   assert.match(source, /function DrinkDetailDialog/);
   assert.match(source, /Zobacz napój i pełny opis/);
   assert.match(source, /Wróć do napojów/);
+  assert.match(source, /const previewDetails=activeKind==="cold"\|\|activeKind==="zero"\|\|activeKind==="cocktails"/);
+  assert.match(source, /previewDetails=\{previewDetails\}/);
+  assert.match(source, /activeKind==="zero"\?\(p\.visualKind==="beer"\?setBeerProduct:p\.visualKind==="coffee"\?setCoffeeProduct:setDrinkProduct\)/);
+  assert.match(source, /p\.image\|\|cakeLayout\|\|previewDetails\?"product product-visual"/);
+  assert.match(source, /previewDetails\?L\("… Czytaj dalej","… Read more"\)/);
+  assert.match(source, /p\.wine&&!previewDetails/);
+  assert.match(css, /\.product\.is-compact-detail \.product-info>p\{[^}]*-webkit-line-clamp:7/);
   assert.match(admin, /Usuń zdjęcie/);
   assert.match(admin, /Albo wybierz zdjęcie z dysku/);
   assert.match(api, /productImageUrl\(item\.imagePath\)/);
   assert.match(api, /isArabicaBagProduct\(item\.name\) \? ARABICA_BAG_IMAGE/);
+});
+
+test("merges drinks and spirits into a visual Alko Bar", async () => {
+  const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
+  const admin = await readFile(path.join(root, "app/admin/admin-panel.tsx"), "utf8");
+  const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
+  const css = await readFile(path.join(root, "app/globals.css"), "utf8");
+
+  assert.match(api, /visualKind === "cocktails"\) return \{ id: "alco-bar", pl: "Alko Bar", en: "Alco Bar" \}/);
+  assert.match(source, /id:"alco-bar",pl:"Alko Bar",en:"Alco Bar",visualKind:"cocktails"/);
+  assert.match(source, /activeKind==="cocktails"\?setDrinkProduct/);
+  assert.match(source, /isAlcoBar\?L\("Wróć do Alko Baru","Back to the Alco Bar"\)/);
+  assert.match(source, /cocktailType:\["Rodzaj","Type"\]/);
+  assert.match(source, /servingStyle:\["Podanie","Serving style"\]/);
+  assert.match(admin, /input\("cocktailType", "Rodzaj"/);
+  assert.match(admin, /input\("servingStyle", "Sposób podania"/);
+  assert.match(css, /\.drink-detail-dialog\.is-alco-bar \.wine-detail-visual>img\{width:100%;height:100%;object-fit:cover/);
 });
 
 test("separates wine colour, bubbles, serving and independent features", async () => {
@@ -247,7 +310,7 @@ test("keeps beer descriptions short in the menu and opens a full product preview
   assert.match(source, /const\[beerProduct,setBeerProduct\]=useState<Product\|null>\(null\)/);
   assert.match(source, /activeKind==="beer"\?setBeerProduct/);
   assert.match(source, /<BeerDetailDialog product=\{beerProduct\}/);
-  assert.match(source, /compactDetails=\{activeKind==="shelf"\|\|activeKind==="beer"\|\|showChef\}/);
+  assert.match(source, /compactDetails=\{activeKind==="shelf"\|\|activeKind==="beer"\|\|showChef\|\|previewDetails\}/);
   assert.match(css, /\.motif-beer \.product\.is-compact-detail \.product-info>p\{[^}]*flex:0 0 auto;[^}]*max-height:2\.65em;[^}]*-webkit-line-clamp:2/);
 });
 
@@ -323,13 +386,19 @@ test("opens Harney teas with official cup-and-leaf photography and the full Doty
 
 test("uses exact cake photos in image-led cards with a company-story intro", async () => {
   const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
+  const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
   const css = await readFile(path.join(root, "app/globals.css"), "utf8");
 
+  assert.match(source, /\{id:"cakes",pl:"NA SŁODKO",en:"SWEET"\}/);
+  assert.match(api, /visualKind === "cakes"/);
+  assert.match(api, /\{ id: "cakes", pl: "NA SŁODKO", en: "SWEET" \}/);
+  assert.match(api, /category: standardMenuProduct \? publicCategory\(visualKind, item\.categoryId\)\.id : "shelf"/);
   assert.match(source, /cakeLayout=\{activeKind==="cakes"\}/);
   assert.match(source, /activeKind==="cakes"\?setCakeProduct/);
   assert.match(source, /<CakeDetailDialog product=\{cakeProduct\}/);
   assert.match(source, /activeKind==="cakes"&&isCapuccinoBannerCategory\(cat\)&&<CakePartnerIntro lang=\{lang\}/);
   assert.match(source, /function isCapuccinoBannerCategory\(category:Category\|undefined\)/);
+  assert.match(source, /category\?\.visualKind==="cakes"\|\|category\?\.id==="cakes"/);
   assert.match(source, /<CakePartnerDialog open=\{capuccinoOpen\}/);
   assert.match(source, /\/capuccino-wedding-cakes\.jpg/);
   assert.match(source, /\/capuccino-occasion-cakes\.jpg/);
@@ -405,9 +474,10 @@ test("guides alternative coffee through beans, brewing method and product detail
   assert.match(source, /coffee-methods\/aeropress\.jpg/);
   assert.match(source, /coffee-methods\/drip\.jpg/);
   assert.match(source, /coffeeMethodImage\(method\)&&<img/);
-  assert.match(source, /isAeropressMethod\(method\)\|\|isChemexMethod\(method\)\|\|isDripMethod\(method\)/);
+  assert.match(source, /setSelectedMethodId\(methodKey\(method\)\)/);
   assert.match(source, /setMethodPreview\(method\)/);
-  assert.match(source, /Wybierz \$\{methodPreview\.pl\}/);
+  assert.doesNotMatch(source, /Wybierz \$\{methodPreview\.pl\}/);
+  assert.doesNotMatch(source, /Wróć bez wyboru/);
   assert.match(source, /ponad 30 prototypach/);
   assert.match(source, /Chemex zaprojektował i opatentował w 1941 roku/);
   assert.match(source, /V60 to stożkowy dripper HARIO/);

@@ -10,9 +10,10 @@ export const dynamic = "force-dynamic";
 
 async function removeImageWhenUnused(storedPath: string | null | undefined) {
   if (!storedPath) return;
-  const [reference] = await getDb().select({ productId: productContent.productId }).from(productContent)
-    .where(eq(productContent.imagePath, storedPath)).limit(1);
-  if (!reference) await removeProductImageFile(storedPath);
+  const references = await getDb().select({ imagePath: productContent.imagePath, galleryPaths: productContent.galleryPaths }).from(productContent);
+  if (!references.some((reference) => reference.imagePath === storedPath || (reference.galleryPaths ?? []).includes(storedPath))) {
+    await removeProductImageFile(storedPath);
+  }
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {

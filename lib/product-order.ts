@@ -9,6 +9,16 @@ export function suggestProductGroup(category: string | null, product: string): P
   const text = normalized(product);
 
   if (/win/.test(categoryText)) return null;
+  if (/drink|koktaj|cocktail/.test(categoryText)) {
+    if (/\bb\s*\/\s*a\b|\/\s*ba\b|bezalkohol|alcohol.?free|\b0(?:[,.]0)?\s*%/.test(text)) return { pl: "Drinki 0%", en: "Alcohol-free cocktails", rank: 30 };
+    if (/spritz/.test(text)) return { pl: "Spritze", en: "Spritzes", rank: 10 };
+    return { pl: "Koktajle", en: "Cocktails", rank: 20 };
+  }
+  if (/^alkohol/.test(categoryText)) {
+    if (/wodka/.test(text) && !/\b50\s*ml\b|shot/.test(text)) return { pl: "Wódka na butelki", en: "Vodka by the bottle", rank: 50 };
+    if (/\b50\s*ml\b|shot/.test(text)) return { pl: "Shoty · 50 ml", en: "Shots · 50 ml", rank: 40 };
+    return { pl: "Pozostałe alkohole", en: "Other spirits", rank: 60 };
+  }
   if (/napoj|zimn|cold|soft/.test(categoryText)) {
     if (/wod|water/.test(text)) return { pl: "Wody", en: "Water", rank: 10 };
     if (/coca|cola|fanta|sprite|tonic|oran|soda|ginger/.test(text)) return { pl: "Napoje gazowane", en: "Soft drinks", rank: 20 };
@@ -49,6 +59,9 @@ const groupTranslations = new Map([
   ["Białe", "White tea"], ["Ziołowe", "Herbal tea"], ["Owocowe", "Fruit tea"],
   ["Bezalkoholowe", "Alcohol-free"], ["Z nalewaka", "On tap"], ["Butelkowe", "Bottled"],
   ["Sałaty", "Salads"], ["Kanapki", "Sandwiches"], ["Talerzyki", "Small plates"],
+  ["Spritze", "Spritzes"], ["Koktajle", "Cocktails"], ["Drinki 0%", "Alcohol-free cocktails"],
+  ["Shoty · 50 ml", "Shots · 50 ml"], ["Wódka na butelki", "Vodka by the bottle"],
+  ["Pozostałe alkohole", "Other spirits"],
 ]);
 
 export function translateProductGroup(group: string) {

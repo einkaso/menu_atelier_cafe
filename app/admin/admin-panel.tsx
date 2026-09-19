@@ -48,6 +48,7 @@ type Product = {
   translationSourceHash: string | null;
   imageSourceUrl: string | null;
   imagePath: string | null;
+  galleryPaths: string[];
   featured: boolean | null;
   featuredSortOrder: number | null;
   contentApproved: boolean | null;
@@ -167,7 +168,7 @@ type HistoricalImportResult = {
 };
 
 const editable = ["nameEn", "descriptionPl", "descriptionEn", "imageSourceUrl", "country", "region", "grapes", "wineStyle", "wineColor", "sparklingType", "sweetness", "veganStatus", "tastingNotes", "staffInstructions"] as const;
-const attributeKeys = ["alcoholPercentage", "beerStyle", "origin", "teaType", "brewTemperature", "brewTime", "coffeeOrigin", "coffeeProfile", "coffeeModifiers", "producer", "dietaryInfo", "cocktailBase", "tasteProfile", "volume", "spiritType", "spiritStyle", "ageStatement", "caskType"] as const;
+const attributeKeys = ["alcoholPercentage", "beerStyle", "origin", "teaType", "brewTemperature", "brewTime", "coffeeOrigin", "coffeeProfile", "coffeeModifiers", "producer", "dietaryInfo", "cocktailType", "cocktailBase", "servingStyle", "tasteProfile", "volume", "spiritType", "spiritStyle", "ageStatement", "caskType"] as const;
 
 const MAX_LOCAL_IMAGE_BYTES = 50 * 1024 * 1024;
 const MAX_STORED_IMAGE_BYTES = 2_400_000;
@@ -764,6 +765,7 @@ export default function AdminPanel() {
     setError("");
     const form = new FormData(event.currentTarget);
     const localImage = form.get("imageFile");
+    const galleryFiles = form.getAll("galleryFiles").filter((item): item is File => item instanceof File && item.size > 0);
     const staffMediaFiles = form.getAll("staffMediaFiles").filter((item): item is File => item instanceof File && item.size > 0);
     const payload: Record<string, unknown> = {};
     for (const key of editable) payload[key] = String(form.get(key) ?? "").trim() || null;
@@ -803,6 +805,19 @@ export default function AdminPanel() {
           setError(`Pozostałe zmiany zostały zapisane, ale zdjęcie nie: ${imageError instanceof Error ? imageError.message : "nieznany błąd"}`);
         }
       }
+      let galleryImagesSaved = 0;
+      if (galleryFiles.length > 0) {
+        try {
+          const upload = new FormData();
+          for (const file of galleryFiles) upload.append("images", await prepareLocalImage(file));
+          const galleryResponse = await fetch(`/api/admin/products/${selected.id}/gallery`, { method: "POST", body: upload });
+          const galleryBody = await galleryResponse.json().catch(() => ({})) as { error?: string };
+          if (!galleryResponse.ok) throw new Error(galleryBody.error ?? "Nie udało się przesłać zdjęć galerii.");
+          galleryImagesSaved = galleryFiles.length;
+        } catch (galleryError) {
+          setError(`Pozostałe zmiany zostały zapisane, ale galeria nie: ${galleryError instanceof Error ? galleryError.message : "nieznany błąd"}`);
+        }
+      }
       let staffMediaSaved = 0;
       if (staffMediaFiles.length > 0) {
         try {
@@ -819,8 +834,8 @@ export default function AdminPanel() {
           setError(`Tekst instrukcji i pozostałe zmiany zostały zapisane, ale jej pliki nie: ${mediaError instanceof Error ? mediaError.message : "nieznany błąd"}`);
         }
       }
-      if ((!localImage || !(localImage instanceof File) || !localImage.size || imageSaved) && (!staffMediaFiles.length || staffMediaSaved > 0)) {
-        const suffix = `${imageSaved ? " Zdjęcie produktu zostało zmniejszone i zapisane na serwerze." : ""}${staffMediaSaved ? ` Dodano ${staffMediaSaved} plików instrukcji.` : ""}`;
+      if ((!localImage || !(localImage instanceof File) || !localImage.size || imageSaved) && (!galleryFiles.length || galleryImagesSaved > 0) && (!staffMediaFiles.length || staffMediaSaved > 0)) {
+        const suffix = `${imageSaved ? " Zdjęcie produktu zostało zmniejszone i zapisane na serwerze." : ""}${galleryImagesSaved ? ` Dodano ${galleryImagesSaved} zdjęć do galerii.` : ""}${staffMediaSaved ? ` Dodano ${staffMediaSaved} plików instrukcji.` : ""}`;
         setMessage(body.warning ? `Zapisano: ${selected.name}. ${body.warning}${suffix}` : `Zapisano: ${selected.name}.${suffix}`);
       }
       await loadProducts(selected.id);
@@ -864,6 +879,26 @@ export default function AdminPanel() {
       await loadProducts(selected.id);
     } catch (imageError) {
       setError(imageError instanceof Error ? imageError.message : "Nie udało się usunąć zdjęcia produktu.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeGalleryImage(imagePath: string) {
+    if (!selected || !window.confirm(`Usunąć to zdjęcie z galerii produktu „${selected.name}”?`)) return;
+    setSaving(true); setMessage(""); setError("");
+    try {
+      const response = await fetch(`/api/admin/products/${selected.id}/gallery`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imagePath }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Nie udało się usunąć zdjęcia z galerii.");
+      setMessage(`Usunięto zdjęcie z galerii produktu ${selected.name}.`);
+      await loadProducts(selected.id);
+    } catch (imageError) {
+      setError(imageError instanceof Error ? imageError.message : "Nie udało się usunąć zdjęcia z galerii.");
     } finally {
       setSaving(false);
     }
@@ -1228,7 +1263,7 @@ export default function AdminPanel() {
 
         <section className="admin-editor">
           {!selected && <div className="admin-empty"><h2>Wybierz produkt</h2><p>Po lewej pojawią się towary oznaczone w Dotykačce atrybutem „menu”.</p></div>}
-          {selected && <ProductForm key={`${selected.id}-${selected.syncedAt}-${selected.contentUpdatedAt ?? "new"}`} product={selected} wineSources={wineSources} saving={saving} discovering={enriching} feedback={error || message} feedbackIsError={Boolean(error)} onSubmit={save} onImageImport={importImageFromUrl} onRemoveImage={removeProductImage} onRemoveStaffMedia={removeStaffMedia} onDiscover={discoverProductInformation} onDecision={decideWineSource} />}
+          {selected && <ProductForm key={`${selected.id}-${selected.syncedAt}-${selected.contentUpdatedAt ?? "new"}`} product={selected} wineSources={wineSources} saving={saving} discovering={enriching} feedback={error || message} feedbackIsError={Boolean(error)} onSubmit={save} onImageImport={importImageFromUrl} onRemoveImage={removeProductImage} onRemoveGalleryImage={removeGalleryImage} onRemoveStaffMedia={removeStaffMedia} onDiscover={discoverProductInformation} onDecision={decideWineSource} />}
         </section>
       </section> : view === "categories" ? <section className="admin-category-workspace">
         <div className="admin-category-heading">
@@ -1488,6 +1523,7 @@ const proposalLabels: Record<string, string> = {
   veganStatus: "Wegańskie", tastingNotes: "Aromaty", alcoholPercentage: "Alkohol",
   beerStyle: "Styl piwa", origin: "Pochodzenie", volume: "Objętość",
   spiritType: "Rodzaj trunku", spiritStyle: "Styl", ageStatement: "Wiek", caskType: "Beczka", tasteProfile: "Profil smaku",
+  cocktailType: "Rodzaj drinka", cocktailBase: "Alkohol bazowy", servingStyle: "Sposób podania",
 };
 
 function sourceKindLabel(kind: string) {
@@ -1506,7 +1542,7 @@ function sourceHostname(value: string) {
   try { return new URL(value).hostname; } catch { return "źródło internetowe"; }
 }
 
-function ProductForm({ product, wineSources, saving, discovering, feedback, feedbackIsError, onSubmit, onImageImport, onRemoveImage, onRemoveStaffMedia, onDiscover, onDecision }: {
+function ProductForm({ product, wineSources, saving, discovering, feedback, feedbackIsError, onSubmit, onImageImport, onRemoveImage, onRemoveGalleryImage, onRemoveStaffMedia, onDiscover, onDecision }: {
   product: Product;
   wineSources: WineSource[];
   saving: boolean;
@@ -1516,6 +1552,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onImageImport: (sourceUrl: string) => Promise<void>;
   onRemoveImage: () => Promise<void>;
+  onRemoveGalleryImage: (imagePath: string) => Promise<void>;
   onRemoveStaffMedia: (mediaId: string) => Promise<void>;
   onDiscover: (sourceUrl?: string, sourceText?: string) => void;
   onDecision: (sourceId: number, decision: "KEEP_CURRENT" | "FILL_MISSING" | "REPLACE", imageSourceUrl?: string) => void;
@@ -1535,6 +1572,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
   const [manualSearchKey, setManualSearchKey] = useState("");
   const [manualSearchResultPage, setManualSearchResultPage] = useState(0);
   const productKind = product.wineCode ? "wine" : sectionFor(product.category);
+  const galleryImages = Array.from(new Set([product.imagePath, ...(product.galleryPaths ?? [])].filter((imagePath): imagePath is string => Boolean(imagePath)))).slice(0, 5);
   const attributes = product.attributes ?? {};
   const informationDiscoveryEnabled = true;
   const searchKind = productKind === "wine" ? "wino" : productKind === "whisky" ? "whisky koniak brandy" : productKind === "beer" ? "piwo" : "produkt";
@@ -1721,14 +1759,20 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
 
       <section className="admin-publish-zone">
       <header className="admin-publish-heading"><span>Treść publicznego menu</span><div><h3>Dane publikacyjne</h3><p>Te pola odpowiadają temu, co zobaczy gość. Po zaakceptowaniu propozycji z wyszukiwania wartości pojawiają się tutaj automatycznie; możesz je jeszcze poprawić i zapisać.</p></div></header>
-      {(product.imagePath || product.imageSourceUrl) && <div className="admin-image-preview">
+      {productKind === "food" && galleryImages.length > 0 ? <div className="admin-gallery-preview">
+        <div className="admin-gallery-heading"><span>Galeria „Na słono”</span><b>{galleryImages.length}/5 zdjęć</b></div>
+        <div>{galleryImages.map((imagePath, index) => <figure key={imagePath}>
+          <img src={imagePath} alt={`${product.name} — zdjęcie ${index + 1}`} />
+          <figcaption>{index === 0 ? "Zdjęcie główne" : `Zdjęcie ${index + 1}`}<button type="button" className="admin-image-remove" disabled={saving} onClick={() => void onRemoveGalleryImage(imagePath)}>Usuń</button></figcaption>
+        </figure>)}</div>
+      </div> : (product.imagePath || product.imageSourceUrl) && <div className="admin-image-preview">
         <img src={product.imagePath ?? product.imageSourceUrl ?? ""} alt={`Podgląd: ${product.name}`} />
         <div><span>{product.imagePath ? "Własna kopia zdjęcia zapisana na serwerze" : "Podgląd zdjęcia źródłowego"}</span><button type="button" className="admin-image-remove" disabled={saving} onClick={() => void onRemoveImage()}>Usuń zdjęcie</button></div>
       </div>}
 
       <fieldset className="admin-content-fields">
         <legend>Zdjęcie i opis produktu</legend>
-        <p className="admin-field-help">Możesz wkleić adres zdjęcia albo wybrać plik ze swojego urządzenia. Wybrany plik ma pierwszeństwo przed linkiem.</p>
+        <p className="admin-field-help">{productKind === "food" ? "Zdjęcie pobrane z linku staje się zdjęciem głównym. Z urządzenia możesz dodać kilka zdjęć naraz — galeria mieści łącznie maksymalnie 5." : "Możesz wkleić adres zdjęcia albo wybrać plik ze swojego urządzenia. Wybrany plik ma pierwszeństwo przed linkiem."}</p>
         <div className="admin-form-grid">
           <label>Nazwa angielska<input name="nameEn" defaultValue={product.nameEn ?? ""} /></label>
           <div className="admin-wide admin-image-url-row">
@@ -1736,7 +1780,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
             <button type="button" className="admin-secondary" disabled={saving || !imageSourceUrl.trim()} onClick={() => void onImageImport(imageSourceUrl.trim())}>{saving ? "Pobieram…" : "Pobierz i zapisz zdjęcie"}</button>
             <small>Zdjęcie zapisuje się od razu w naszym zbiorze, niezależnie od pozostałych pól formularza.</small>
           </div>
-          <label className="admin-wide admin-file-field">Albo wybierz zdjęcie z dysku<input name="imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>Zdjęcie źródłowe może mieć do 50 MB. System automatycznie zmniejszy je do 1600 px i zapisze plik nie większy niż około 2,4 MB.</small></label>
+          {productKind === "food" ? <label className="admin-wide admin-file-field">Dodaj zdjęcia do galerii<input name="galleryFiles" type="file" multiple disabled={galleryImages.length >= 5} accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>{galleryImages.length >= 5 ? "Galeria jest pełna. Usuń zdjęcie, aby dodać inne." : `Możesz dodać jeszcze ${5 - galleryImages.length} ${5 - galleryImages.length === 1 ? "zdjęcie" : "zdjęcia"}.`} Każdy plik może mieć do 50 MB; system automatycznie go zmniejszy i zoptymalizuje.</small></label> : <label className="admin-wide admin-file-field">Albo wybierz zdjęcie z dysku<input name="imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>Zdjęcie źródłowe może mieć do 50 MB. System automatycznie zmniejszy je do 1600 px i zapisze plik nie większy niż około 2,4 MB.</small></label>}
           {product.sourceDescription && <div className="admin-wide admin-description-proposal"><span className="admin-eyebrow">Propozycja z Dotykački</span><p>{product.sourceDescription}</p><button type="button" className="admin-secondary" onClick={() => { setDescriptionPl(product.sourceDescription ?? ""); markFormDirty(); }}>Użyj jako opisu w menu</button></div>}
           <label className="admin-wide">Opis polski<textarea name="descriptionPl" rows={4} value={descriptionPl} onChange={(event) => setDescriptionPl(event.target.value)} placeholder="Opis widoczny dla gościa — możesz go poprawić przed publikacją" /></label>
           <label className="admin-wide">Opis angielski<textarea name="descriptionEn" rows={4} defaultValue={product.descriptionEn ?? ""} /></label>
@@ -1824,9 +1868,11 @@ function ProductFeatureFields({ kind, attributes }: { kind: string; attributes: 
     input("producer", "Producent"),
     wide("dietaryInfo", "Cechy szczególne", "np. wegańskie · bez glutenu"),
   ] : kind === "cocktails" ? [
+    input("cocktailType", "Rodzaj", "np. spritz, koktajl klasyczny, shot, wódka na butelkę"),
     input("cocktailBase", "Alkohol bazowy"),
-    input("alcoholPercentage", "Zawartość alkoholu", "jeżeli chcemy ją pokazywać"),
     input("tasteProfile", "Profil smakowy", "np. wytrawny · cytrusowy"),
+    input("servingStyle", "Sposób podania", "np. kieliszek coupe · dużo lodu · pomarańcza"),
+    input("alcoholPercentage", "Zawartość alkoholu", "jeżeli chcemy ją pokazywać"),
   ] : kind === "cold" || kind === "zero" ? [
     input("volume", "Objętość / wariant"),
     input("origin", "Producent lub pochodzenie"),

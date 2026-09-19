@@ -6,7 +6,7 @@ export const categoryRules: Array<[string, RegExp]> = [
   ["cakes", /ciast|deser|cake/],
   ["wine", /win|wine/],
   ["whisky", /whisk|bourbon|koniak|cognac|brandy/],
-  ["cocktails", /koktaj|drink|cocktail/],
+  ["cocktails", /koktaj|drink|cocktail|^alkohol/],
   ["beer", /piw|beer/],
   ["cold", /napoj|lemoniad|sok|wod|drink/],
   ["food", /jedz|dani|sniadan|śniadan|kanap|salat|sałat|food/],
@@ -25,7 +25,7 @@ export const categoryTranslations: Record<string, string> = {
   cold: "Soft drinks",
   cakes: "Cakes & desserts",
   wine: "Wine",
-  cocktails: "Cocktails",
+  cocktails: "Alco Bar",
   zero: "Alcohol-free",
   beer: "Beer",
 };

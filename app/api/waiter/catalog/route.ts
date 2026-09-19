@@ -3,7 +3,8 @@ import { getDb } from "../../../../db";
 import { menuAddons, menuCategories, menuProducts, productContent, waiterExtraProducts, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
 import { productImageUrl } from "../../../../lib/image-import";
 import { currentWaiter } from "../../../../lib/waiter-auth";
-import { isAlternativeCoffeeBeanGroup, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
+import { isAlternativeCoffeeBeanGroup, isAlternativeCoffeeMethod, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
+import { isWholeVodkaBottleName } from "../../../../lib/alcohol-sale-warning";
 import { menuProductIsAvailable, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
 import { sectionFor } from "../../../../lib/menu-categories";
 import { isZeroAlcoholValue } from "../../../../lib/wine-characteristics";
@@ -105,6 +106,23 @@ export async function GET(request: Request) {
     group.options.push({ id: addon.id, name: addon.name, price: addon.price, currency: addon.currency });
     groups.set(groupName, group); addonGroupsByProduct.set(addon.parentId, groups);
   }
+  const sharedOptions = (matches: (name: string | null) => boolean) => Array.from(new Map(addons
+    .filter((addon) => matches(addon.groupName))
+    .map((addon) => [addon.id, { id: addon.id, name: addon.name, price: addon.price, currency: addon.currency }])).values());
+  const sharedBeanOptions = sharedOptions(isAlternativeCoffeeBeanGroup);
+  const sharedCoffeeAddons = sharedOptions(isCoffeeAddonGroup);
+  const addonGroupsFor = (product: { dotykackaId: string; name: string }) => {
+    const direct = Array.from(addonGroupsByProduct.get(product.dotykackaId)?.values() ?? []);
+    if (!isAlternativeCoffeeMethod(product.name)) return direct;
+    const beans = direct.filter((group) => isAlternativeCoffeeBeanGroup(group.name));
+    const additions = direct.filter((group) => isCoffeeAddonGroup(group.name));
+    const other = direct.filter((group) => !isAlternativeCoffeeBeanGroup(group.name) && !isCoffeeAddonGroup(group.name));
+    return [
+      ...(beans.length ? beans : sharedBeanOptions.length ? [{ name: "ZIARNA DO KAW ALTERNATYWNYCH", required: true, multiple: false, options: sharedBeanOptions }] : []),
+      ...other,
+      ...(additions.length ? additions : sharedCoffeeAddons.length ? [{ name: "DODATKI DO KAWY", required: false, multiple: true, options: sharedCoffeeAddons }] : []),
+    ];
+  };
   const availableProducts = products.filter((product) => menuProductIsAvailable(
     product.tags, MENU_TAG, product.stockDeduct, product.stockOverdraft, product.stockQuantity,
   ));
@@ -124,7 +142,8 @@ export async function GET(request: Request) {
       const licenseCodes = Array.from(new Set([...product.licenseCodes, ...(pairedWine?.licenseCodes ?? [])]));
       const serving = kind === "wine" ? (isByGlass(product.tags, product.name) ? "glass" : "bottle")
         : kind === "whisky" ? (hasBottleTag(product.tags) ? "bottle" : "serving")
-          : kind === "beer" ? (isDraughtBeer(product.name) ? "draught" : "bottle") : null;
+          : kind === "beer" ? (isDraughtBeer(product.name) ? "draught" : "bottle")
+            : kind === "cocktails" && isWholeVodkaBottleName(product.name) ? "bottle" : null;
       return {
         ...product,
         kind,
@@ -143,7 +162,7 @@ export async function GET(request: Request) {
           instructions: product.staffInstructions?.trim() ?? "",
           media: product.staffMedia ?? [],
         } : null,
-        addonGroups: Array.from(addonGroupsByProduct.get(product.dotykackaId)?.values() ?? []),
+        addonGroups: addonGroupsFor(product),
       };
     }), ...extraProducts.filter((product) => regularProductStockIsAvailable(
       product.stockDeduct, product.stockOverdraft, product.stockQuantity,
