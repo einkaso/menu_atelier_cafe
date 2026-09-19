@@ -192,6 +192,7 @@ test("opens savoury dishes with their description, price and allergens", async (
 test("separates wine colour, bubbles, serving and independent features", async () => {
   const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
   const admin = await readFile(path.join(root, "app/admin/admin-panel.tsx"), "utf8");
+  const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
 
   assert.match(source, /L\("Kolor","Colour"\)/);
   assert.match(source, /L\("Musowanie","Bubbles"\)/);
@@ -201,9 +202,14 @@ test("separates wine colour, bubbles, serving and independent features", async (
   assert.match(source, /!zeroOnly\|\|p\.alcoholFree/);
   assert.doesNotMatch(admin, /<option>Musujące<\/option>/);
   assert.match(admin, /name="sparklingType"/);
-  assert.match(source, /const bottleOnly=offers\.some\(offer=>offer\.kind==="bottle"\)&&!offers\.some\(offer=>offer\.kind==="glass"\)/);
+  assert.match(source, /const bottleOnly=offers\.some\(offer=>offer\.kind==="bottle"\)&&!offers\.some\(offer=>offer\.kind==="glass"\)&&!glassEligible/);
   assert.match(source, /L\("tylko butelka","bottle only"\)/);
-  assert.match(admin, /Brak poprawnie powiązanego wariantu „na kieliszki” oznacza sprzedaż tylko całej butelki/);
+  assert.doesNotMatch(source, /na życzenie/i);
+  assert.match(api, /const glassEligibleBottleKeys = new Set\(rows/);
+  assert.match(api, /glassEligible: visualKind === "wine"/);
+  assert.match(api, /glassEligible: current\.glassEligible \|\| product\.glassEligible/);
+  assert.match(admin, /bez obietnicy otwarcia na życzenie/);
+  assert.match(admin, /Dopiero całkowity brak wariantu kieliszkowego/);
 });
 
 test("uses the available shelf-card height before pinning the details link to the image bottom", async () => {
@@ -224,7 +230,7 @@ test("keeps beer descriptions short in the menu and opens a full product preview
   assert.match(source, /const\[beerProduct,setBeerProduct\]=useState<Product\|null>\(null\)/);
   assert.match(source, /activeKind==="beer"\?setBeerProduct/);
   assert.match(source, /<BeerDetailDialog product=\{beerProduct\}/);
-  assert.match(source, /compactDetails=\{activeKind==="shelf"\|\|activeKind==="beer"\}/);
+  assert.match(source, /compactDetails=\{activeKind==="shelf"\|\|activeKind==="beer"\|\|showChef\}/);
   assert.match(css, /\.motif-beer \.product\.is-compact-detail \.product-info>p\{[^}]*flex:0 0 auto;[^}]*max-height:2\.65em;[^}]*-webkit-line-clamp:2/);
 });
 
@@ -310,7 +316,11 @@ test("uses exact cake photos in image-led cards with a company-story intro", asy
   assert.match(source, /<CakePartnerDialog open=\{capuccinoOpen\}/);
   assert.match(source, /\/capuccino-wedding-cakes\.jpg/);
   assert.match(source, /\/capuccino-occasion-cakes\.jpg/);
-  assert.match(source, /className="capuccino-story-footer"/);
+  assert.doesNotMatch(source, /className="capuccino-story-footer"/);
+  assert.doesNotMatch(source, /Rodzinna firma · od 2006 roku/);
+  assert.doesNotMatch(source, /W karcie Atelier logo Capuccino Cafe oznacza/);
+  assert.doesNotMatch(source, /Autorska pracownia tortów/);
+  assert.doesNotMatch(source, /<figcaption>/);
   assert.doesNotMatch(source, /href="https:\/\/capuccinocafe\.pl/);
   assert.doesNotMatch(source, /<CakeShowcase/);
   assert.doesNotMatch(source, /cakeShowcase=/);
@@ -332,7 +342,8 @@ test("uses exact cake photos in image-led cards with a company-story intro", asy
   assert.match(css, /\.cake-detail-logo\{[^}]*width:135px[^}]*object-position:left center/);
   assert.match(css, /\.cake-partner-intro\{[^}]*grid-template-columns:[^}]*border-top:5px solid var\(--pink\)/);
   assert.doesNotMatch(css, /\.cake-partner-copy \.cake-partner-link/);
-  assert.match(css, /\.capuccino-story-banners img\{[^}]*object-fit:cover/);
+  assert.match(css, /\.capuccino-story-banners\{[^}]*grid-template-columns:1fr 1fr;[^}]*gap:0/);
+  assert.match(css, /\.capuccino-story-banners img\{[^}]*width:100%;[^}]*height:auto;[^}]*object-fit:contain/);
 });
 
 test("places the featured marker over the left side of product photos", async () => {
@@ -353,4 +364,24 @@ test("uses a whisky tumbler and keeps 50 ml independent from bottle source data"
   assert.match(api, /function hasBottleTag/);
   assert.match(api, /whiskyBottle \? "bottle" : "serving"/);
   assert.match(api, /delete publicAttributes\.volume/);
+});
+
+test("guides alternative coffee through beans, brewing method and product details", async () => {
+  const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
+  const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
+  const css = await readFile(path.join(root, "app/globals.css"), "utf8");
+
+  assert.match(source, /const\[coffeeProduct,setCoffeeProduct\]=useState<Product\|null>\(null\)/);
+  assert.match(source, /activeKind==="coffee"\?setCoffeeProduct/);
+  assert.match(source, /<CoffeeDetailDialog product=\{coffeeProduct\}/);
+  assert.match(source, /function CoffeeDetailDialog/);
+  assert.match(source, /<AlternativeCoffeeBeans lang=\{lang\} beans=\{alternativeCoffeeBeans\} methods=\{regularVisible\.filter\(isAlternativeCoffeeProduct\)\}/);
+  assert.match(source, /Wybierz ziarno/);
+  assert.match(source, /Wybierz metodę parzenia/);
+  assert.match(source, /selected&&selectedMethod&&<p className="alternative-selection-summary"/);
+  assert.match(api, /inventoryCatalogProducts\.imageSourceUrl/);
+  assert.match(api, /image: beanImages\.get\(item\.addonDotykackaId\)/);
+  assert.match(css, /\.alternative-beans-picker\{display:grid/);
+  assert.match(css, /\.alternative-method-picker\{display:grid/);
+  assert.match(css, /\.coffee-detail-visual>img\{[^}]*object-fit:contain/);
 });

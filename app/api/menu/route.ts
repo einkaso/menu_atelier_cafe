@@ -1,6 +1,6 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { menuAddons, menuCategories, menuGroupOrders, menuOfferSettings, menuProducts, productContent, suppliers } from "../../../db/schema";
+import { inventoryCatalogProducts, menuAddons, menuCategories, menuGroupOrders, menuOfferSettings, menuProducts, productContent, suppliers } from "../../../db/schema";
 import { categoryTranslations, sectionFor } from "../../../lib/menu-categories";
 import { suggestProductGroup, translateProductGroup } from "../../../lib/product-order";
 import { productImageUrl } from "../../../lib/image-import";
@@ -158,6 +158,12 @@ export async function GET() {
     const availableBottleKeys = new Set(individuallyVisibleRows
       .filter((item) => item.wineCode && !hasGlassName(item.name))
       .map((item) => `${item.categoryId ?? "other"}:${item.wineCode}`));
+    // A hidden glass product means that the wine can return to the staff-managed
+    // rotation. It must not be advertised as open now, but its bottle must not be
+    // described as a wine that is never sold by the glass either.
+    const glassEligibleBottleKeys = new Set(rows
+      .filter((item) => sectionFor(item.category) === "wine" && !item.deleted && item.wineCode && hasGlassName(item.name))
+      .map((item) => `${item.categoryId ?? "other"}:${item.wineCode}`));
     const visibleRows = individuallyVisibleRows.filter((item) => sectionFor(item.category) !== "wine" || !hasGlassName(item.name)
       || Boolean(isByGlass(item.tags, item.name) && item.wineCode
         && availableBottleKeys.has(`${item.categoryId ?? "other"}:${item.wineCode}`)));
@@ -285,6 +291,7 @@ export async function GET() {
       attributesEn: publicAttributesEn,
       takeHome: hasTag(item.tags, "ziarno"),
       byGlass,
+      glassEligible: visualKind === "wine" && Boolean(item.wineCode && glassEligibleBottleKeys.has(`${item.categoryId ?? "other"}:${item.wineCode}`)),
       vegan: item.veganStatus === "YES" || item.features.some((feature) => feature.toLocaleLowerCase("pl") === "vegan"),
       veganStatus: item.veganStatus,
       alcoholFree,
@@ -344,6 +351,7 @@ export async function GET() {
         allergens: Array.from(new Set([...current.allergens, ...product.allergens])).sort((a, b) => a - b),
         salesCount30d: Math.max(current.salesCount30d, product.salesCount30d),
         byGlass: offers.some((offer) => offer.kind === "glass"),
+        glassEligible: current.glassEligible || product.glassEligible,
         offers,
         price: offers.map((offer) => offer.price).filter(Boolean).join(" / "),
       });
@@ -370,13 +378,20 @@ export async function GET() {
       group: item.groupName,
     }])).values());
 
-    const alternativeCoffeeBeans = Array.from(new Map(addonRows.filter((item) => isAlternativeCoffeeBeanGroup(item.groupName)).map((item) => [item.addonDotykackaId, {
+    const alternativeBeanRows = Array.from(new Map(addonRows.filter((item) => isAlternativeCoffeeBeanGroup(item.groupName)).map((item) => [item.addonDotykackaId, item])).values());
+    const beanImageRows = alternativeBeanRows.length ? await db.select({
+      dotykackaId: inventoryCatalogProducts.dotykackaId,
+      imageSourceUrl: inventoryCatalogProducts.imageSourceUrl,
+    }).from(inventoryCatalogProducts).where(inArray(inventoryCatalogProducts.dotykackaId, alternativeBeanRows.map((item) => item.addonDotykackaId))) : [];
+    const beanImages = new Map(beanImageRows.map((item) => [item.dotykackaId, item.imageSourceUrl]));
+    const alternativeCoffeeBeans = alternativeBeanRows.map((item) => ({
       id: item.addonDotykackaId,
       pl: item.name,
       en: item.nameEn || item.name,
       descriptionPl: item.descriptionPl || "",
       descriptionEn: item.descriptionEn || item.descriptionPl || "",
-    }])).values());
+      image: beanImages.get(item.addonDotykackaId) || undefined,
+    }));
 
     return Response.json({ appVersion: APP_BUILD_VERSION, categories, products, coffeeOptions, alternativeCoffeeBeans, source: "dotykacka" }, {
       headers: { "cache-control": "no-store", "x-menu-build-version": APP_BUILD_VERSION },
