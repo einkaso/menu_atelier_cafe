@@ -4,6 +4,7 @@ import { menuAddons, menuCategories, menuProducts, productContent, waiterExtraPr
 import { productImageUrl } from "../../../../lib/image-import";
 import { currentWaiter } from "../../../../lib/waiter-auth";
 import { isAlternativeCoffeeBeanGroup, isAlternativeCoffeeMethod, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
+import { acceptsFlavorSyrup, FLAVOR_SYRUP_GROUP, isForestLifeSyrupCategory, isGenericFlavorSyrupOption } from "../../../../lib/flavor-syrups";
 import { isWholeVodkaBottleName } from "../../../../lib/alcohol-sale-warning";
 import { menuProductIsAvailable, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
 import { sectionFor } from "../../../../lib/menu-categories";
@@ -111,17 +112,28 @@ export async function GET(request: Request) {
     .map((addon) => [addon.id, { id: addon.id, name: addon.name, price: addon.price, currency: addon.currency }])).values());
   const sharedBeanOptions = sharedOptions(isAlternativeCoffeeBeanGroup);
   const sharedCoffeeAddons = sharedOptions(isCoffeeAddonGroup);
-  const addonGroupsFor = (product: { dotykackaId: string; name: string }) => {
+  const genericSyrupAddon = addons.find((addon) => isGenericFlavorSyrupOption(addon.name));
+  const flavorSyrupOptions = genericSyrupAddon ? Array.from(new Map([...products, ...extraProducts]
+    .filter((product) => isForestLifeSyrupCategory(product.category) && Number(product.stockQuantity ?? 0) > 0)
+    .map((product) => [product.dotykackaId, { id: `syrup-flavor:${product.dotykackaId}`, name: product.name, price: genericSyrupAddon.price, currency: genericSyrupAddon.currency }])).values()) : [];
+  const addonGroupsFor = (product: { dotykackaId: string; name: string; category: string }) => {
     const direct = Array.from(addonGroupsByProduct.get(product.dotykackaId)?.values() ?? []);
-    if (!isAlternativeCoffeeMethod(product.name)) return direct;
-    const beans = direct.filter((group) => isAlternativeCoffeeBeanGroup(group.name));
-    const additions = direct.filter((group) => isCoffeeAddonGroup(group.name));
-    const other = direct.filter((group) => !isAlternativeCoffeeBeanGroup(group.name) && !isCoffeeAddonGroup(group.name));
-    return [
+    const baseGroups = !isAlternativeCoffeeMethod(product.name) ? direct : (() => {
+      const beans = direct.filter((group) => isAlternativeCoffeeBeanGroup(group.name));
+      const additions = direct.filter((group) => isCoffeeAddonGroup(group.name));
+      const other = direct.filter((group) => !isAlternativeCoffeeBeanGroup(group.name) && !isCoffeeAddonGroup(group.name));
+      return [
       ...(beans.length ? beans : sharedBeanOptions.length ? [{ name: "ZIARNA DO KAW ALTERNATYWNYCH", required: true, multiple: false, options: sharedBeanOptions }] : []),
       ...other,
       ...(additions.length ? additions : sharedCoffeeAddons.length ? [{ name: "DODATKI DO KAWY", required: false, multiple: true, options: sharedCoffeeAddons }] : []),
-    ];
+      ];
+    })();
+    if (!flavorSyrupOptions.length || !acceptsFlavorSyrup(product.category, product.name)) return baseGroups;
+    const withoutGenericSyrup = baseGroups.map((group) => ({
+      ...group,
+      options: group.options.filter((option) => !isGenericFlavorSyrupOption(option.name)),
+    })).filter((group) => group.options.length > 0);
+    return [...withoutGenericSyrup, { name: FLAVOR_SYRUP_GROUP, required: false, multiple: false, options: flavorSyrupOptions }];
   };
   const availableProducts = products.filter((product) => menuProductIsAvailable(
     product.tags, MENU_TAG, product.stockDeduct, product.stockOverdraft, product.stockQuantity,

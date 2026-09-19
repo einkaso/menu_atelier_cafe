@@ -15,6 +15,10 @@ export function shouldSyncMenuProduct(tags: string[], menuTag: string) {
   return hasTag(tags, menuTag) || isShelfProduct(tags);
 }
 
+export function shouldManageMenuProduct(tags: string[], menuTag: string, inventoryTracked: boolean) {
+  return inventoryTracked || shouldSyncMenuProduct(tags, menuTag);
+}
+
 export function shelfHasPositiveStock(stockQuantity: string | number | null | undefined) {
   return Number(stockQuantity ?? 0) > 0;
 }

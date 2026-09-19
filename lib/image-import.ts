@@ -6,6 +6,7 @@ import { isIP } from "node:net";
 import path from "node:path";
 
 import { optimizeProductImage, removeLightImageBackground } from "./image-background";
+import { detectUploadedImageType, prepareUploadedImage } from "./uploaded-image";
 
 const MAX_BYTES = 32 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -20,20 +21,11 @@ const contentTypes: Record<string, string> = {
 
 const filenamePattern = /^\d+-[a-f0-9]{16}\.(?:jpg|png|webp|avif)$/;
 
-function detectedImageType(bytes: Buffer) {
-  if (bytes.length >= 12 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { mime: "image/jpeg", extension: "jpg" };
-  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { mime: "image/png", extension: "png" };
-  if (bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP") return { mime: "image/webp", extension: "webp" };
-  if (bytes.length >= 12 && bytes.subarray(4, 8).toString("ascii") === "ftyp" && ["avif", "avis"].includes(bytes.subarray(8, 12).toString("ascii"))) return { mime: "image/avif", extension: "avif" };
-  if (bytes.length >= 12 && bytes.subarray(4, 8).toString("ascii") === "ftyp" && ["heic", "heix", "hevc", "hevx", "mif1", "msf1"].includes(bytes.subarray(8, 12).toString("ascii"))) return { mime: "image/heic", extension: "heic" };
-  return null;
-}
-
 async function storeProductImage(productId: number, bytes: Buffer) {
-  const prepared = await removeLightImageBackground(bytes).catch(() => ({ bytes, backgroundRemoved: false }));
-  const preparedType = detectedImageType(prepared.bytes);
-  const optimized = await optimizeProductImage(prepared.bytes, undefined, preparedType?.mime === "image/heic" || preparedType?.mime === "image/heif");
-  const detected = detectedImageType(optimized);
+  const browserCompatible = await prepareUploadedImage(bytes);
+  const prepared = await removeLightImageBackground(browserCompatible).catch(() => ({ bytes: browserCompatible, backgroundRemoved: false }));
+  const optimized = await optimizeProductImage(prepared.bytes);
+  const detected = detectUploadedImageType(optimized);
   if (!detected || !contentTypes[detected.mime]) throw new Error("Plik nie jest prawidłowym zdjęciem JPG, PNG, WebP lub AVIF.");
   const fingerprint = createHash("sha256").update(optimized).digest("hex").slice(0, 16);
   const filename = `${productId}-${fingerprint}.${detected.extension}`;
@@ -111,18 +103,19 @@ export async function importProductImage(productId: number, sourceUrl: string) {
   }
   if (!response?.ok) throw new Error(`Nie udało się pobrać zdjęcia (${response?.status ?? "zbyt wiele przekierowań"}).`);
   const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
-  if (!contentTypes[type]) throw new Error("Plik musi być zdjęciem JPG, PNG, WebP lub AVIF.");
+  if (type && !type.startsWith("image/") && type !== "application/octet-stream") throw new Error("Adres nie prowadzi do pliku zdjęcia.");
   const announcedSize = Number(response.headers.get("content-length") ?? 0);
   if (announcedSize > MAX_BYTES) throw new Error("Zdjęcie źródłowe jest większe niż 32 MB.");
   const bytes = Buffer.from(await response.arrayBuffer());
   if (!bytes.length || bytes.length > MAX_BYTES) throw new Error("Zdjęcie jest puste albo większe niż 32 MB.");
+  if (!detectUploadedImageType(bytes)) throw new Error("Plik musi być zdjęciem JPG, PNG, WebP, AVIF, HEIC lub HEIF.");
   return storeProductImage(productId, bytes);
 }
 
 export async function importUploadedProductImage(productId: number, file: File) {
-  if (!contentTypes[file.type]) throw new Error("Wybierz zdjęcie JPG, PNG, WebP, AVIF, HEIC lub HEIF.");
   if (!file.size || file.size > MAX_UPLOAD_BYTES) throw new Error("Zdjęcie źródłowe może mieć maksymalnie 50 MB.");
   const bytes = Buffer.from(await file.arrayBuffer());
   if (!bytes.length || bytes.length > MAX_UPLOAD_BYTES) throw new Error("Zdjęcie jest puste albo większe niż 50 MB.");
+  if (!detectUploadedImageType(bytes)) throw new Error("Wybierz zdjęcie JPG, PNG, WebP, AVIF, HEIC lub HEIF.");
   return storeProductImage(productId, bytes);
 }

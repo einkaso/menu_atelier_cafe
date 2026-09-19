@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hasTag, isShelfProduct, menuProductDestinations, menuProductIsAvailable, regularProductStockIsAvailable, shelfHasPositiveStock, shouldSyncMenuProduct } from "../lib/menu-tags.ts";
+import { hasTag, isShelfProduct, menuProductDestinations, menuProductIsAvailable, regularProductStockIsAvailable, shelfHasPositiveStock, shouldManageMenuProduct, shouldSyncMenuProduct } from "../lib/menu-tags.ts";
 
 test("recognizes the PÓŁKA tag regardless of case, whitespace or missing Polish diacritics", () => {
   assert.equal(isShelfProduct(["MENU", " PÓŁKA "]), true);
@@ -18,6 +18,12 @@ test("imports a shelf product without MENU but ignores unrelated POS products", 
   assert.equal(shouldSyncMenuProduct(["PÓŁKA"], "menu"), true);
   assert.equal(shouldSyncMenuProduct(["MENU"], "menu"), true);
   assert.equal(shouldSyncMenuProduct(["PROMO"], "menu"), false);
+});
+
+test("imports inventory-tracked products for administration without publishing them in the menu", () => {
+  assert.equal(shouldManageMenuProduct(["SYROP"], "MENU", true), true);
+  assert.equal(shouldSyncMenuProduct(["SYROP"], "MENU"), false);
+  assert.equal(shouldManageMenuProduct(["SYROP"], "MENU", false), false);
 });
 
 test("publishes shelf products only when their stock is greater than zero", () => {

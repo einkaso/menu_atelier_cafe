@@ -9,7 +9,7 @@ import { sectionFor } from "../menu-categories";
 import { translateMenuContent, translatePolishTexts, translationConfigured, translationSourceHash } from "../translation";
 import { matchLatestDeliveryNoteSuppliers } from "./delivery-notes";
 import { isAlternativeCoffeeBeanGroup, isSupportedCoffeeOptionGroup } from "../coffee-addons";
-import { shouldSyncMenuProduct } from "../menu-tags";
+import { shouldManageMenuProduct, shouldSyncMenuProduct } from "../menu-tags";
 import { detectSparklingType } from "../wine-characteristics";
 
 const sourceDate = (value?: string | null) => value && !Number.isNaN(Date.parse(value)) ? new Date(value) : null;
@@ -64,7 +64,18 @@ export async function syncDotykackaMenu() {
     const stockByProduct = new Map(stocks.map((item) => [String(item.id), item.stockQuantityStatus]));
     const stockDetailsByProduct = new Map(stocks.map((item) => [String(item.id), item]));
     const salesByProduct = new Map((salesReport?.productSales ?? []).map((item) => [String(item.id), item.count ?? 0]));
-    const selected = products.filter((product) => shouldSyncMenuProduct(product.tags ?? [], config.menuTag));
+    const existingInventorySettings = await db.select({
+      dotykackaId: inventoryCatalogProducts.dotykackaId,
+      inventoryTracked: inventoryCatalogProducts.inventoryTracked,
+      inventoryCountingMode: inventoryCatalogProducts.inventoryCountingMode,
+      servingsPerContainer: inventoryCatalogProducts.servingsPerContainer,
+    }).from(inventoryCatalogProducts);
+    const inventorySettingsByProduct = new Map(existingInventorySettings.map((product) => [product.dotykackaId, product]));
+    const selected = products.filter((product) => shouldManageMenuProduct(
+      product.tags ?? [],
+      config.menuTag,
+      inventorySettingsByProduct.get(String(product.id))?.inventoryTracked === true,
+    ));
     const selectedIds = selected.map((product) => String(product.id));
     const categoryNames = new Map(categories.map((item) => [String(item.id), item.name]));
     const categoryById = new Map(categories.map((item) => [String(item.id), item]));
@@ -126,13 +137,6 @@ export async function syncDotykackaMenu() {
     }
 
     const inventorySyncedAt = new Date();
-    const existingInventorySettings = await db.select({
-      dotykackaId: inventoryCatalogProducts.dotykackaId,
-      inventoryTracked: inventoryCatalogProducts.inventoryTracked,
-      inventoryCountingMode: inventoryCatalogProducts.inventoryCountingMode,
-      servingsPerContainer: inventoryCatalogProducts.servingsPerContainer,
-    }).from(inventoryCatalogProducts);
-    const inventorySettingsByProduct = new Map(existingInventorySettings.map((product) => [product.dotykackaId, product]));
     const inventoryCategoryRows = categories.map((category) => ({
       dotykackaId: String(category.id),
       name: category.name,
@@ -337,6 +341,7 @@ export async function syncDotykackaMenu() {
       const parsedCodes = parseProductCodes(product.plu);
       const code = parsedCodes.catalogCode?.startsWith("WIN") ? parsedCodes.catalogCode : legacyWineCode(product.name);
       const eanCodes = (product.ean ?? []).map(String).filter(Boolean);
+      const menuTagged = shouldSyncMenuProduct(product.tags ?? [], config.menuTag);
       const [savedProduct] = await db.insert(menuProducts).values({
         dotykackaId: String(product.id), dotykackaCategoryId: product._categoryId ? String(product._categoryId) : null,
         name: product.name, wineCode: code, catalogCode: parsedCodes.catalogCode,
@@ -351,7 +356,7 @@ export async function syncDotykackaMenu() {
         salesCount30d: salesReport ? String(salesByProduct.get(String(product.id)) ?? 0) : "0",
         salesSyncedAt: salesReport ? reportTo : null,
         sourceSortOrder: product.sortOrder ?? null, tags: product.tags ?? [], allergens: product.allergens ?? [],
-        features: product.features ?? [], menuTagged: true, sourceVersion: sourceDate(product.versionDate), syncedAt: new Date(),
+        features: product.features ?? [], menuTagged, sourceVersion: sourceDate(product.versionDate), syncedAt: new Date(),
       }).onConflictDoUpdate({
         target: menuProducts.dotykackaId,
         set: {
@@ -370,7 +375,7 @@ export async function syncDotykackaMenu() {
             salesSyncedAt: reportTo,
           } : {}),
           sourceSortOrder: product.sortOrder ?? null, tags: product.tags ?? [], allergens: product.allergens ?? [],
-          features: product.features ?? [], menuTagged: true, sourceVersion: sourceDate(product.versionDate), syncedAt: new Date(),
+          features: product.features ?? [], menuTagged, sourceVersion: sourceDate(product.versionDate), syncedAt: new Date(),
         },
       }).returning({ id: menuProducts.id });
 

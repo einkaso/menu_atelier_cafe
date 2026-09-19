@@ -4,6 +4,7 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { StaffManualMedia } from "../db/schema";
 import { optimizeProductImage } from "./image-background";
+import { detectUploadedImageType, prepareUploadedImage } from "./uploaded-image";
 
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 25 * 1024 * 1024;
@@ -20,11 +21,8 @@ const contentTypes: Record<string, string> = {
 };
 
 function detectMedia(bytes: Buffer): { extension: string; type: StaffManualMedia["type"] } | null {
-  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { extension: "jpg", type: "IMAGE" };
-  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { extension: "png", type: "IMAGE" };
-  if (bytes.length >= 12 && bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP") return { extension: "webp", type: "IMAGE" };
-  if (bytes.length >= 12 && bytes.subarray(4, 8).toString("ascii") === "ftyp" && ["avif", "avis"].includes(bytes.subarray(8, 12).toString("ascii"))) return { extension: "avif", type: "IMAGE" };
-  if (bytes.length >= 12 && bytes.subarray(4, 8).toString("ascii") === "ftyp" && ["heic", "heix", "hevc", "hevx", "mif1", "msf1"].includes(bytes.subarray(8, 12).toString("ascii"))) return { extension: "heic", type: "IMAGE" };
+  const image = detectUploadedImageType(bytes);
+  if (image) return { extension: image.extension, type: "IMAGE" };
   if (["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString("ascii"))) return { extension: "gif", type: "IMAGE" };
   if (bytes.length >= 4 && bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return { extension: "webm", type: "VIDEO" };
   if (bytes.length >= 12 && bytes.subarray(4, 8).toString("ascii") === "ftyp") return { extension: "mp4", type: "VIDEO" };
@@ -55,7 +53,7 @@ export async function importStaffManualMedia(productId: number, file: File): Pro
     throw new Error("Film lub animowany GIF może mieć maksymalnie 25 MB.");
   }
   const prepared = detected.type === "IMAGE" && detected.extension !== "gif"
-    ? await optimizeProductImage(bytes, undefined, detected.extension === "heic")
+    ? await optimizeProductImage(await prepareUploadedImage(bytes))
     : bytes;
   const storedType = detectMedia(prepared);
   if (!storedType || storedType.extension === "heic") throw new Error("Nie udało się przygotować zdjęcia do formatu obsługiwanego przez aplikację.");

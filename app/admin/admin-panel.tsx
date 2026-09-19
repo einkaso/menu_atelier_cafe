@@ -184,7 +184,8 @@ const localImageTypes: Record<string, string> = {
 
 function normalizedLocalImage(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const type = file.type || localImageTypes[extension];
+  const declaredType = file.type.toLowerCase();
+  const type = Object.values(localImageTypes).includes(declaredType) ? declaredType : localImageTypes[extension];
   if (!type || !Object.values(localImageTypes).includes(type)) throw new Error("Wybierz zdjęcie JPG, PNG, WebP, AVIF, HEIC lub HEIF.");
   return file.type === type ? file : new File([file], file.name, { type });
 }
@@ -330,6 +331,8 @@ const ruleSections = [
       ["Automatycznie", "Wybór ziarna jest pokazany raz dla całej podgrupy kaw alternatywnych. Nazwy, profile smakowe, opisy i tłumaczenia są pobierane oraz aktualizowane systemowo."],
       ["Automatycznie", "W strefie kelnera dotknięcie „+” przy produkcie mającym dodatki otwiera wybór wariantu dla jednej właśnie dodawanej sztuki. Produkty bez dodatków trafiają do zamówienia od razu."],
       ["Automatycznie", "Przy jednej kawie można połączyć dowolną liczbę modyfikacji z grupy „DODATKI DO KAWY”, na przykład inne mleko i dodatkowe espresso."],
+      ["Automatycznie", "Dostępne smaki syropów Leśne Życie są pobierane z aktualnego stanu magazynowego i pokazywane przy kawie, matchy, herbacie oraz lemoniadzie."],
+      ["Zawsze", "Smak syropu przy napoju korzysta z ceny dodatku „Syrop smakowy”. Produkt Leśne Życie z tagiem PÓŁKA pozostaje osobną pełną butelką z własną ceną i nie może zostać omyłkowo doliczony jako dodatek."],
       ["Automatycznie", "Każda konfiguracja jest osobną linią zamówienia. Dwie latte mogą więc wystąpić oddzielnie: jedna standardowa, a druga np. ze zmianą mleka na kokosowe."],
       ["Automatycznie", "Cena dodatku jest doliczana do ceny jednej skonfigurowanej pozycji. Nazwa wariantu oraz jego cena pochodzą z aktualnych połączeń produktów w Dotykačce."],
       ["Zawsze", "Przy kawie alternatywnej wybór jednego ziarna jest obowiązkowy. System nie pozwala dodać tej pozycji ani wysłać nieistniejącego dodatku lub dwóch ziaren jednocześnie."],
@@ -517,7 +520,7 @@ function visibilityLabel(product: Product) {
 
 function productListStatus(product: Product): { kind: ProductStatusKind; className: string; label: string } {
   if (product.manualHidden) return { kind: "menu-hidden", className: "admin-dot is-menu-hidden", label: "Ukryty ręcznie tylko w naszym cyfrowym menu" };
-  if (!visible(product)) return { kind: "dotykacka-hidden", className: "admin-dot", label: "Ukryty przez ustawienia Dotykački lub brak stanu" };
+  if (!visible(product)) return { kind: "dotykacka-hidden", className: "admin-dot", label: "Ukryty w menu: brak tagu MENU/PÓŁKA, ustawienia Dotykački lub brak stanu" };
   if (!product.contentApproved) return { kind: "needs-review", className: "admin-dot needs-review", label: `${visibilityLabel(product)}, ale wymaga ręcznego przeglądu i zatwierdzenia treści` };
   return { kind: "approved", className: "admin-dot is-visible", label: `${visibilityLabel(product)} — zatwierdzony` };
 }
@@ -540,7 +543,7 @@ export default function AdminPanel() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Wszystkie");
-  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>("visible");
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>("all");
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>("all");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1233,7 +1236,7 @@ export default function AdminPanel() {
               <i className="admin-dot needs-review" />wymagają uwagi <b>{productStatusCounts["needs-review"]}</b>
             </button>
             <button type="button" className={productStatusFilter === "dotykacka-hidden" ? "is-active" : ""} aria-pressed={productStatusFilter === "dotykacka-hidden"} onClick={() => setProductStatusFilter("dotykacka-hidden")}>
-              <i className="admin-dot" />ukryte przez Dotykačkę lub brak stanu <b>{productStatusCounts["dotykacka-hidden"]}</b>
+              <i className="admin-dot" />ukryte w menu lub bez stanu <b>{productStatusCounts["dotykacka-hidden"]}</b>
             </button>
             <button type="button" className={productStatusFilter === "menu-hidden" ? "is-active" : ""} aria-pressed={productStatusFilter === "menu-hidden"} onClick={() => setProductStatusFilter("menu-hidden")}>
               <i className="admin-dot is-menu-hidden" />ukryte ręcznie w naszym menu <b>{productStatusCounts["menu-hidden"]}</b>

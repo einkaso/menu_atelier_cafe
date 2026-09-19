@@ -145,6 +145,8 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(schema, /inventoryCountEntries = pgTable\("inventory_count_entries"/);
   assert.match(migration, /CREATE TABLE "inventory_exports"/);
   assert.match(sync, /await tx\.delete\(inventoryCatalogProducts\)/);
+  assert.match(sync, /shouldManageMenuProduct\([\s\S]*inventorySettingsByProduct\.get\(String\(product\.id\)\)\?\.inventoryTracked === true/);
+  assert.match(sync, /const menuTagged = shouldSyncMenuProduct\(product\.tags \?\? \[\], config\.menuTag\)/);
   assert.match(adminRoute, /eq\(inventoryCatalogProducts\.inventoryTracked, true\)/);
   assert.match(adminRoute, /SET_PRODUCT_TRACKING/);
   assert.match(adminRoute, /selectInventoryProducts/);
@@ -190,6 +192,7 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(adminScreen, /zer pominiętych/);
   assert.match(adminScreen, /Powtarzające się odchylenia/);
   assert.match(panel, /href="\/admin\/inventory"/);
+  assert.match(panel, /useState<VisibilityFilter>\("all"\)/);
 });
 
 test("omits a repeatedly confirmed zero until a positive stock movement occurs", () => {
@@ -402,18 +405,19 @@ test("keeps a staff-only preparation manual behind three product-photo taps", as
   assert.match(mediaRoute, /isAdmin\(\)/);
   assert.match(mediaRoute, /currentWaiter\(request\)/);
   assert.match(mediaRoute, /Content-Range/);
-  assert.match(mediaStorage, /optimizeProductImage\(bytes/);
+  assert.match(mediaStorage, /optimizeProductImage\(await prepareUploadedImage\(bytes\)\)/);
   assert.match(mediaStorage, /MAX_IMAGE_BYTES = 50 \* 1024 \* 1024/);
   assert.match(storageSetup, /uploads\/staff-manuals/);
   assert.match(storageSetup, /-o menuapp -g menuapp/);
 });
 
 test("lets admins remove product images and optimizes oversized files", async () => {
-  const [admin, imageRoute, imageImport, imageBackground] = await Promise.all([
+  const [admin, imageRoute, imageImport, imageBackground, uploadedImage] = await Promise.all([
     read("app/admin/admin-panel.tsx"),
     read("app/api/admin/products/[id]/image/route.ts"),
     read("lib/image-import.ts"),
     read("lib/image-background.ts"),
+    read("lib/uploaded-image.ts"),
   ]);
   assert.match(admin, /async function removeProductImage\(\)/);
   assert.match(admin, /method: "DELETE"/);
@@ -427,6 +431,10 @@ test("lets admins remove product images and optimizes oversized files", async ()
   assert.match(admin, /return source;/);
   assert.match(admin, /image\/heic/);
   assert.match(imageImport, /removeProductImageFile/);
+  assert.match(imageImport, /prepareUploadedImage\(bytes\)/);
+  assert.match(uploadedImage, /await import\("heic-decode"\)/);
+  assert.match(uploadedImage, /HEIC_BRANDS/);
+  assert.match(uploadedImage, /webp\(\{ quality: 86/);
   assert.match(imageBackground, /MAX_STORED_BYTES = 2_400_000/);
   assert.match(imageBackground, /maxSide: 1_600, quality: 86/);
   assert.match(imageBackground, /maxSide: 1_000, quality: 62/);

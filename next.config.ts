@@ -17,6 +17,7 @@ function releaseBuildVersion() {
 const appBuildVersion = process.env.NEXT_PUBLIC_APP_BUILD_VERSION ?? releaseBuildVersion();
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["heic-decode", "libheif-js"],
   env: {
     NEXT_PUBLIC_APP_BUILD_VERSION: appBuildVersion,
   },

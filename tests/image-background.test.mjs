@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
@@ -69,4 +70,21 @@ test("shrinks an oversized product photo for application use", async () => {
   assert.ok((metadata.height ?? Infinity) <= 1_600);
   assert.ok(optimized.length <= 2_400_000);
   assert.equal(metadata.format, "webp");
+});
+
+test("decodes an iPhone HEIC photo to a browser-compatible optimized image", async () => {
+  const { detectUploadedImageType, prepareUploadedImage } = await vite.ssrLoadModule("/lib/uploaded-image.ts");
+  const source = await readFile(new URL("./fixtures/iphone-heic.heic", import.meta.url));
+
+  assert.deepEqual(detectUploadedImageType(source), {
+    mime: "image/heic",
+    extension: "heic",
+    requiresHeicDecode: true,
+  });
+
+  const prepared = await prepareUploadedImage(source);
+  const metadata = await sharp(prepared).metadata();
+  assert.equal(metadata.format, "webp");
+  assert.ok((metadata.width ?? 0) > 0 && (metadata.width ?? Infinity) <= 1_600);
+  assert.ok((metadata.height ?? 0) > 0 && (metadata.height ?? Infinity) <= 1_600);
 });

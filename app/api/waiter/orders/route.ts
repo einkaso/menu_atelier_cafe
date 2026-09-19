@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { menuAddons, menuProducts, waiterExtraProducts, waiterOrders, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
+import { menuAddons, menuCategories, menuProducts, waiterExtraProducts, waiterOrders, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
 import { currentWaiter, waiterCookie } from "../../../../lib/waiter-auth";
 import { isAlternativeCoffeeBeanGroup, isAlternativeCoffeeMethod, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
+import { acceptsFlavorSyrup, isForestLifeSyrupCategory, isGenericFlavorSyrupOption } from "../../../../lib/flavor-syrups";
 import { menuProductIsAvailable, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
 import { DotykackaClient } from "../../../../lib/dotykacka/client";
 import { getDotykackaConfig } from "../../../../lib/dotykacka/config";
@@ -34,18 +35,22 @@ export async function POST(request: Request) {
   }
   const productIds = [...new Set(items.map((item) => String(item.productId)))];
   const db = getDb();
-  const [table, products, extraProducts, questions, allowedAddons] = await Promise.all([
+  const [table, products, extraProducts, questions, allowedAddons, syrupFlavorProducts, menuSyrupFlavorProducts] = await Promise.all([
     db.select({ id: waiterTables.dotykackaId }).from(waiterTables).where(and(eq(waiterTables.dotykackaId, tableId), eq(waiterTables.display, true), eq(waiterTables.deleted, false))).limit(1),
     db.select({
-      id: menuProducts.id, dotykackaId: menuProducts.dotykackaId, name: menuProducts.name, price: menuProducts.priceWithVat,
+      id: menuProducts.id, dotykackaId: menuProducts.dotykackaId, name: menuProducts.name, category: menuCategories.name, price: menuProducts.priceWithVat,
       tags: menuProducts.tags, stockDeduct: menuProducts.stockDeduct, stockOverdraft: menuProducts.stockOverdraft, stockQuantity: menuProducts.stockQuantity,
-    }).from(menuProducts).where(and(inArray(menuProducts.dotykackaId, productIds), eq(menuProducts.menuTagged, true), eq(menuProducts.display, true), eq(menuProducts.deleted, false))),
+    }).from(menuProducts).innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId)).where(and(inArray(menuProducts.dotykackaId, productIds), eq(menuProducts.menuTagged, true), eq(menuProducts.display, true), eq(menuProducts.deleted, false))),
     db.select({
-      id: waiterExtraProducts.id, dotykackaId: waiterExtraProducts.dotykackaId, name: waiterExtraProducts.name, price: waiterExtraProducts.priceWithVat,
+      id: waiterExtraProducts.id, dotykackaId: waiterExtraProducts.dotykackaId, name: waiterExtraProducts.name, category: waiterExtraProducts.category, price: waiterExtraProducts.priceWithVat,
       stockDeduct: waiterExtraProducts.stockDeduct, stockOverdraft: waiterExtraProducts.stockOverdraft, stockQuantity: waiterExtraProducts.stockQuantity,
     }).from(waiterExtraProducts).where(inArray(waiterExtraProducts.dotykackaId, productIds)),
     db.select({ id: waiterSurveyQuestions.id, prompt: waiterSurveyQuestions.prompt, options: waiterSurveyQuestions.options, required: waiterSurveyQuestions.required }).from(waiterSurveyQuestions).where(eq(waiterSurveyQuestions.active, true)),
     db.select({ parentId: menuAddons.parentDotykackaId, customizationId: menuAddons.customizationDotykackaId, productId: menuAddons.addonDotykackaId, groupName: menuAddons.groupName, name: menuAddons.name, price: menuAddons.priceWithVat }).from(menuAddons),
+    db.select({ dotykackaId: waiterExtraProducts.dotykackaId, name: waiterExtraProducts.name, category: waiterExtraProducts.category, stockQuantity: waiterExtraProducts.stockQuantity }).from(waiterExtraProducts),
+    db.select({ dotykackaId: menuProducts.dotykackaId, name: menuProducts.name, category: menuCategories.name, stockQuantity: menuProducts.stockQuantity })
+      .from(menuProducts).innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
+      .where(and(eq(menuProducts.menuTagged, true), eq(menuProducts.display, true), eq(menuProducts.deleted, false))),
   ]);
   const availableProducts = [...products.filter((product) => menuProductIsAvailable(
     product.tags, MENU_TAG, product.stockDeduct, product.stockOverdraft, product.stockQuantity,
@@ -61,14 +66,24 @@ export async function POST(request: Request) {
   }
   const sharedBeans = new Map(allowedAddons.filter((addon) => isAlternativeCoffeeBeanGroup(addon.groupName)).map((addon) => [addon.productId, addon]));
   const sharedCoffeeAddons = new Map(allowedAddons.filter((addon) => isCoffeeAddonGroup(addon.groupName)).map((addon) => [addon.productId, addon]));
+  const genericSyrupAddon = allowedAddons.find((addon) => isGenericFlavorSyrupOption(addon.name));
+  const availableSyrupFlavors = new Map([...syrupFlavorProducts, ...menuSyrupFlavorProducts]
+    .filter((product) => isForestLifeSyrupCategory(product.category) && Number(product.stockQuantity ?? 0) > 0)
+    .map((product) => [`syrup-flavor:${product.dotykackaId}`, product]));
   const selectionsFor = (productId: string, requestedIds: string[]) => {
     const direct = allowedByParent.get(productId) ?? new Map();
-    const alternative = isAlternativeCoffeeMethod(byId.get(productId)?.name);
+    const product = byId.get(productId);
+    const alternative = isAlternativeCoffeeMethod(product?.name);
     const hasDirectBeans = Array.from(direct.values()).some((addon) => isAlternativeCoffeeBeanGroup(addon.groupName));
     const hasDirectCoffeeAddons = Array.from(direct.values()).some((addon) => isCoffeeAddonGroup(addon.groupName));
     return requestedIds.map((id) => {
+      const syrupFlavor = availableSyrupFlavors.get(id);
+      if (syrupFlavor && genericSyrupAddon && acceptsFlavorSyrup(product?.category, product?.name)) {
+        const directSyrupAddon = Array.from(direct.values()).find((addon) => isGenericFlavorSyrupOption(addon.name));
+        return { addon: directSyrupAddon ?? genericSyrupAddon, fallback: directSyrupAddon ? null : "syrup" as const, flavorName: syrupFlavor.name };
+      }
       const native = direct.get(id);
-      if (native) return { addon: native, fallback: null as "bean" | "addition" | null };
+      if (native) return { addon: native, fallback: null as "bean" | "addition" | "syrup" | null, flavorName: null };
       if (alternative && !hasDirectBeans && sharedBeans.has(id)) return { addon: sharedBeans.get(id)!, fallback: "bean" as const };
       if (alternative && !hasDirectCoffeeAddons && sharedCoffeeAddons.has(id)) return { addon: sharedCoffeeAddons.get(id)!, fallback: "addition" as const };
       return null;
@@ -79,6 +94,7 @@ export async function POST(request: Request) {
     const requestedIds = [...new Set((Array.isArray(item.customizations) ? item.customizations : []).map((value) => typeof value === "string" ? value : "").filter(Boolean))];
     const resolved = selectionsFor(productId, requestedIds);
     if (resolved.some((selection) => !selection)) return Response.json({ error: "Zamówienie zawiera niedostępny dodatek." }, { status: 400 });
+    if (resolved.filter((selection) => selection?.flavorName).length > 1) return Response.json({ error: "Wybierz jeden smak syropu do napoju." }, { status: 400 });
     const selectedGroups = resolved.map((selection) => selection?.addon.groupName?.trim() || "Dodatki");
     const singleChoiceGroups = selectedGroups.filter((group) => !isCoffeeAddonGroup(group));
     if (new Set(singleChoiceGroups).size !== singleChoiceGroups.length) return Response.json({ error: "W tej grupie można wybrać tylko jeden wariant." }, { status: 400 });
@@ -92,12 +108,13 @@ export async function POST(request: Request) {
     const customizationIds = [...new Set(rawCustomizations.map((value) => typeof value === "string" ? value : "").filter(Boolean))];
     const selected = selectionsFor(product.dotykackaId, customizationIds).filter((selection): selection is NonNullable<typeof selection> => Boolean(selection));
     const beanNotes = selected.filter((selection) => selection.fallback === "bean").map((selection) => `Ziarno: ${selection.addon.name}`);
+    const syrupNotes = selected.filter((selection) => selection.flavorName).map((selection) => `Syrop: ${selection.flavorName}`);
     const rawNote = typeof item.note === "string" ? item.note.trim().slice(0, 500) : "";
-    const note = [rawNote, ...beanNotes].filter(Boolean).join(" · ") || undefined;
+    const note = [rawNote, ...beanNotes, ...syrupNotes].filter(Boolean).join(" · ") || undefined;
     const unitPrice = Number(product.price ?? 0) + selected.reduce((sum, selection) => sum + Number(selection.addon.price ?? 0), 0);
-    const customizations = selected.map(({ addon, fallback }) => ({ customizationId: fallback ? "" : addon.customizationId ?? "", productId: addon.productId, name: addon.name, price: addon.price ?? "0", fallback }));
+    const customizations = selected.map(({ addon, fallback, flavorName }) => ({ customizationId: fallback ? "" : addon.customizationId ?? "", productId: addon.productId, name: flavorName ? `${addon.name}: ${flavorName}` : addon.name, price: addon.price ?? "0", fallback }));
     const posCustomizations = customizations.filter((addon) => !addon.fallback);
-    const standaloneAddons = customizations.filter((addon) => addon.fallback === "addition");
+    const standaloneAddons = customizations.filter((addon) => addon.fallback === "addition" || addon.fallback === "syrup");
     return { productId: product.dotykackaId, localProductId: product.id, name: product.name, quantity: Number(item.quantity), unitPrice: String(unitPrice), note, customizations, posCustomizations, standaloneAddons };
   });
   const rawAnswers = body.surveyAnswers && typeof body.surveyAnswers === "object" ? body.surveyAnswers as Record<string, unknown> : {};

@@ -5,6 +5,7 @@ import { categoryTranslations, sectionFor } from "../../../lib/menu-categories";
 import { suggestProductGroup, translateProductGroup } from "../../../lib/product-order";
 import { productImageUrl } from "../../../lib/image-import";
 import { isAlternativeCoffeeBeanGroup, isCoffeeAddonGroup } from "../../../lib/coffee-addons";
+import { isForestLifeSyrupCategory, isGenericFlavorSyrupOption } from "../../../lib/flavor-syrups";
 import { hasTag, isShelfProduct, menuProductDestinations, menuProductIsAvailable, shelfHasPositiveStock } from "../../../lib/menu-tags";
 import { productAttributesEn, productAttributesPl } from "../../../lib/translation";
 import { isZeroAlcoholValue } from "../../../lib/wine-characteristics";
@@ -400,6 +401,19 @@ export async function GET() {
       currency: item.currency,
       group: item.groupName,
     }])).values());
+    const syrupAddon = coffeeOptions.find((item) => isGenericFlavorSyrupOption(item.pl));
+    const flavorSyrups = Array.from(new Map(rows
+      .filter((item) => isForestLifeSyrupCategory(item.category) && item.display && !item.deleted && Number(item.stockQuantity ?? 0) > 0)
+      .map((item) => [item.id, {
+        id: String(item.id),
+        pl: item.name,
+        en: item.nameEn || item.name,
+        descriptionPl: item.descriptionPl || "",
+        descriptionEn: item.descriptionEn || item.descriptionPl || "",
+        image: productImageUrl(item.imagePath) || undefined,
+        addonPrice: syrupAddon?.price || "",
+        currency: syrupAddon?.currency || "PLN",
+      }])).values());
 
     const alternativeBeanRows = Array.from(new Map(addonRows.filter((item) => isAlternativeCoffeeBeanGroup(item.groupName)).map((item) => [item.addonDotykackaId, item])).values());
     const beanImageRows = alternativeBeanRows.length ? await db.select({
@@ -416,7 +430,7 @@ export async function GET() {
       image: beanImages.get(item.addonDotykackaId) || undefined,
     }));
 
-    return Response.json({ appVersion: APP_BUILD_VERSION, categories, products, coffeeOptions, alternativeCoffeeBeans, source: "dotykacka" }, {
+    return Response.json({ appVersion: APP_BUILD_VERSION, categories, products, coffeeOptions, alternativeCoffeeBeans, flavorSyrups, source: "dotykacka" }, {
       headers: { "cache-control": "no-store", "x-menu-build-version": APP_BUILD_VERSION },
     });
   } catch (error) {
