@@ -14,6 +14,7 @@ export async function GET() {
       enabled: waiterEmployees.enabled,
       deleted: waiterEmployees.deleted,
       accessLevel: waiterEmployees.accessLevel,
+      canManageMenuVisibility: waiterEmployees.canManageMenuVisibility,
       pinHash: waiterEmployees.pinHash,
       syncedAt: waiterEmployees.syncedAt,
     }).from(waiterEmployees).where(and(eq(waiterEmployees.enabled, true), eq(waiterEmployees.deleted, false))).orderBy(asc(waiterEmployees.name)),

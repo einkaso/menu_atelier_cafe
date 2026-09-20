@@ -51,11 +51,14 @@ export async function GET() {
       imageSourceUrl: productContent.imageSourceUrl,
       imagePath: productContent.imagePath,
       galleryPaths: productContent.galleryPaths,
+      detailBackdropPath: productContent.detailBackdropPath,
+      detailBackdropSourceUrl: productContent.detailBackdropSourceUrl,
       featured: productContent.featured,
       featuredSortOrder: productContent.featuredSortOrder,
       contentApproved: productContent.contentApproved,
       hideWhenOutOfStock: productContent.hideWhenOutOfStock,
       manualHidden: productContent.manualHidden,
+      waiterVisibilityOverride: productContent.waiterVisibilityOverride,
       country: productContent.country,
       region: productContent.region,
       grapes: productContent.grapes,
@@ -77,6 +80,7 @@ export async function GET() {
       ...row,
       imagePath: productImageUrl(row.imagePath),
       galleryPaths: (row.galleryPaths ?? []).map((imagePath) => productImageUrl(imagePath)).filter((imagePath): imagePath is string => Boolean(imagePath)),
+      detailBackdropPath: productImageUrl(row.detailBackdropPath),
       catalogCodeCandidates: parseProductCodes(row.pluCodes).catalogCodes,
     })) });
   } catch (error) {

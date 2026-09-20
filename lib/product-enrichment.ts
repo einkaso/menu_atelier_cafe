@@ -4,10 +4,10 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
 import type { WineSourceProposal } from "../db/schema";
-import { manualProductSearchUrl, productSearchTitle } from "./manual-product-search";
+import { manualProductSearchTerms, manualProductSearchUrl, productSearchTitle } from "./manual-product-search";
 import { detectSparklingType } from "./wine-characteristics";
 
-export type ProductKind = "wine" | "whisky" | "beer" | "product";
+export type ProductKind = "wine" | "whisky" | "beer" | "cocktails" | "product";
 
 export type DiscoveryInput = {
   name: string;
@@ -509,6 +509,21 @@ function openFoodFactsProposal(product: OpenFoodFactsProduct, ean: string, input
       ...(origin ? { origin } : {}),
       ...(volume ? { volume } : {}),
     };
+  } else if (input.kind === "cocktails") {
+    const cocktailType = detectedCocktailType(searchable);
+    const cocktailBase = detectedCocktailBase(searchable);
+    const tasteProfile = detectedCocktailTasteProfile(searchable);
+    const servingStyle = detectedCocktailServingStyle(searchable);
+    const origin = detectedCountry(`${product.origins ?? ""} ${product.countries ?? ""} ${searchable}`);
+    proposal.attributes = {
+      ...(cocktailType ? { cocktailType } : {}),
+      ...(cocktailBase ? { cocktailBase } : {}),
+      ...(tasteProfile ? { tasteProfile } : {}),
+      ...(servingStyle ? { servingStyle } : {}),
+      ...(alcoholPercentage ? { alcoholPercentage } : {}),
+      ...(origin ? { origin } : {}),
+      ...(volume ? { volume } : {}),
+    };
   }
   return { proposal, sourceUrl };
 }
@@ -545,7 +560,7 @@ async function openFoodFactsProducts(input: DiscoveryInput, warnings: string[]) 
 
 function searchQuery(input: DiscoveryInput) {
   const identifier = input.eanCodes?.find((value) => /^\d{8,14}$/.test(value.replace(/\s/g, ""))) || input.supplierProductCode || input.catalogCode;
-  const kind = input.kind === "wine" ? "wino" : input.kind === "whisky" ? "whisky koniak brandy" : input.kind === "beer" ? "piwo" : "produkt";
+  const kind = manualProductSearchTerms(input.kind);
   return [identifier ? `"${identifier}"` : `"${input.name}"`, input.supplierName, kind].filter(Boolean).join(" ");
 }
 
@@ -934,6 +949,68 @@ function detectedTasteProfile(text: string) {
   return profiles.find(([, pattern]) => pattern.test(value))?.[0] ?? null;
 }
 
+function detectedCocktailType(text: string) {
+  const value = normalized(text);
+  if (/\bspritz\w*\b/.test(value)) return "Spritz";
+  if (/\bsour\w*\b/.test(value)) return "Sour";
+  if (/\b(highball|long drink)\b/.test(value)) return "Highball";
+  if (/\b(shot|shooter|kieliszek)\b|\b(?:20|25|30|40|50)\s*ml\b/.test(value)) return "Shot";
+  if (/\b(?:butelka|bottle)\b|\b(?:500|700|750|1000)\s*ml\b/.test(value)
+    && /\b(wodk\w*|vodka|gin|rum|whisk\w*|bourbon|tequila|mezcal|koniak|cognac|brandy|likier\w*|liqueur)\b/.test(value)) return "Alkohol na butelkę";
+  if (/\b(aperitif|aperitivo|digestif|digestivo)\b/.test(value)) return "Aperitif / digestif";
+  if (/\b(koktajl\w*|cocktail|drink|martini|negroni|mojito|margarita|daiquiri|old fashioned|boulevardier)\b/.test(value)) return "Koktajl klasyczny";
+  return null;
+}
+
+function detectedCocktailBase(text: string) {
+  const value = normalized(text);
+  const bases: Array<[string, RegExp]> = [
+    ["Wódka", /\b(wodk\w*|vodka)\b/],
+    ["Gin", /\bgin\b/],
+    ["Rum", /\brum\b/],
+    ["Whisky", /\b(whisk\w*|scotch)\b/],
+    ["Bourbon", /\bbourbon\b/],
+    ["Tequila", /\btequil\w*\b/],
+    ["Mezcal", /\bmezcal\w*\b/],
+    ["Koniak / brandy", /\b(koniak\w*|cognac|brandy)\b/],
+    ["Prosecco", /\bprosecco\b/],
+    ["Wermut", /\b(wermut\w*|vermouth)\b/],
+    ["Aperitif / bitter", /\b(aperol|campari|bitter|amaro|aperitif|aperitivo)\b/],
+    ["Likier", /\b(likier\w*|liqueur)\b/],
+    ["Wino", /\b(wino|wine)\b/],
+  ];
+  const found = bases.filter(([, pattern]) => pattern.test(value)).map(([label]) => label);
+  return found.length ? found.slice(0, 4).join(" · ") : null;
+}
+
+function detectedCocktailTasteProfile(text: string) {
+  const value = normalized(text);
+  const profiles: Array<[string, RegExp]> = [
+    ["Wytrawny", /\b(wytrawn\w*|dry)\b/],
+    ["Słodki", /\b(slod\w*|sweet|syrop\w*|syrup)\b/],
+    ["Gorzki", /\b(gorzk\w*|bitter|amaro)\b/],
+    ["Cytrusowy i kwaśny", /\b(cytrus\w*|citrus|limonk\w*|lime|cytryn\w*|lemon|kwasn\w*|sour)\b/],
+    ["Owocowy", /\b(owoc\w*|fruit\w*|malin\w*|raspberr\w*|marakuj\w*|passion fruit|brzoskwin\w*|peach)\b/],
+    ["Kremowy", /\b(krem\w*|cream\w*|mlecz\w*|milk|coconut)\b/],
+    ["Korzenny", /\b(korzenn\w*|spic\w*|cynamon\w*|cinnamon|imbir\w*|ginger)\b/],
+    ["Dymny", /\b(dym\w*|smok\w*|torf\w*|peat\w*)\b/],
+  ];
+  const found = profiles.filter(([, pattern]) => pattern.test(value)).map(([label]) => label);
+  return found.length ? found.slice(0, 3).join(" · ") : null;
+}
+
+function detectedCocktailServingStyle(text: string) {
+  const value = normalized(text);
+  if (/\b(coupe|coupetka)\b/.test(value)) return "Coupe";
+  if (/\b(martini glass|kieliszek martini)\b/.test(value)) return "Kieliszek martini";
+  if (/\b(highball|collins)\b/.test(value)) return "Highball";
+  if (/\b(old fashioned|rocks glass|on the rocks)\b/.test(value)) return "Old fashioned / lód";
+  if (/\b(shot|shooter|kieliszek do wodki)\b/.test(value)) return "Shot";
+  if (/\b(kieliszek do wina|wine glass)\b/.test(value)) return "Kieliszek do wina";
+  if (/\b(?:butelka|bottle)\b/.test(value)) return "Butelka";
+  return null;
+}
+
 function detectedCountry(text: string) {
   const value = normalized(text);
   const containsWholePhrase = (candidate: string) => {
@@ -1090,6 +1167,27 @@ function extractPage(page: CandidatePage, input: DiscoveryInput): WineSourceProp
       ...(origin ? { origin } : {}),
       ...(volume ? { volume } : {}),
     };
+  } else if (input.kind === "cocktails") {
+    const cocktailText = `${input.name}\n${productText}\n${text}`;
+    const rawType = fact(facts, ["rodzaj drinka", "rodzaj koktajlu", "rodzaj", "typ", "type", "category"]);
+    const rawBase = fact(facts, ["alkohol bazowy", "baza", "base spirit", "spirit base", "sklad", "skład"]);
+    const rawTaste = fact(facts, ["profil smakowy", "smak", "taste", "flavour", "flavor"]);
+    const rawServing = fact(facts, ["sposob podania", "sposób podania", "podanie", "szklo", "szkło", "serving", "glassware"]);
+    const rawOrigin = fact(facts, ["kraj", "kraj pochodzenia", "country", "pochodzenie", "origin"]);
+    const cocktailType = detectedCocktailType(rawType || "") || detectedCocktailType(cocktailText) || rawType;
+    const cocktailBase = detectedCocktailBase(rawBase || "") || detectedCocktailBase(cocktailText) || rawBase;
+    const tasteProfile = detectedCocktailTasteProfile(rawTaste || "") || rawTaste || detectedCocktailTasteProfile(rawDescription || cocktailText);
+    const servingStyle = detectedCocktailServingStyle(rawServing || "") || rawServing || detectedCocktailServingStyle(cocktailText);
+    const origin = detectedCountry(rawOrigin || "") || rawOrigin || detectedCountry(cocktailText);
+    proposal.attributes = {
+      ...(cocktailType ? { cocktailType } : {}),
+      ...(cocktailBase ? { cocktailBase } : {}),
+      ...(tasteProfile ? { tasteProfile } : {}),
+      ...(servingStyle ? { servingStyle } : {}),
+      ...(alcoholPercentage ? { alcoholPercentage } : {}),
+      ...(origin ? { origin } : {}),
+      ...(volume ? { volume } : {}),
+    };
   }
   return proposal;
 }
@@ -1138,6 +1236,8 @@ function enough(proposal: WineSourceProposal, kind: ProductKind) {
       ? Boolean(proposal.descriptionPl && proposal.imageSourceUrl && attributes.spiritType && attributes.alcoholPercentage)
     : kind === "beer"
       ? Boolean(proposal.descriptionPl && proposal.imageSourceUrl && attributes.alcoholPercentage && attributes.beerStyle)
+      : kind === "cocktails"
+        ? Boolean(proposal.descriptionPl && proposal.imageSourceUrl && attributes.cocktailType && attributes.cocktailBase)
       : Boolean(proposal.descriptionPl && proposal.imageSourceUrl);
 }
 

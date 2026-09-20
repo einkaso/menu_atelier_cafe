@@ -6,6 +6,7 @@ type Employee = {
   dotykackaId: string;
   name: string;
   accessLevel: string | null;
+  canManageMenuVisibility: boolean;
   pinConfigured: boolean;
   adminConfigured: boolean;
   adminUsername: string | null;
@@ -85,6 +86,19 @@ export default function WaiterAdminClient() {
     setBusy("");
   }
 
+  async function setMenuVisibilityAccess(employee: Employee, enabled: boolean) {
+    setBusy(`visibility:${employee.dotykackaId}`); setError(""); setMessage("");
+    const response = await fetch(`/api/admin/waiter/employees/${encodeURIComponent(employee.dotykackaId)}/visibility`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) setError(body.error ?? "Nie udało się zmienić uprawnienia do widoczności menu.");
+    else { setMessage(`${employee.name}: ${enabled ? "włączono" : "wyłączono"} zarządzanie widocznością menu.`); await load(); }
+    setBusy("");
+  }
+
   async function uploadThankYouMedia(event: FormEvent<HTMLFormElement>, employee: Employee) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -129,12 +143,13 @@ export default function WaiterAdminClient() {
     <div className="waiter-admin-content">
       <section className="waiter-admin-intro"><div><span className="admin-eyebrow">Jedna lista z Dotykački</span><h2>Dostęp dla obsługi</h2><p>Aktywnemu pracownikowi możesz niezależnie nadać PIN do strefy kelnera oraz login do całego panelu zarządzania menu. Hasła i PIN-y zapisujemy wyłącznie jako bezpieczne skróty.</p></div><a className="admin-primary" href="/admin">Synchronizuj w panelu</a></section>
       {!posEnabled && <p className="waiter-admin-warning"><b>Tryb projektowy:</b> wysyłanie zamówień do POS jest zablokowane. Można bezpiecznie ustawić PIN-y i sprawdzić interfejs.</p>}
-      <div className="waiter-admin-summary"><span><b>{employees.length}</b> aktywnych pracowników</span><span><b>{employees.filter((item) => item.pinConfigured).length}</b> z PIN-em kelnera</span><span><b>{employees.filter((item) => item.adminConfigured).length}</b> administratorów menu</span><span><b>{tables.filter((item) => item.display && !item.deleted).length}</b> aktywnych stolików</span></div>
+      <div className="waiter-admin-summary"><span><b>{employees.length}</b> aktywnych pracowników</span><span><b>{employees.filter((item) => item.pinConfigured).length}</b> z PIN-em kelnera</span><span><b>{employees.filter((item) => item.canManageMenuVisibility).length}</b> może zmieniać widoczność</span><span><b>{employees.filter((item) => item.adminConfigured).length}</b> administratorów menu</span><span><b>{tables.filter((item) => item.display && !item.deleted).length}</b> aktywnych stolików</span></div>
       <section className="waiter-admin-list">{employees.map((employee) => <article className="waiter-admin-row" key={employee.dotykackaId}>
         <div className="waiter-employee-heading"><div><h3>{employee.name}</h3><small>ID Dotykački: {employee.dotykackaId}{employee.accessLevel ? ` · poziom ${employee.accessLevel}` : ""}</small></div></div>
         <div className="waiter-access-grid">
           <section className="waiter-access-card"><header><div><b>Strefa kelnera</b><small>Krótki PIN do zamówień i rozliczeń</small></div><span className={`waiter-admin-state ${employee.pinConfigured ? "is-ready" : ""}`}>{employee.pinConfigured ? "Aktywny" : "Brak PIN-u"}</span></header><form className="waiter-pin-form" onSubmit={(event) => savePin(event, employee)}><input name="pin" inputMode="numeric" pattern="[0-9]{4,8}" minLength={4} maxLength={8} autoComplete="new-password" placeholder="••••" aria-label={`Nowy PIN dla ${employee.name}`} required/><button className="admin-primary" disabled={busy === `pin:${employee.dotykackaId}`}>{employee.pinConfigured ? "Zmień PIN" : "Nadaj PIN"}</button>{employee.pinConfigured && <button type="button" className="admin-secondary" disabled={busy === `pin:${employee.dotykackaId}`} onClick={() => clearPin(employee)}>Wyłącz</button>}</form></section>
           <section className="waiter-access-card is-admin"><header><div><b>Administrator menu</b><small>{employee.adminLastLoginAt ? `Ostatnie logowanie: ${new Date(employee.adminLastLoginAt).toLocaleString("pl-PL")}` : "Dostęp do panelu /admin"}</small></div><span className={`waiter-admin-state ${employee.adminConfigured ? "is-ready" : ""}`}>{employee.adminConfigured ? "Aktywny" : "Wyłączony"}</span></header><form className="waiter-admin-login-form" onSubmit={(event) => saveAdminAccess(event, employee)}><label>Login<input name="username" defaultValue={employee.adminUsername ?? ""} minLength={3} maxLength={50} pattern="[a-z0-9._-]+" autoComplete="off" placeholder="np. anna.nowak" required/></label><label>{employee.adminConfigured ? "Nowe hasło (opcjonalnie)" : "Hasło"}<input name="password" type="password" minLength={10} maxLength={128} autoComplete="new-password" placeholder={employee.adminConfigured ? "pozostaw puste bez zmiany" : "minimum 10 znaków"} required={!employee.adminConfigured}/></label><div><button className="admin-primary" disabled={busy === `admin:${employee.dotykackaId}`}>{employee.adminConfigured ? "Zapisz zmiany" : "Nadaj dostęp"}</button>{employee.adminConfigured && <button type="button" className="admin-secondary" disabled={busy === `admin:${employee.dotykackaId}`} onClick={() => disableAdminAccess(employee)}>Wyłącz</button>}</div></form></section>
+          <section className="waiter-access-card waiter-menu-visibility-card"><header><div><b>Widoczność menu gościa</b><small>Włączanie i ukrywanie produktów z tagiem MENU</small></div><span className={`waiter-admin-state ${employee.canManageMenuVisibility ? "is-ready" : ""}`}>{employee.canManageMenuVisibility ? "Dozwolone" : "Zablokowane"}</span></header><p>Uprawnienie jest domyślnie wyłączone. Każda zmiana wymaga podania powodu i trafia do historii administratora.</p><button type="button" className={employee.canManageMenuVisibility ? "admin-secondary" : "admin-primary"} disabled={busy === `visibility:${employee.dotykackaId}`} onClick={() => void setMenuVisibilityAccess(employee, !employee.canManageMenuVisibility)}>{employee.canManageMenuVisibility ? "Odbierz uprawnienie" : "Nadaj uprawnienie"}</button></section>
           <section className="waiter-access-card waiter-thanks-card"><header><div><b>Podziękowanie na rachunku</b><small>Do 3 animacji; jedna zostanie wybrana losowo dla gościa</small></div><span className={`waiter-admin-state ${employee.thankYouMedia.length ? "is-ready" : ""}`}>{employee.thankYouMedia.length}/3</span></header>{employee.thankYouMedia.length > 0 && <div className="waiter-thanks-gallery">{employee.thankYouMedia.map((media) => <figure key={media.id}>{media.mediaType === "GIF" ? <img src={media.mediaPath} alt={`Animacja ${employee.name}`}/> : <video src={media.mediaPath} autoPlay loop muted playsInline/>}<button type="button" aria-label={`Usuń animację ${employee.name}`} disabled={busy === `thanks:${employee.dotykackaId}`} onClick={() => void removeThankYouMedia(employee, media.id)}>×</button></figure>)}</div>}<form className="waiter-thanks-form" onSubmit={(event) => uploadThankYouMedia(event, employee)}><input name="media" type="file" accept="video/mp4,video/webm,image/gif,.mp4,.webm,.gif" required disabled={employee.thankYouMedia.length >= 3 || busy === `thanks:${employee.dotykackaId}`}/><button className="admin-primary" disabled={employee.thankYouMedia.length >= 3 || busy === `thanks:${employee.dotykackaId}`}>{employee.thankYouMedia.length >= 3 ? "Limit 3 animacji" : "Dodaj animację"}</button></form></section>
         </div>
       </article>)}{!employees.length && <p className="admin-muted">Brak aktywnych pracowników. Uruchom synchronizację z Dotykačką w głównym panelu.</p>}</section>

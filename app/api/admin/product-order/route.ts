@@ -4,6 +4,7 @@ import { menuCategories, menuGroupOrders, menuProducts, productContent } from ".
 import { isAdmin } from "../../../../lib/admin-auth";
 import { suggestProductGroup } from "../../../../lib/product-order";
 import { hasTag } from "../../../../lib/menu-tags";
+import { menuProductVisibleForGuest } from "../../../../lib/menu-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,13 @@ export async function GET(request: Request) {
       display: menuProducts.display, deleted: menuProducts.deleted, menuTagged: menuProducts.menuTagged,
       stockDeduct: menuProducts.stockDeduct, stockOverdraft: menuProducts.stockOverdraft,
       stockQuantity: menuProducts.stockQuantity, manualHidden: productContent.manualHidden,
+      waiterVisibilityOverride: productContent.waiterVisibilityOverride,
     }).from(menuProducts)
       .leftJoin(productContent, eq(menuProducts.id, productContent.productId))
       .where(and(eq(menuProducts.dotykackaCategoryId, category.dotykackaId), eq(menuProducts.menuTagged, true)))
       .orderBy(asc(menuProducts.menuSortOrder), asc(menuProducts.sourceSortOrder), asc(menuProducts.name));
-    const visibleProducts = products.filter((product) => product.menuTagged && hasTag(product.tags, "MENU") && product.display && !product.deleted && !product.manualHidden
+    const visibleProducts = products.filter((product) => product.menuTagged && hasTag(product.tags, "MENU") && !product.deleted
+      && menuProductVisibleForGuest(product.display, product.manualHidden, product.waiterVisibilityOverride)
       && !(product.stockDeduct && product.stockOverdraft === "DISABLE" && Number(product.stockQuantity ?? 0) <= 0));
     const visibleWithSuggestions = visibleProducts.map((product) => {
       const suggestion = suggestProductGroup(category.name, product.name);

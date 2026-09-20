@@ -18,7 +18,7 @@ Plik `RELEASE` jest obowiązkowym, stałym identyfikatorem całego buildu. Nie w
 1. Skopiować `.env_example` jako `.env` tylko wtedy, gdy lokalny `.env` jeszcze nie istnieje.
 2. Wygenerować silne wartości `POSTGRES_PASSWORD` i `SYNC_SECRET`.
 3. Wpisać `DOTYKACKA_REFRESH_TOKEN`, `DOTYKACKA_CLOUD_ID` oraz opcjonalnie `DOTYKACKA_WAREHOUSE_ID`.
-4. Bezpłatne wyszukiwanie danych o winach i piwach korzysta ze strony dostawcy, Open Food Facts po EAN oraz analizy adresu wskazanego ręcznie; nie wymaga dodatkowego klucza API.
+4. Wyszukiwanie danych i zdjęć win, piw, whisky, brandy, koniaków oraz pozycji Alko Baru korzysta ze strony dostawcy, Open Food Facts po EAN oraz analizy adresu wskazanego ręcznie; podstawowy tryb nie wymaga dodatkowego klucza API.
 5. Opcjonalnie można wpisać `BRAVE_SEARCH_API_KEY`, aby uruchomić pełne automatyczne wyszukiwanie całego internetu.
 6. Uruchomić `docker compose up -d --build`.
 7. Sprawdzić `GET /api/health`.

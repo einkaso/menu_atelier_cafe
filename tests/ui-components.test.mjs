@@ -184,7 +184,7 @@ test("opens savoury dishes with their description, price and allergens", async (
   const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
 
   assert.match(source, /const\[savoryProduct,setSavoryProduct\]=useState<Product\|null>\(null\)/);
-  assert.match(source, /showChef\?setSavoryProduct:undefined/);
+  assert.match(source, /if\(kind==="food"\)\{setSavoryProduct\(product\)/);
   assert.match(source, /<SavoryDetailDialog product=\{savoryProduct\}/);
   assert.match(source, /function SavoryDetailDialog/);
   assert.match(source, /L\("Poznaj naszą kuchnię","Discover our kitchen"\)/);
@@ -219,10 +219,14 @@ test("lets admins manage up to five optimized savoury gallery images", async () 
   assert.match(admin, /name="galleryFiles" type="file" multiple/);
   assert.match(admin, /Galeria „Na słono”/);
   assert.match(admin, /async function removeGalleryImage/);
+  assert.match(admin, /async function setPrimaryGalleryImage/);
+  assert.match(admin, /Ustaw jako pierwsze/);
   assert.match(galleryRoute, /MAX_GALLERY_IMAGES = 5/);
   assert.match(galleryRoute, /sectionFor\(product\.category\) !== "food"/);
   assert.match(galleryRoute, /importUploadedProductImage/);
   assert.match(galleryRoute, /galleryPaths: combined\.slice\(1\)/);
+  assert.match(galleryRoute, /export async function PATCH/);
+  assert.match(galleryRoute, /const reordered = \[selectedPath,/);
   assert.match(galleryRoute, /export async function DELETE/);
   assert.match(imageRoute, /reference\.galleryPaths/);
 });
@@ -234,14 +238,14 @@ test("opens drinks with managed photos, descriptions and allergens", async () =>
   const css = await readFile(path.join(root, "app/globals.css"), "utf8");
 
   assert.match(source, /const\[drinkProduct,setDrinkProduct\]=useState<Product\|null>\(null\)/);
-  assert.match(source, /activeKind==="cold"\?setDrinkProduct/);
+  assert.match(source, /if\(kind==="cold"\|\|kind==="cocktails"\)\{setDrinkProduct\(product\)/);
   assert.match(source, /<DrinkDetailDialog product=\{drinkProduct\}/);
   assert.match(source, /function DrinkDetailDialog/);
   assert.match(source, /Zobacz napój i pełny opis/);
   assert.match(source, /Wróć do napojów/);
   assert.match(source, /const previewDetails=activeKind==="cold"\|\|activeKind==="zero"\|\|activeKind==="cocktails"/);
   assert.match(source, /previewDetails=\{previewDetails\}/);
-  assert.match(source, /activeKind==="zero"\?\(p\.visualKind==="beer"\?setBeerProduct:p\.visualKind==="coffee"\?setCoffeeProduct:setDrinkProduct\)/);
+  assert.match(source, /const kind=product\.visualKind\?\?activeKind/);
   assert.match(source, /p\.image\|\|cakeLayout\|\|previewDetails\?"product product-visual"/);
   assert.match(source, /previewDetails\?L\("… Czytaj dalej","… Read more"\)/);
   assert.match(source, /p\.wine&&!previewDetails/);
@@ -258,14 +262,24 @@ test("merges drinks and spirits into a visual Alko Bar", async () => {
   const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
   const css = await readFile(path.join(root, "app/globals.css"), "utf8");
 
-  assert.match(api, /visualKind === "cocktails"\) return \{ id: "alco-bar", pl: "Alko Bar", en: "Alco Bar" \}/);
-  assert.match(source, /id:"alco-bar",pl:"Alko Bar",en:"Alco Bar",visualKind:"cocktails"/);
-  assert.match(source, /activeKind==="cocktails"\?setDrinkProduct/);
+  assert.ok(api.includes('if (visualKind === "cocktails") return { id: "alco-bar", pl: "ALKO BAR", en: "ALKO BAR" };'));
+  assert.ok(source.includes('{id:"alco-bar",pl:"ALKO BAR",en:"ALKO BAR",visualKind:"cocktails"}'));
+  assert.ok(source.includes('activeKind==="cocktails"?"ALKO BAR":cat?.[lang]'));
+  assert.match(api, /inferredAlcoBarAttributes/);
+  assert.match(source, /if\(kind==="cold"\|\|kind==="cocktails"\)\{setDrinkProduct\(product\)/);
   assert.match(source, /isAlcoBar\?L\("Wróć do Alko Baru","Back to the Alco Bar"\)/);
+  assert.match(source, /function AlcoBarFinder/);
+  assert.match(source, /matchesAlcoAttribute\(p,"cocktailType",alcoType\)/);
+  assert.match(source, /matchesAlcoAttribute\(p,"cocktailBase",alcoBase\)/);
+  assert.match(source, /matchesAlcoAttribute\(p,"tasteProfile",alcoTaste\)/);
+  assert.match(source, /matchesAlcoAttribute\(p,"servingStyle",alcoServing\)/);
+  assert.match(source, /className="alco-card-attributes"/);
   assert.match(source, /cocktailType:\["Rodzaj","Type"\]/);
   assert.match(source, /servingStyle:\["Podanie","Serving style"\]/);
-  assert.match(admin, /input\("cocktailType", "Rodzaj"/);
+  assert.match(admin, /input\("cocktailType", "Rodzaj pozycji"/);
   assert.match(admin, /input\("servingStyle", "Sposób podania"/);
+  assert.match(admin, /Dla pozycji Alko Baru szukamy rodzaju, alkoholu bazowego/);
+  assert.match(css, /\.alco-card-attributes\{/);
   assert.match(css, /\.drink-detail-dialog\.is-alco-bar \.wine-detail-visual>img\{width:100%;height:100%;object-fit:cover/);
 });
 
@@ -308,7 +322,8 @@ test("keeps beer descriptions short in the menu and opens a full product preview
   const css = await readFile(path.join(root, "app/globals.css"), "utf8");
 
   assert.match(source, /const\[beerProduct,setBeerProduct\]=useState<Product\|null>\(null\)/);
-  assert.match(source, /activeKind==="beer"\?setBeerProduct/);
+  assert.match(source, /if\(kind==="beer"\)\{setBeerProduct\(product\);return\}/);
+  assert.match(source, /onOpen=\{openProductDetails\}/);
   assert.match(source, /<BeerDetailDialog product=\{beerProduct\}/);
   assert.match(source, /compactDetails=\{activeKind==="shelf"\|\|activeKind==="beer"\|\|showChef\|\|previewDetails\}/);
   assert.match(css, /\.motif-beer \.product\.is-compact-detail \.product-info>p\{[^}]*flex:0 0 auto;[^}]*max-height:2\.65em;[^}]*-webkit-line-clamp:2/);
@@ -370,7 +385,8 @@ test("opens Harney teas with official cup-and-leaf photography and the full Doty
 
   assert.equal(teaPhotos.filter(name => name.endsWith(".jpg")).length, 15);
   assert.match(source, /const teaImageByName:Record<string,string>/);
-  assert.match(source, /activeKind==="tea"&&teaImageFor\(p\)\?setTeaProduct/);
+  assert.match(source, /if\(kind==="tea"\)\{setTeaProduct\(product\);return\}/);
+  assert.match(source, /onOpen=\{openProductDetails\}/);
   assert.match(source, /<TeaDetailDialog product=\{teaProduct\}/);
   assert.match(source, /className="wine-detail-dialog tea-detail-dialog"/);
   assert.match(source, /Napar i liście herbaty/);
@@ -394,7 +410,7 @@ test("uses exact cake photos in image-led cards with a company-story intro", asy
   assert.match(api, /\{ id: "cakes", pl: "NA SŁODKO", en: "SWEET" \}/);
   assert.match(api, /category: standardMenuProduct \? publicCategory\(visualKind, item\.categoryId\)\.id : "shelf"/);
   assert.match(source, /cakeLayout=\{activeKind==="cakes"\}/);
-  assert.match(source, /activeKind==="cakes"\?setCakeProduct/);
+  assert.match(source, /if\(kind==="cakes"\)\{setCakeProduct\(product\)/);
   assert.match(source, /<CakeDetailDialog product=\{cakeProduct\}/);
   assert.match(source, /activeKind==="cakes"&&isCapuccinoBannerCategory\(cat\)&&<CakePartnerIntro lang=\{lang\}/);
   assert.match(source, /function isCapuccinoBannerCategory\(category:Category\|undefined\)/);
@@ -440,6 +456,21 @@ test("places the featured marker over the left side of product photos", async ()
   assert.match(css, /\.product:not\(\.product-visual\)>\.featured-mark\{position:static/);
 });
 
+test("opens every Atelier selection with the same product detail routing as the regular menu card", async () => {
+  const [source, css] = await Promise.all([
+    readFile(path.join(root, "app/menu-client.tsx"), "utf8"),
+    readFile(path.join(root, "app/globals.css"), "utf8"),
+  ]);
+  assert.match(source, /const openProductDetails=\(product:Product\)=>/);
+  assert.match(source, /<Featured key=\{product\.id\?\?product\.pl\} product=\{product\} lang=\{lang\} onOpen=\{openProductDetails\}/);
+  assert.match(source, /<ProductCard product=\{p\}[\s\S]*onOpen=\{openProductDetails\}/);
+  assert.match(source, /function Featured\(\{product,lang,onOpen\}/);
+  assert.match(source, /role="button" tabIndex=\{0\} onClick=\{\(\)=>onOpen\(product\)\}/);
+  assert.match(source, /if\(product\.whisky\|\|kind==="whisky"\)\{setSpiritProduct\(product\)/);
+  assert.match(source, /<GenericProductDetailDialog product=\{genericProduct\}/);
+  assert.match(css, /\.featured\.is-openable\{cursor:pointer/);
+});
+
 test("uses a whisky tumbler and keeps 50 ml independent from bottle source data", async () => {
   const source = await readFile(path.join(root, "app/menu-client.tsx"), "utf8");
   const api = await readFile(path.join(root, "app/api/menu/route.ts"), "utf8");
@@ -458,12 +489,16 @@ test("guides alternative coffee through beans, brewing method and product detail
   const css = await readFile(path.join(root, "app/globals.css"), "utf8");
 
   assert.match(source, /const\[coffeeProduct,setCoffeeProduct\]=useState<Product\|null>\(null\)/);
-  assert.match(source, /activeKind==="coffee"\?setCoffeeProduct/);
+  assert.match(source, /if\(kind==="coffee"\)\{setCoffeeProduct\(product\)/);
   assert.match(source, /<CoffeeDetailDialog product=\{coffeeProduct\}/);
   assert.match(source, /function CoffeeDetailDialog/);
-  assert.match(source, /<AlternativeCoffeeBeans lang=\{lang\} beans=\{alternativeCoffeeBeans\} methods=\{regularVisible\.filter\(isAlternativeCoffeeProduct\)\}/);
+  assert.match(source, /const alternativeCoffeeMethods=activeKind==="coffee"\?regularVisible\.filter\(isAlternativeCoffeeProduct\):\[\]/);
+  assert.match(source, /const displayedProducts=activeKind==="coffee"\?\[\.\.\.regularVisible\.filter\(product=>!isAlternativeCoffeeProduct\(product\)\),\.\.\.alternativeCoffeeMethods\]:regularVisible/);
+  assert.match(source, /coffeeOptions\.length>0&&<Options[^]*<AlternativeCoffeeBeans lang=\{lang\} beans=\{alternativeCoffeeBeans\} methods=\{alternativeCoffeeMethods\}/);
   assert.match(source, /Wybierz ziarno/);
   assert.match(source, /Wybierz metodę parzenia/);
+  const alternativeFlow = source.slice(source.indexOf("function AlternativeCoffeeBeans"), source.indexOf("function TakeHomeCoffee"));
+  assert.ok(alternativeFlow.indexOf("Wybierz metodę parzenia") < alternativeFlow.indexOf("Wybierz ziarno"));
   assert.match(source, /selected&&selectedMethod&&<p className="alternative-selection-summary"/);
   assert.match(source, /function isAeropressMethod/);
   assert.match(source, /function isChemexMethod/);
@@ -476,6 +511,12 @@ test("guides alternative coffee through beans, brewing method and product detail
   assert.match(source, /coffeeMethodImage\(method\)&&<img/);
   assert.match(source, /setSelectedMethodId\(methodKey\(method\)\)/);
   assert.match(source, /setMethodPreview\(method\)/);
+  assert.match(source, /className="alternative-method-step is-ready"/);
+  assert.match(source, /className="alternative-bean-step is-ready"/);
+  assert.doesNotMatch(source, /disabled=\{!selectedMethod\}/);
+  assert.doesNotMatch(source, /disabled=\{!selected\}/);
+  assert.doesNotMatch(source, /Najpierw wybierz ziarno powyżej/);
+  assert.doesNotMatch(source, /setSelectedMethodId\(""\)/);
   assert.doesNotMatch(source, /Wybierz \$\{methodPreview\.pl\}/);
   assert.doesNotMatch(source, /Wróć bez wyboru/);
   assert.match(source, /ponad 30 prototypach/);
@@ -487,12 +528,30 @@ test("guides alternative coffee through beans, brewing method and product detail
   assert.match(api, /inventoryCatalogProducts\.imageSourceUrl/);
   assert.match(api, /image: beanImages\.get\(item\.addonDotykackaId\)/);
   assert.match(css, /\.alternative-beans-picker\{display:grid/);
+  assert.match(css, /\.alternative-method-step,\.alternative-bean-step\{grid-column:1\/-1/);
+  assert.match(css, /\.options\{display:grid;grid-column:1\/-1/);
   assert.match(css, /\.alternative-method-picker\{display:grid/);
   assert.match(css, /\.alternative-method-picker button\.has-image/);
   assert.match(css, /button\.has-image:after/);
   assert.match(css, /button\.has-image img\{position:absolute/);
   assert.match(css, /\.alternative-method-video\{display:block/);
   assert.match(css, /\.coffee-detail-visual>img\{[^}]*object-fit:contain/);
+  assert.match(css, /\.alternative-bean-placeholder\{font-size:0;background:#fff url\(\/coffee-methods\/churchill-sapphire-mug\.webp\)/);
+  assert.doesNotMatch(source, /Kubek Churchill|Churchill Monochrome|alternative-serving-cup/);
+});
+
+test("shows WARM and COLD serving graphics in the guest menu", async () => {
+  const [source, api, css] = await Promise.all([
+    readFile(path.join(root, "app/menu-client.tsx"), "utf8"),
+    readFile(path.join(root, "app/api/menu/route.ts"), "utf8"),
+    readFile(path.join(root, "app/globals.css"), "utf8"),
+  ]);
+  assert.match(source, /function TemperatureChoice/);
+  assert.match(source, /<TemperatureChoice temperatures=\{p\.temperatures\?\?\[\]\}/);
+  assert.match(source, /M10 5a2 2 0 0 1 4 0v8\.4a4 4 0 1 1-4 0V5/);
+  assert.match(api, /temperatures: productTemperatures\(item\.tags\)/);
+  assert.match(css, /\.temperature-pill\.is-warm/);
+  assert.match(css, /\.temperature-pill\.is-cold/);
 });
 
 test("uses the transparent product photo for the Arabica coffee bag", async () => {

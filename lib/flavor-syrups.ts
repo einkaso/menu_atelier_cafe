@@ -16,10 +16,14 @@ export function isForestLifeSyrupCategory(category: string | null | undefined) {
 
 export function isGenericFlavorSyrupOption(name: string | null | undefined) {
   const value = normalized(name);
-  return value === "syrop" || value === "syrop smakowy";
+  return value === "syrop" || value === "syrop smakowy" || value.startsWith("syrop smakowy ");
+}
+
+export function isLemonadeProduct(name: string | null | undefined) {
+  return /lemoniad/.test(normalized(name));
 }
 
 export function acceptsFlavorSyrup(category: string | null | undefined, productName: string | null | undefined) {
   const categoryName = normalized(category);
-  return /matcha|kaw|coffee|herbat|tea/.test(categoryName) || /lemoniad/.test(normalized(productName));
+  return /matcha|kaw|coffee|herbat|tea/.test(categoryName) || isLemonadeProduct(productName);
 }

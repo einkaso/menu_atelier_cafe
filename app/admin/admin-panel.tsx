@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { sectionFor } from "../../lib/menu-categories";
 import { manualProductSearchUrl, productSearchTitle } from "../../lib/manual-product-search";
 import { hasTag, isShelfProduct, shelfHasPositiveStock } from "../../lib/menu-tags";
+import { isForestLifeSyrupCategory } from "../../lib/flavor-syrups";
+import { menuProductVisibleForGuest } from "../../lib/menu-visibility";
 
 type StaffManualMedia = { id: string; path: string; type: "IMAGE" | "VIDEO"; name: string };
 
@@ -49,11 +51,14 @@ type Product = {
   imageSourceUrl: string | null;
   imagePath: string | null;
   galleryPaths: string[];
+  detailBackdropPath: string | null;
+  detailBackdropSourceUrl: string | null;
   featured: boolean | null;
   featuredSortOrder: number | null;
   contentApproved: boolean | null;
   hideWhenOutOfStock: boolean | null;
   manualHidden: boolean | null;
+  waiterVisibilityOverride: boolean | null;
   country: string | null;
   region: string | null;
   grapes: string | null;
@@ -129,6 +134,19 @@ type OfferSettings = {
   specialCount: number;
 };
 type AuditIssue = { productId: number; name: string; category: string; kind: "image" | "description" | "translation" | "wine" | "beer"; message: string };
+type VisibilityEvent = {
+  id: number;
+  productId: number | null;
+  productDotykackaId: string;
+  productName: string;
+  categoryName: string;
+  previousVisible: boolean;
+  visible: boolean;
+  reason: string;
+  employeeDotykackaId: string;
+  employeeName: string;
+  createdAt: string;
+};
 type DotykackaOption = { id: string; name: string };
 type DotykackaStatus = {
   connectorConfigured: boolean;
@@ -167,7 +185,7 @@ type HistoricalImportResult = {
   warnings: string[];
 };
 
-const editable = ["nameEn", "descriptionPl", "descriptionEn", "imageSourceUrl", "country", "region", "grapes", "wineStyle", "wineColor", "sparklingType", "sweetness", "veganStatus", "tastingNotes", "staffInstructions"] as const;
+const editable = ["nameEn", "descriptionPl", "descriptionEn", "country", "region", "grapes", "wineStyle", "wineColor", "sparklingType", "sweetness", "veganStatus", "tastingNotes", "staffInstructions"] as const;
 const attributeKeys = ["alcoholPercentage", "beerStyle", "origin", "teaType", "brewTemperature", "brewTime", "coffeeOrigin", "coffeeProfile", "coffeeModifiers", "producer", "dietaryInfo", "cocktailType", "cocktailBase", "servingStyle", "tasteProfile", "volume", "spiritType", "spiritStyle", "ageStatement", "caskType"] as const;
 
 const MAX_LOCAL_IMAGE_BYTES = 50 * 1024 * 1024;
@@ -244,6 +262,7 @@ const ruleSections = [
       ["Dotykačka", "Tag PROMO wyróżnia produkt na stronie powitalnej i na początku jego kategorii, ale nie zastępuje tagu MENU. Liczba promowanych pozycji jest dowolna."],
       ["Nasz panel", "Kolejność wszystkich polecanych pozycji ustawiamy w zakładce „Polecane”. Nie ma limitu liczby produktów."],
       ["Automatycznie", "Oznaczenie „POLECAMY” jest umieszczane po lewej stronie zdjęcia produktu, w tym samym obszarze co „Wybór naszych gości”. Jeżeli występują oba oznaczenia, system układa je jedno pod drugim."],
+      ["Automatycznie", "Wyróżniony „Wybór Atelier” na początku każdej kategorii jest w całości klikalny i otwiera ten sam właściwy podgląd produktu co jego pozycja na zwykłej liście."],
       ["Nasz panel", "Ręczne ukrycie ma pierwszeństwo przed pozostałymi ustawieniami i pozostaje zapisane po kolejnej synchronizacji."],
     ],
   },
@@ -256,6 +275,8 @@ const ruleSections = [
       ["Dotykačka", "Produkty przygotowywane na miejscu mogą pozostać widoczne przy stanie 0: ustaw sprzedaż poniżej stanu jako dozwoloną lub dozwoloną z ostrzeżeniem."],
       ["Automatycznie", "Po ponownym pojawieniu się zapasu produkt wraca do menu przy następnej synchronizacji, o ile spełnia pozostałe warunki publikacji."],
       ["Automatycznie", "Zmiany ceny, widoczności, tagów, kategorii, alergenów i stanu są pobierane z Dotykački."],
+      ["Dotykačka", "W kategorii „Składniki” tag INWENT jest jedyną regułą udziału produktu w inwentaryzacji: dodanie tagu włącza produkt, a jego usunięcie wyłącza produkt przy następnej synchronizacji."],
+      ["Automatycznie", "Dla produktów z kategorii „Składniki” panel blokuje ręczne zaznaczanie inwentaryzacji, aby ustawienie nie rozchodziło się z tagiem INWENT w Dotykačce."],
     ],
   },
   {
@@ -265,12 +286,13 @@ const ruleSections = [
       ["Nasz panel", "Opis z Dotykački trafia do panelu jako propozycja. Gość zobaczy dopiero opis przyjęty lub napisany w naszym panelu, więc nie powielamy roboczej treści z POS."],
       ["Nasz panel", "Zatwierdzone opisy, tłumaczenia, zdjęcia i dodatkowe informacje zapisujemy w naszej bazie; nie znikają podczas synchronizacji z POS."],
       ["Nasz panel", "Zdjęcie można pobrać z linku albo wybrać z dysku. Plik z urządzenia jest automatycznie zmniejszany do maksymalnie 1600 px i zapisywany w formacie WebP; serwer przyjmuje najwyżej 2,5 MB."],
+      ["Zawsze", "Zapis nowego opisu, parametrów lub źródła nigdy nie usuwa ani nie podmienia wcześniejszego zdjęcia. Aby zmienić obraz, najpierw klikamy „Usuń zdjęcie”, a dopiero potem importujemy nowy."],
       ["Automatycznie", "Dla produktu już opisanego kolejna dostawa nie wstrzymuje sprzedaży i nie zastępuje zatwierdzonej treści."],
       ["Nasz panel", "Przy nowym źródle można wybrać: zachowaj obecne dane, uzupełnij tylko braki albo zastąp dane informacjami z nowego źródła."],
-      ["Automatycznie", "Dla win i piw system najpierw sprawdza stronę rozpoznanego dostawcy, a produkt z EAN także w bezpłatnym katalogu Open Food Facts. EAN nie jest wymagany."],
+      ["Automatycznie", "Dla win, piw, whisky, brandy, koniaków i pozycji Alko Baru system sprawdza stronę rozpoznanego dostawcy, a produkt z EAN także w bezpłatnym katalogu Open Food Facts. EAN nie jest wymagany."],
       ["Nasz panel", "Jeśli automatyczne źródła nie wystarczą, przycisk otwiera centralne okno wyszukiwania wewnątrz panelu. Wybranie wyniku od razu pobiera pola oraz zdjęcia do akceptacji, bez opuszczania edytowanego produktu."],
       ["Automatycznie", "Na stronie produktu system odczytuje dane strukturalne sklepu, tabele oraz pary etykieta–wartość, np. Kraj—Włochy lub Grona—Montepulciano. Teksty ogólne, stopka oraz polecane produkty nie mogą nadpisywać kraju, regionu, szczepu ani stylu."],
-      ["Nasz panel", "Znalezione opisy, parametry, adresy źródeł i zdjęcia są wyłącznie propozycją. Przed publikacją wybieramy właściwe zdjęcie i akceptujemy uzupełnienie danych."],
+      ["Nasz panel", "Znalezione opisy, parametry, adresy źródeł i zdjęcia są wyłącznie propozycją. Zdjęcie wybieramy tylko dla produktu bez obrazu; istniejące pozostaje chronione podczas akceptowania pozostałych danych."],
       ["Dotykačka", "Przy cieście dostawca decyduje o oznaczeniu pracowni. Dokładne przypisanie „FONTANNA SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ” oznacza wypiek Capuccino Cafe; inne ciasta oraz własne wyroby nie otrzymują tego oznaczenia."],
       ["Automatycznie", "Przy wypieku Capuccino Cafe karta pokazuje subtelny logotyp i przycisk „Ciasto z Capuccino Cafe”. Dotknięcie otwiera opis sopockiej pracowni, bez opuszczania menu."],
       ["Automatycznie", "Na początku całej karty „Na słono” pokazujemy Andrzeja Andrzejczaka — Dr Meat — jako autora receptur i opiekuna jakości. Portret oraz rozwijana opowieść dotyczą całej karty, nie pojedynczego dania."],
@@ -328,14 +350,16 @@ const ruleSections = [
       ["Dotykačka", "Kawę sprzedawaną w ziarnach oznaczamy dwoma tagami: MENU oraz ZIARNO."],
       ["Automatycznie", "Produkty z tagiem ZIARNO trafiają na koniec zakładki Kawy do sekcji „Zabierz naszą kawę do domu”."],
       ["Dotykačka", "Chemex, AeroPress i Drip należą do podgrupy „Kawy alternatywne”. Dostępne ziarna przypisujemy do tych produktów jako dodatki z grupy „ZIARNA DO KAW ALTERNATYWNYCH”."],
-      ["Automatycznie", "Wybór ziarna jest pokazany raz dla całej podgrupy kaw alternatywnych. Nazwy, profile smakowe, opisy i tłumaczenia są pobierane oraz aktualizowane systemowo."],
+      ["Automatycznie", "Wybór metody i ziarna jest pokazany raz dla całej podgrupy kaw alternatywnych. Menu sugeruje najpierw metodę, ale oba wybory są aktywne od początku. Nazwy, profile smakowe, opisy i tłumaczenia są pobierane oraz aktualizowane systemowo."],
+      ["Automatycznie", "Karty AeroPressu, Chemexa i Dripa mają własne ilustracje i podglądy metod. Przy brakującym zdjęciu ziarna pokazujemy neutralną ikonę niebieskiego kubka, bez osobnej reklamy producenta."],
       ["Automatycznie", "W strefie kelnera dotknięcie „+” przy produkcie mającym dodatki otwiera wybór wariantu dla jednej właśnie dodawanej sztuki. Produkty bez dodatków trafiają do zamówienia od razu."],
       ["Automatycznie", "Przy jednej kawie można połączyć dowolną liczbę modyfikacji z grupy „DODATKI DO KAWY”, na przykład inne mleko i dodatkowe espresso."],
       ["Automatycznie", "Dostępne smaki syropów Leśne Życie są pobierane z aktualnego stanu magazynowego i pokazywane przy kawie, matchy, herbacie oraz lemoniadzie."],
-      ["Zawsze", "Smak syropu przy napoju korzysta z ceny dodatku „Syrop smakowy”. Produkt Leśne Życie z tagiem PÓŁKA pozostaje osobną pełną butelką z własną ceną i nie może zostać omyłkowo doliczony jako dodatek."],
+      ["Zawsze", "Przy kawie, matchy i herbacie smak korzysta z ceny dodatku „Syrop smakowy”. Przy lemoniadzie można połączyć maksymalnie dwa smaki, a ich koszt jest już zawarty w cenie lemoniady. Produkt Leśne Życie z tagiem PÓŁKA pozostaje osobną pełną butelką z własną ceną."],
+      ["Nasz panel", "Syrop Leśne Życie może mieć osobne tło podglądu. Miniatura pozostaje zdjęciem butelki, a fotografia głównego składnika wypełnia prawą połowę podglądu i nie zastępuje butelki."],
       ["Automatycznie", "Każda konfiguracja jest osobną linią zamówienia. Dwie latte mogą więc wystąpić oddzielnie: jedna standardowa, a druga np. ze zmianą mleka na kokosowe."],
       ["Automatycznie", "Cena dodatku jest doliczana do ceny jednej skonfigurowanej pozycji. Nazwa wariantu oraz jego cena pochodzą z aktualnych połączeń produktów w Dotykačce."],
-      ["Zawsze", "Przy kawie alternatywnej wybór jednego ziarna jest obowiązkowy. System nie pozwala dodać tej pozycji ani wysłać nieistniejącego dodatku lub dwóch ziaren jednocześnie."],
+      ["Zawsze", "W strefie kelnera przy kawie alternatywnej wybór dokładnie jednego ziarna jest obowiązkowy. Gość może oglądać metodę i ziarno w dowolnej kolejności, ponieważ zamówienie przekazuje obsłudze."],
     ],
   },
   {
@@ -362,6 +386,8 @@ const ruleSections = [
       ["Automatycznie", "Pojemności butelki nie publikujemy w menu ani w podglądzie szczegółów. Kod WIN wyświetlamy osobno od nazwy."],
       ["Dotykačka", "W kategorii WHISKEY pozycja bez tagu BUTELKA oznacza porcję 50 ml. Dopiero osobny produkt z tagiem BUTELKA może reprezentować sprzedaż całej butelki i mieć własną cenę."],
       ["Automatycznie", "Przy porcji whisky, bourbonu, koniaku lub brandy menu pokazuje ikonę szklanki do whisky i napis „50 ml”, bez dodatkowego słowa „szklaneczka”. Nazwa samej kategorii nadal pochodzi z Dotykački."],
+      ["Nasz panel", "Przy pozycji Alko Baru zapisujemy rodzaj, alkohol bazowy, profil smaku, sposób podania, moc, pochodzenie i objętość. Wyszukiwarka potrafi zaproponować te pola oraz zdjęcia na podstawie strony produktu."],
+      ["Automatycznie", "W menu gościa i kelnera Alko Bar ma te same filtry: Rodzaj, Baza, Profil smaku, Podanie oraz Alkoholowe/0%. Brakujące wartości mogą być wnioskowane z nazwy, opisu i podgrupy, ale ręczny zapis ma pierwszeństwo."],
     ],
   },
   {
@@ -385,7 +411,13 @@ const ruleSections = [
       ["Dotykačka", "Nazwy i identyfikatory stolików są synchronizowane z Dotykački. Kelner wybiera stolik i liczbę gości przed sprawdzeniem zamówienia."],
       ["Automatycznie", "Katalog kelnera stosuje te same reguły dostępności co menu gościa. Produkt z tagiem PÓŁKA można dodać tylko przy stanie większym od zera; pusty, zerowy lub ujemny stan ukrywa go w obu widokach."],
       ["Dotykačka", "Osobny widok „Poza menu” zawiera aktywne, nieusunięte produkty oznaczone w Dotykačce jako wyświetlane, które nie mają tagu MENU ani PÓŁKA. Kelner może je zamówić, ale nigdy nie trafiają one do karty gościa ani panelu redakcyjnego produktów menu."],
+      ["Nasz panel", "W obrębie zwykłej kategorii kelner może podejrzeć ukryte produkty z tagiem MENU. Ukrywanie i ponowne ujawnianie jest dostępne wyłącznie pracownikom, którym administrator nadał imienne uprawnienie; domyślnie jest ono wyłączone."],
+      ["Automatycznie", "Każda zmiana widoczności wykonana przez pracownika wymaga wybrania przyczyny i trafia do „Historii widoczności” z nazwą pracownika, produktem oraz czasem. Ręczne ukrycie administratora ma pierwszeństwo i nie może zostać cofnięte w strefie kelnera."],
       ["Automatycznie", "Każdy produkt ma sterowanie ilością. Przed wysłaniem można zmienić ilości, usunąć pozycje, dopisać uwagę do konkretnej konfiguracji oraz uwagę do całego zamówienia."],
+      ["Dotykačka", "Tagi WARM i COLD określają dostępność wersji ciepłej i zimnej. Jeżeli produkt ma oba, kelner wskazuje temperaturę dla dodawanej sztuki."],
+      ["Dotykačka", "Tag TOGO udostępnia kelnerowi opcję „Zapakuj na wynos”. Domyślnie produkt pozostaje zamówieniem na miejscu, a w menu gościa nie pokazujemy ikony na wynos."],
+      ["Automatycznie", "Filtry win, whisky i Alko Baru działają w strefie kelnera według tych samych cech co w menu gościa."],
+      ["Automatycznie", "Przy pełnej butelce piwa, wina, whisky lub wódki zamawianej między 21:58 a 06:02 system pokazuje ostrzeżenie o zakazie sprzedaży na wynos. Reguła nie dotyczy produktów 0% ani porcji."],
       ["Nasz panel", "Pytania ankiety definiujemy, porządkujemy, włączamy i wyłączamy w ekranie „Kelnerzy i PIN-y”. Dostępne są pytania Tak/Nie oraz wybór jednej z własnych odpowiedzi; pytanie może być obowiązkowe."],
       ["Automatycznie", "Jeżeli ankieta ma aktywne pytania, pojawia się jako ostatni krok po podsumowaniu koszyka. Odpowiedzi są zapisywane ze szkicem zamówienia bez danych osobowych gościa."],
       ["Zawsze", "Wysłanie z tabletu ma utworzyć lub uzupełnić otwarte zamówienie w Dotykačce i wydrukować właściwe bony zgodnie z konfiguracją POS. Nie może wykonywać płatności, zamykać rachunku ani wystawiać paragonu fiskalnego."],
@@ -492,6 +524,38 @@ const recognizedMenuTags = [
     kind: "coffee",
   },
   {
+    tag: "WARM",
+    aliases: "—",
+    area: "Temperatura podania",
+    effect: "Oznacza, że produkt można zamówić na ciepło. Jeżeli produkt ma także COLD, kelner musi wskazać temperaturę przed dodaniem pozycji.",
+    condition: "Działa razem z tagiem MENU. Jako jedyny tag temperatury ustawia wariant ciepły automatycznie.",
+    kind: "offer",
+  },
+  {
+    tag: "COLD",
+    aliases: "—",
+    area: "Temperatura podania",
+    effect: "Oznacza, że produkt można zamówić na zimno. Jeżeli produkt ma także WARM, kelner musi wskazać temperaturę przed dodaniem pozycji.",
+    condition: "Działa razem z tagiem MENU. Jako jedyny tag temperatury ustawia wariant zimny automatycznie.",
+    kind: "offer",
+  },
+  {
+    tag: "TOGO",
+    aliases: "—",
+    area: "Pakowanie na wynos",
+    effect: "Dodaje w menu kelnera tekstową opcję „Zapakuj na wynos”. Zwykłe dodanie produktu nadal oznacza zamówienie na miejscu.",
+    condition: "Działa razem z tagiem MENU. Nie dodaje żadnego oznaczenia ani ikony w menu gościa i nie wymusza dodatkowego pytania.",
+    kind: "offer",
+  },
+  {
+    tag: "INWENT",
+    aliases: "—",
+    area: "Inwentaryzacja składników",
+    effect: "Automatycznie obejmuje produkt z kategorii „Składniki” inwentaryzacją w naszym systemie.",
+    condition: "Działa wyłącznie w kategorii „Składniki”. Usunięcie tagu wyłącza produkt z kolejnych zleceń po synchronizacji.",
+    kind: "inventory",
+  },
+  {
     tag: "PÓŁKA",
     aliases: "POLKA",
     area: "Z półki",
@@ -502,31 +566,47 @@ const recognizedMenuTags = [
 ] as const;
 
 function visible(product: Product) {
-  if (!product.menuTagged || !product.display || product.deleted || product.manualHidden) return false;
+  if (!product.menuTagged || product.deleted) return false;
   const regularStockVisible = !(product.stockDeduct && product.stockOverdraft === "DISABLE" && Number(product.stockQuantity ?? 0) <= 0);
-  return (hasTag(product.tags, "MENU") && regularStockVisible)
-    || (isShelfProduct(product.tags) && shelfHasPositiveStock(product.stockQuantity));
+  return (hasTag(product.tags, "MENU") && regularStockVisible && menuProductVisibleForGuest(product.display, product.manualHidden, product.waiterVisibilityOverride))
+    || (isShelfProduct(product.tags) && product.display && !product.manualHidden && shelfHasPositiveStock(product.stockQuantity));
 }
 
 function visibilityLabel(product: Product) {
   const regularStockVisible = !(product.stockDeduct && product.stockOverdraft === "DISABLE" && Number(product.stockQuantity ?? 0) <= 0);
-  const regular = hasTag(product.tags, "MENU") && regularStockVisible;
-  const shelf = isShelfProduct(product.tags) && shelfHasPositiveStock(product.stockQuantity);
+  const regular = hasTag(product.tags, "MENU") && regularStockVisible && menuProductVisibleForGuest(product.display, product.manualHidden, product.waiterVisibilityOverride);
+  const shelf = isShelfProduct(product.tags) && product.display && !product.manualHidden && shelfHasPositiveStock(product.stockQuantity);
   if (regular && shelf) return "Widoczny w menu i Z PÓŁKI";
   if (shelf) return "Widoczny w Z PÓŁKI";
   if (regular) return "Widoczny w menu";
   return "Ukryty w menu";
 }
 
+function normalizedProductSearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ł/g, "l")
+    .replace(/Ł/g, "L")
+    .toLocaleLowerCase("pl")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatVisibilityDate(value: string) {
+  return new Intl.DateTimeFormat("pl-PL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
 function productListStatus(product: Product): { kind: ProductStatusKind; className: string; label: string } {
   if (product.manualHidden) return { kind: "menu-hidden", className: "admin-dot is-menu-hidden", label: "Ukryty ręcznie tylko w naszym cyfrowym menu" };
+  if (product.waiterVisibilityOverride === false) return { kind: "menu-hidden", className: "admin-dot is-menu-hidden", label: "Ukryty przez uprawnionego pracownika — szczegóły w Historii widoczności" };
   if (!visible(product)) return { kind: "dotykacka-hidden", className: "admin-dot", label: "Ukryty w menu: brak tagu MENU/PÓŁKA, ustawienia Dotykački lub brak stanu" };
   if (!product.contentApproved) return { kind: "needs-review", className: "admin-dot needs-review", label: `${visibilityLabel(product)}, ale wymaga ręcznego przeglądu i zatwierdzenia treści` };
   return { kind: "approved", className: "admin-dot is-visible", label: `${visibilityLabel(product)} — zatwierdzony` };
 }
 
 export default function AdminPanel() {
-  const [view, setView] = useState<"connection" | "products" | "categories" | "productOrder" | "offers" | "promotions" | "audit" | "rules">("products");
+  const [view, setView] = useState<"connection" | "products" | "categories" | "productOrder" | "offers" | "promotions" | "audit" | "visibilityHistory" | "rules">("products");
   const [products, setProducts] = useState<Product[]>([]);
   const [wineSources, setWineSources] = useState<WineSource[]>([]);
   const [menuCategoryRows, setMenuCategoryRows] = useState<MenuCategory[]>([]);
@@ -538,6 +618,7 @@ export default function AdminPanel() {
   const [draggedProductGroupName, setDraggedProductGroupName] = useState<string | undefined>();
   const [draggedShelfGroupId, setDraggedShelfGroupId] = useState<number | null>(null);
   const [promotionRows, setPromotionRows] = useState<PromotionRow[]>([]);
+  const [visibilityEvents, setVisibilityEvents] = useState<VisibilityEvent[]>([]);
   const [offerSettings, setOfferSettings] = useState<OfferSettings | null>(null);
   const [draggedProductId, setDraggedProductId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -605,6 +686,30 @@ export default function AdminPanel() {
     setOfferSettings(body);
   }
 
+  async function loadVisibilityEvents() {
+    setError("");
+    const response = await fetch("/api/admin/menu-visibility", { cache: "no-store" });
+    const body = await response.json().catch(() => ({})) as { events?: VisibilityEvent[]; error?: string };
+    if (!response.ok) return setError(body.error ?? "Nie udało się pobrać historii widoczności.");
+    setVisibilityEvents(body.events ?? []);
+  }
+
+  async function resetVisibilityOverride(productId: number) {
+    setSaving(true); setError(""); setMessage("");
+    const response = await fetch("/api/admin/menu-visibility", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ productId }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) setError(body.error ?? "Nie udało się przywrócić ustawienia z Dotykački.");
+    else {
+      setMessage("Usunięto wyjątek pracownika. Widoczność produktu znów wynika z Dotykački i ustawień administratora.");
+      await Promise.all([loadProducts(productId), loadVisibilityEvents()]);
+    }
+    setSaving(false);
+  }
+
   async function loadDotykackaStatus() {
     setError("");
     const response = await fetch("/api/admin/dotykacka/status", { cache: "no-store" });
@@ -637,14 +742,18 @@ export default function AdminPanel() {
   useEffect(() => { if (view === "promotions") void loadPromotions(); }, [view]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (view === "offers") void loadOffers(); }, [view]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (view === "visibilityHistory") void loadVisibilityEvents(); }, [view]);
 
   const categories = useMemo(() => ["Wszystkie", ...Array.from(new Set(products.map((product) => product.category ?? "Bez kategorii")))], [products]);
+  const forestLifeProducts = useMemo(() => products.filter((product) => isForestLifeSyrupCategory(product.category)), [products]);
+  const forestLifeCategory = forestLifeProducts[0]?.category ?? null;
   const productsMatchingMainFilters = useMemo(() => {
-    const phrase = query.trim().toLocaleLowerCase("pl");
+    const phrase = normalizedProductSearch(query);
     return products.filter((product) =>
       (category === "Wszystkie" || (product.category ?? "Bez kategorii") === category)
       && (visibilityFilter === "all" || (visibilityFilter === "visible" ? visible(product) : !visible(product)))
-      && (!phrase || `${product.name} ${product.nameEn ?? ""} ${product.tags.join(" ")}`.toLocaleLowerCase("pl").includes(phrase))
+      && (!phrase || normalizedProductSearch(`${product.name} ${product.nameEn ?? ""} ${product.category ?? ""} ${product.tags.join(" ")}`).includes(phrase))
     );
   }, [products, query, category, visibilityFilter]);
   const productStatusCounts = useMemo(() => {
@@ -671,6 +780,8 @@ export default function AdminPanel() {
     if (/(?:^|[\s_\-/])kielisz(?:ek|ki)(?:$|[\s_\-/])/i.test(product.name) && !product.tags.some((tag) => tag.trim().toLocaleLowerCase("pl") === "kieliszek")) add("wine", "Kieliszek jest ukryty: brak tagu KIELISZEK");
     if (kind === "beer" && !product.attributes?.alcoholPercentage?.trim()) add("beer", "Brak zawartości alkoholu");
     if (kind === "whisky" && !product.attributes?.spiritType?.trim()) add("description", "Brak rodzaju trunku (whisky, bourbon, koniak lub brandy)");
+    if (kind === "cocktails" && !product.attributes?.cocktailType?.trim()) add("description", "Brak rodzaju pozycji Alko Baru — nie będzie można filtrować jej po rodzaju");
+    if (kind === "cocktails" && !product.attributes?.cocktailBase?.trim()) add("description", "Brak alkoholu bazowego — nie będzie można filtrować pozycji po bazie");
     return issues;
   }), [products]);
 
@@ -768,6 +879,7 @@ export default function AdminPanel() {
     setError("");
     const form = new FormData(event.currentTarget);
     const localImage = form.get("imageFile");
+    const backdropImage = form.get("backdropFile");
     const galleryFiles = form.getAll("galleryFiles").filter((item): item is File => item instanceof File && item.size > 0);
     const staffMediaFiles = form.getAll("staffMediaFiles").filter((item): item is File => item instanceof File && item.size > 0);
     const payload: Record<string, unknown> = {};
@@ -821,6 +933,19 @@ export default function AdminPanel() {
           setError(`Pozostałe zmiany zostały zapisane, ale galeria nie: ${galleryError instanceof Error ? galleryError.message : "nieznany błąd"}`);
         }
       }
+      let backdropSaved = false;
+      if (backdropImage instanceof File && backdropImage.size > 0) {
+        try {
+          const upload = new FormData();
+          upload.append("image", await prepareLocalImage(backdropImage));
+          const backdropResponse = await fetch(`/api/admin/products/${selected.id}/backdrop`, { method: "POST", body: upload });
+          const backdropBody = await backdropResponse.json().catch(() => ({})) as { error?: string };
+          if (!backdropResponse.ok) throw new Error(backdropBody.error ?? "Nie udało się przesłać tła podglądu.");
+          backdropSaved = true;
+        } catch (backdropError) {
+          setError(`Pozostałe zmiany zostały zapisane, ale tło podglądu nie: ${backdropError instanceof Error ? backdropError.message : "nieznany błąd"}`);
+        }
+      }
       let staffMediaSaved = 0;
       if (staffMediaFiles.length > 0) {
         try {
@@ -837,8 +962,8 @@ export default function AdminPanel() {
           setError(`Tekst instrukcji i pozostałe zmiany zostały zapisane, ale jej pliki nie: ${mediaError instanceof Error ? mediaError.message : "nieznany błąd"}`);
         }
       }
-      if ((!localImage || !(localImage instanceof File) || !localImage.size || imageSaved) && (!galleryFiles.length || galleryImagesSaved > 0) && (!staffMediaFiles.length || staffMediaSaved > 0)) {
-        const suffix = `${imageSaved ? " Zdjęcie produktu zostało zmniejszone i zapisane na serwerze." : ""}${galleryImagesSaved ? ` Dodano ${galleryImagesSaved} zdjęć do galerii.` : ""}${staffMediaSaved ? ` Dodano ${staffMediaSaved} plików instrukcji.` : ""}`;
+      if ((!localImage || !(localImage instanceof File) || !localImage.size || imageSaved) && (!backdropImage || !(backdropImage instanceof File) || !backdropImage.size || backdropSaved) && (!galleryFiles.length || galleryImagesSaved > 0) && (!staffMediaFiles.length || staffMediaSaved > 0)) {
+        const suffix = `${imageSaved ? " Zdjęcie produktu zostało zmniejszone i zapisane na serwerze." : ""}${backdropSaved ? " Tło podglądu zostało zoptymalizowane i zapisane." : ""}${galleryImagesSaved ? ` Dodano ${galleryImagesSaved} zdjęć do galerii.` : ""}${staffMediaSaved ? ` Dodano ${staffMediaSaved} plików instrukcji.` : ""}`;
         setMessage(body.warning ? `Zapisano: ${selected.name}. ${body.warning}${suffix}` : `Zapisano: ${selected.name}.${suffix}`);
       }
       await loadProducts(selected.id);
@@ -887,6 +1012,42 @@ export default function AdminPanel() {
     }
   }
 
+  async function importBackdropFromUrl(sourceUrl: string) {
+    if (!selected) return;
+    setSaving(true); setMessage(""); setError("");
+    try {
+      const response = await fetch(`/api/admin/products/${selected.id}/backdrop`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imageSourceUrl: sourceUrl }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Nie udało się pobrać tła podglądu.");
+      setMessage(`Tło podglądu produktu ${selected.name} zostało pobrane, zoptymalizowane i zapisane.`);
+      await loadProducts(selected.id);
+    } catch (backdropError) {
+      setError(backdropError instanceof Error ? backdropError.message : "Nie udało się pobrać tła podglądu.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeProductBackdrop() {
+    if (!selected || !window.confirm(`Usunąć tło podglądu produktu „${selected.name}”? Zdjęcie butelki pozostanie bez zmian.`)) return;
+    setSaving(true); setMessage(""); setError("");
+    try {
+      const response = await fetch(`/api/admin/products/${selected.id}/backdrop`, { method: "DELETE" });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Nie udało się usunąć tła podglądu.");
+      setMessage(`Usunięto tło podglądu produktu ${selected.name}. Zdjęcie butelki pozostało bez zmian.`);
+      await loadProducts(selected.id);
+    } catch (backdropError) {
+      setError(backdropError instanceof Error ? backdropError.message : "Nie udało się usunąć tła podglądu.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function removeGalleryImage(imagePath: string) {
     if (!selected || !window.confirm(`Usunąć to zdjęcie z galerii produktu „${selected.name}”?`)) return;
     setSaving(true); setMessage(""); setError("");
@@ -902,6 +1063,26 @@ export default function AdminPanel() {
       await loadProducts(selected.id);
     } catch (imageError) {
       setError(imageError instanceof Error ? imageError.message : "Nie udało się usunąć zdjęcia z galerii.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setPrimaryGalleryImage(imagePath: string) {
+    if (!selected || selected.imagePath === imagePath) return;
+    setSaving(true); setMessage(""); setError("");
+    try {
+      const response = await fetch(`/api/admin/products/${selected.id}/gallery`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ imagePath }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Nie udało się ustawić zdjęcia głównego.");
+      setMessage(`Ustawiono pierwsze zdjęcie galerii produktu ${selected.name}.`);
+      await loadProducts(selected.id);
+    } catch (imageError) {
+      setError(imageError instanceof Error ? imageError.message : "Nie udało się ustawić zdjęcia głównego.");
     } finally {
       setSaving(false);
     }
@@ -1216,6 +1397,7 @@ export default function AdminPanel() {
         <button className={view === "offers" ? "is-active" : ""} onClick={() => setView("offers")}>Oferty czasowe</button>
         <button className={view === "promotions" ? "is-active" : ""} onClick={() => setView("promotions")}>Polecane</button>
         <button className={view === "audit" ? "is-active" : ""} onClick={() => setView("audit")}>Kontrola karty{auditIssues.length ? ` (${auditIssues.length})` : ""}</button>
+        <button className={view === "visibilityHistory" ? "is-active" : ""} onClick={() => setView("visibilityHistory")}>Historia widoczności</button>
         <button className={view === "rules" ? "is-active" : ""} onClick={() => setView("rules")}>Dokumentacja i reguły</button>
       </nav>
 
@@ -1242,14 +1424,21 @@ export default function AdminPanel() {
               <i className="admin-dot is-menu-hidden" />ukryte ręcznie w naszym menu <b>{productStatusCounts["menu-hidden"]}</b>
             </button>
           </div>
-          <input className="admin-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Szukaj produktu…" />
+          <input className="admin-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Szukaj produktu lub kategorii…" />
+          {forestLifeCategory && <button type="button" className={category === forestLifeCategory ? "admin-secondary is-active" : "admin-secondary"} onClick={() => {
+            setQuery("");
+            setVisibilityFilter("all");
+            setProductStatusFilter("all");
+            setCategory(forestLifeCategory);
+            setSelectedId(forestLifeProducts[0]?.id ?? null);
+          }}>Leśne Życie · zdjęcia i opisy ({forestLifeProducts.length})</button>}
           <select className="admin-select" aria-label="Widoczność produktów" value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value as VisibilityFilter)}>
             <option value="visible">Widoczne w menu</option>
             <option value="hidden">Ukryte</option>
             <option value="all">Wszystkie</option>
           </select>
           <select className="admin-select" value={category} onChange={(event) => setCategory(event.target.value)}>
-            {categories.map((item) => <option key={item}>{item}</option>)}
+            {categories.map((item) => <option value={item} key={item}>{item.trim()}</option>)}
           </select>
           <div className="admin-product-list">
             {loading && <p className="admin-muted">Pobieram produkty…</p>}
@@ -1265,8 +1454,8 @@ export default function AdminPanel() {
         </aside>
 
         <section className="admin-editor">
-          {!selected && <div className="admin-empty"><h2>Wybierz produkt</h2><p>Po lewej pojawią się towary oznaczone w Dotykačce atrybutem „menu”.</p></div>}
-          {selected && <ProductForm key={`${selected.id}-${selected.syncedAt}-${selected.contentUpdatedAt ?? "new"}`} product={selected} wineSources={wineSources} saving={saving} discovering={enriching} feedback={error || message} feedbackIsError={Boolean(error)} onSubmit={save} onImageImport={importImageFromUrl} onRemoveImage={removeProductImage} onRemoveGalleryImage={removeGalleryImage} onRemoveStaffMedia={removeStaffMedia} onDiscover={discoverProductInformation} onDecision={decideWineSource} />}
+          {!selected && <div className="admin-empty"><h2>Wybierz produkt</h2><p>Po lewej pojawiają się produkty menu, towary objęte inwentaryzacją oraz wszystkie syropy Leśne Życie.</p></div>}
+          {selected && <ProductForm key={`${selected.id}-${selected.syncedAt}-${selected.contentUpdatedAt ?? "new"}`} product={selected} wineSources={wineSources} saving={saving} discovering={enriching} feedback={error || message} feedbackIsError={Boolean(error)} onSubmit={save} onImageImport={importImageFromUrl} onRemoveImage={removeProductImage} onBackdropImport={importBackdropFromUrl} onRemoveBackdrop={removeProductBackdrop} onRemoveGalleryImage={removeGalleryImage} onSetPrimaryGalleryImage={setPrimaryGalleryImage} onRemoveStaffMedia={removeStaffMedia} onDiscover={discoverProductInformation} onDecision={decideWineSource} />}
         </section>
       </section> : view === "categories" ? <section className="admin-category-workspace">
         <div className="admin-category-heading">
@@ -1395,6 +1584,31 @@ export default function AdminPanel() {
             <p>{issue.message}</p><b>Edytuj →</b>
           </button>)}
         </div>
+      </section> : view === "visibilityHistory" ? <section className="admin-category-workspace admin-visibility-workspace">
+        <div className="admin-category-heading">
+          <div><span className="admin-eyebrow">Kontrola zmian pracowników</span><h2>Historia widoczności menu</h2></div>
+          <p>Rejestr pokazuje kto, kiedy i z jakiego powodu ukrył albo ponownie udostępnił produkt w karcie gościa. Uprawnienie nadajesz osobno każdemu pracownikowi w ekranie „Kelnerzy i PIN-y”.</p>
+        </div>
+        <div className={visibilityEvents.length ? "admin-audit-summary" : "admin-audit-summary is-clean"}>
+          <strong>{visibilityEvents.length ? `${visibilityEvents.length} ostatnich zmian` : "Brak zmian wykonanych przez pracowników"}</strong>
+          <span>Domyślnie pracownik nie ma prawa zmieniać widoczności. Raport przechowuje maksymalnie 500 najnowszych wpisów na ekranie.</span>
+        </div>
+        <div className="admin-visibility-list">
+          {visibilityEvents.map((event) => <article key={event.id}>
+            <span className={event.visible ? "is-shown" : "is-hidden"}>{event.visible ? "UJAWNIONO" : "UKRYTO"}</span>
+            <div className="admin-visibility-product">
+              <strong>{event.productName}</strong>
+              <small>{event.categoryName}</small>
+            </div>
+            <div className="admin-visibility-person">
+              <strong>{event.employeeName}</strong>
+              <small>{formatVisibilityDate(event.createdAt)}</small>
+            </div>
+            <p>{event.reason}</p>
+            {event.productId && <div className="admin-visibility-actions"><button type="button" className="admin-secondary" onClick={() => editAuditProduct(event.productId!)}>Otwórz produkt</button><button type="button" className="admin-secondary" disabled={saving} onClick={() => void resetVisibilityOverride(event.productId!)}>Przywróć wg Dotykački</button></div>}
+          </article>)}
+          {!visibilityEvents.length && <p className="admin-muted">Historia pojawi się po pierwszej zmianie wykonanej przez uprawnionego pracownika.</p>}
+        </div>
       </section> : <RulesView />}
     </main>
   );
@@ -1489,8 +1703,8 @@ function RulesView() {
     </aside>
     <section className="admin-tag-reference" aria-labelledby="admin-tag-reference-title">
       <header>
-        <div><span className="admin-eyebrow">Słownik Dotykački</span><h3 id="admin-tag-reference-title">Tagi rozpoznawane przez menu</h3></div>
-        <p>Wielkość liter nie ma znaczenia. Tagi sumują swoje działanie: <strong>MENU</strong> publikuje produkt w zwykłych sekcjach, a <strong>PÓŁKA</strong> dodaje go również do karty „Z PÓŁKI”. Sam tag PÓŁKA publikuje produkt tylko w tej karcie.</p>
+        <div><span className="admin-eyebrow">Słownik Dotykački</span><h3 id="admin-tag-reference-title">Tagi rozpoznawane przez system</h3></div>
+        <p>Wielkość liter nie ma znaczenia. Tagi sumują swoje działanie: <strong>MENU</strong> publikuje produkt w zwykłych sekcjach, <strong>PÓŁKA</strong> dodaje go do karty „Z PÓŁKI”, a <strong>INWENT</strong> steruje inwentaryzacją kategorii „Składniki”.</p>
       </header>
       <div className="admin-tag-table-scroll">
         <table>
@@ -1516,7 +1730,7 @@ function RulesView() {
         <ol>{section.rules.map(([kind, text], index) => <li key={`${kind}-${index}`}><span data-kind={kind === "Dotykačka" ? "pos" : kind === "Nasz panel" ? "panel" : kind === "Automatycznie" ? "auto" : "always"}>{kind}</span><p>{text}</p></li>)}</ol>
       </article>)}
     </div>
-    <p className="admin-rules-footer">Ostatnia aktualizacja zasad: 14 września 2026. Reguły aktualizujemy razem z rozwojem systemu.</p>
+    <p className="admin-rules-footer">Ostatnia aktualizacja zasad: 20 września 2026. Reguły aktualizujemy razem z rozwojem systemu.</p>
   </section>;
 }
 
@@ -1545,7 +1759,7 @@ function sourceHostname(value: string) {
   try { return new URL(value).hostname; } catch { return "źródło internetowe"; }
 }
 
-function ProductForm({ product, wineSources, saving, discovering, feedback, feedbackIsError, onSubmit, onImageImport, onRemoveImage, onRemoveGalleryImage, onRemoveStaffMedia, onDiscover, onDecision }: {
+function ProductForm({ product, wineSources, saving, discovering, feedback, feedbackIsError, onSubmit, onImageImport, onRemoveImage, onBackdropImport, onRemoveBackdrop, onRemoveGalleryImage, onSetPrimaryGalleryImage, onRemoveStaffMedia, onDiscover, onDecision }: {
   product: Product;
   wineSources: WineSource[];
   saving: boolean;
@@ -1555,13 +1769,17 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onImageImport: (sourceUrl: string) => Promise<void>;
   onRemoveImage: () => Promise<void>;
+  onBackdropImport: (sourceUrl: string) => Promise<void>;
+  onRemoveBackdrop: () => Promise<void>;
   onRemoveGalleryImage: (imagePath: string) => Promise<void>;
+  onSetPrimaryGalleryImage: (imagePath: string) => Promise<void>;
   onRemoveStaffMedia: (mediaId: string) => Promise<void>;
   onDiscover: (sourceUrl?: string, sourceText?: string) => void;
   onDecision: (sourceId: number, decision: "KEEP_CURRENT" | "FILL_MISSING" | "REPLACE", imageSourceUrl?: string) => void;
 }) {
   const [descriptionPl, setDescriptionPl] = useState(product.descriptionPl ?? "");
   const [imageSourceUrl, setImageSourceUrl] = useState(product.imageSourceUrl ?? "");
+  const [backdropSourceUrl, setBackdropSourceUrl] = useState(product.detailBackdropSourceUrl ?? "");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [selectedImages, setSelectedImages] = useState<Record<number, string>>({});
   const [manualSourceUrl, setManualSourceUrl] = useState("");
@@ -1575,10 +1793,11 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
   const [manualSearchKey, setManualSearchKey] = useState("");
   const [manualSearchResultPage, setManualSearchResultPage] = useState(0);
   const productKind = product.wineCode ? "wine" : sectionFor(product.category);
+  const forestLifeSyrup = isForestLifeSyrupCategory(product.category);
   const galleryImages = Array.from(new Set([product.imagePath, ...(product.galleryPaths ?? [])].filter((imagePath): imagePath is string => Boolean(imagePath)))).slice(0, 5);
   const attributes = product.attributes ?? {};
   const informationDiscoveryEnabled = true;
-  const searchKind = productKind === "wine" ? "wino" : productKind === "whisky" ? "whisky koniak brandy" : productKind === "beer" ? "piwo" : "produkt";
+  const searchKind = productKind === "wine" ? "wino" : productKind === "whisky" ? "whisky koniak brandy" : productKind === "beer" ? "piwo" : productKind === "cocktails" ? "alkohol drink koktajl skład profil smakowy zdjęcie" : "produkt";
 
   useEffect(() => {
     document.documentElement.dataset.adminFormDirty = "false";
@@ -1680,7 +1899,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
         <summary><b>Strefa robocza</b> · informacje i zdjęcia do sprawdzenia {wineSources.some((source) => source.status === "PENDING")&&<span>{wineSources.filter((source) => source.status === "PENDING").length}</span>}</summary>
         <fieldset>
         <legend>Wyszukiwanie danych o produkcie <small>nie są jeszcze treścią menu</small></legend>
-        <p className="admin-muted">Najpierw sprawdzamy stronę rozpoznanego dostawcy, a przy dostępnym EAN także bezpłatny katalog Open Food Facts. EAN pomaga, ale jego brak nie zatrzymuje procesu. Żadna propozycja nie trafia do menu bez Twojej decyzji.</p>
+        <p className="admin-muted">{productKind === "cocktails" ? "Dla pozycji Alko Baru szukamy rodzaju, alkoholu bazowego, profilu smaku, sposobu podania, pochodzenia, procentu alkoholu, pojemności oraz zdjęć. Najpierw sprawdzamy stronę rozpoznanego dostawcy, a następnie inne publiczne źródła. Żadna propozycja nie trafia do menu bez Twojej decyzji." : "Najpierw sprawdzamy stronę rozpoznanego dostawcy, a przy dostępnym EAN także bezpłatny katalog Open Food Facts. EAN pomaga, ale jego brak nie zatrzymuje procesu. Żadna propozycja nie trafia do menu bez Twojej decyzji."}</p>
         <div className="admin-enrichment-actions">
           <button type="button" className="admin-primary" disabled={discovering || saving} onClick={() => onDiscover()}>{discovering ? "Szukam informacji…" : "Sprawdź bezpłatne źródła"}</button>
           <button type="button" className="admin-secondary" aria-haspopup="dialog" onClick={openManualSearch}>Szukaj ręcznie</button>
@@ -1705,7 +1924,8 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
         {wineSources.map((source) => {
           const proposal = source.proposedContent ?? {};
           const candidates = proposal.imageCandidates ?? (proposal.imageSourceUrl ? [{ url: proposal.imageSourceUrl, sourceUrl: source.sourceUrl ?? proposal.imageSourceUrl }] : []);
-          const chosenImage = selectedImages[source.id] ?? (candidates.length === 1 ? candidates[0].url : "");
+          const preserveCurrentImage = Boolean(product.imagePath || product.imageSourceUrl);
+          const chosenImage = preserveCurrentImage ? "" : selectedImages[source.id] ?? (candidates.length === 1 ? candidates[0].url : "");
           const sourceUrls = Array.from(new Set([...(proposal.sourceUrls ?? []), source.sourceUrl, source.supplierWebsite].filter((url): url is string => Boolean(url))));
           const proposalEntries: Array<[string, string]> = [
             ...Object.entries(proposal).flatMap(([key, value]) =>
@@ -1723,17 +1943,17 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
             {sourceUrls.length > 0 && <div className="admin-source-links"><b>Sprawdzone adresy</b>{sourceUrls.map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}</div>}
             {proposalEntries.length > 0 && <dl className="admin-source-proposal">{proposalEntries.map(([key, value]) => <div key={key}><dt>{proposalLabels[key] ?? key}</dt><dd>{value}</dd></div>)}</dl>}
             {candidates.length > 0 && <div className="admin-image-candidates">
-              <b>{candidates.length > 1 ? "Wybierz zdjęcie do zapisania" : "Znalezione zdjęcie"}</b>
+              <b>{preserveCurrentImage ? "Znalezione zdjęcia — obecne zdjęcie pozostanie bez zmian" : candidates.length > 1 ? "Wybierz zdjęcie do zapisania" : "Znalezione zdjęcie"}</b>
               <div>{candidates.map((candidate) => <label key={candidate.url} className={chosenImage === candidate.url ? "is-selected" : ""}>
-                <input type="radio" name={`source-image-${source.id}`} value={candidate.url} checked={chosenImage === candidate.url} onChange={() => setSelectedImages((current) => ({ ...current, [source.id]: candidate.url }))} />
+                {!preserveCurrentImage && <input type="radio" name={`source-image-${source.id}`} value={candidate.url} checked={chosenImage === candidate.url} onChange={() => setSelectedImages((current) => ({ ...current, [source.id]: candidate.url }))} />}
                 <img src={candidate.url} alt="Kandydat zdjęcia produktu" />
                 <span>{candidate.label || sourceHostname(candidate.sourceUrl)}</span>
               </label>)}</div>
             </div>}
             {source.status === "PENDING" ? <div className="admin-source-decisions">
               <button type="button" disabled={saving} onClick={() => onDecision(source.id, "KEEP_CURRENT")}>Odrzuć propozycję</button>
-              <button type="button" disabled={saving || (candidates.length > 1 && !chosenImage)} onClick={() => onDecision(source.id, "FILL_MISSING", chosenImage)}>Uzupełnij tylko braki</button>
-              <button type="button" disabled={saving || (candidates.length > 1 && !chosenImage)} onClick={() => onDecision(source.id, "REPLACE", chosenImage)}>Zastosuj wybrane dane</button>
+              <button type="button" disabled={saving || (!preserveCurrentImage && candidates.length > 1 && !chosenImage)} onClick={() => onDecision(source.id, "FILL_MISSING", chosenImage || undefined)}>Uzupełnij tylko braki</button>
+              <button type="button" disabled={saving || (!preserveCurrentImage && candidates.length > 1 && !chosenImage)} onClick={() => onDecision(source.id, "REPLACE", chosenImage || undefined)}>Zastosuj wybrane dane</button>
             </div> : <span className="admin-source-result">{source.decision === "KEEP_CURRENT" ? "Propozycja odrzucona — zachowano obecne dane" : "Źródło zaakceptowane — dane przeniesiono do pól publikacyjnych poniżej"}</span>}
           </article>;
         })}
@@ -1766,7 +1986,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
         <div className="admin-gallery-heading"><span>Galeria „Na słono”</span><b>{galleryImages.length}/5 zdjęć</b></div>
         <div>{galleryImages.map((imagePath, index) => <figure key={imagePath}>
           <img src={imagePath} alt={`${product.name} — zdjęcie ${index + 1}`} />
-          <figcaption>{index === 0 ? "Zdjęcie główne" : `Zdjęcie ${index + 1}`}<button type="button" className="admin-image-remove" disabled={saving} onClick={() => void onRemoveGalleryImage(imagePath)}>Usuń</button></figcaption>
+          <figcaption><span>{index === 0 ? "Zdjęcie główne" : `Zdjęcie ${index + 1}`}</span><button type="button" className={index === 0 ? "admin-gallery-primary is-primary" : "admin-gallery-primary"} aria-pressed={index === 0} disabled={saving || index === 0} onClick={() => void onSetPrimaryGalleryImage(imagePath)}>{index === 0 ? "✓ Pierwsze w menu" : "Ustaw jako pierwsze"}</button><button type="button" className="admin-image-remove" disabled={saving} onClick={() => void onRemoveGalleryImage(imagePath)}>Usuń</button></figcaption>
         </figure>)}</div>
       </div> : (product.imagePath || product.imageSourceUrl) && <div className="admin-image-preview">
         <img src={product.imagePath ?? product.imageSourceUrl ?? ""} alt={`Podgląd: ${product.name}`} />
@@ -1775,15 +1995,15 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
 
       <fieldset className="admin-content-fields">
         <legend>Zdjęcie i opis produktu</legend>
-        <p className="admin-field-help">{productKind === "food" ? "Zdjęcie pobrane z linku staje się zdjęciem głównym. Z urządzenia możesz dodać kilka zdjęć naraz — galeria mieści łącznie maksymalnie 5." : "Możesz wkleić adres zdjęcia albo wybrać plik ze swojego urządzenia. Wybrany plik ma pierwszeństwo przed linkiem."}</p>
+        <p className="admin-field-help">{productKind === "food" ? "Zdjęcie pobrane z linku staje się zdjęciem głównym. Z urządzenia możesz dodać kilka zdjęć naraz — galeria mieści łącznie maksymalnie 5." : product.imagePath || product.imageSourceUrl ? "Obecne zdjęcie jest chronione. Aby wstawić inne, najpierw użyj przycisku „Usuń zdjęcie” przy podglądzie." : "Możesz wkleić adres zdjęcia albo wybrać plik ze swojego urządzenia."}</p>
         <div className="admin-form-grid">
           <label>Nazwa angielska<input name="nameEn" defaultValue={product.nameEn ?? ""} /></label>
-          <div className="admin-wide admin-image-url-row">
+          {!(product.imagePath || product.imageSourceUrl) && <div className="admin-wide admin-image-url-row">
             <label>Link do zdjęcia — pobierzemy kopię<input name="imageSourceUrl" type="url" placeholder="https://…" value={imageSourceUrl} onChange={(event) => setImageSourceUrl(event.target.value)} /></label>
             <button type="button" className="admin-secondary" disabled={saving || !imageSourceUrl.trim()} onClick={() => void onImageImport(imageSourceUrl.trim())}>{saving ? "Pobieram…" : "Pobierz i zapisz zdjęcie"}</button>
             <small>Zdjęcie zapisuje się od razu w naszym zbiorze, niezależnie od pozostałych pól formularza.</small>
-          </div>
-          {productKind === "food" ? <label className="admin-wide admin-file-field">Dodaj zdjęcia do galerii<input name="galleryFiles" type="file" multiple disabled={galleryImages.length >= 5} accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>{galleryImages.length >= 5 ? "Galeria jest pełna. Usuń zdjęcie, aby dodać inne." : `Możesz dodać jeszcze ${5 - galleryImages.length} ${5 - galleryImages.length === 1 ? "zdjęcie" : "zdjęcia"}.`} Każdy plik może mieć do 50 MB; system automatycznie go zmniejszy i zoptymalizuje.</small></label> : <label className="admin-wide admin-file-field">Albo wybierz zdjęcie z dysku<input name="imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>Zdjęcie źródłowe może mieć do 50 MB. System automatycznie zmniejszy je do 1600 px i zapisze plik nie większy niż około 2,4 MB.</small></label>}
+          </div>}
+          {productKind === "food" ? <label className="admin-wide admin-file-field">Dodaj zdjęcia do galerii<input name="galleryFiles" type="file" multiple disabled={galleryImages.length >= 5} accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>{galleryImages.length >= 5 ? "Galeria jest pełna. Usuń zdjęcie, aby dodać inne." : `Możesz dodać jeszcze ${5 - galleryImages.length} ${5 - galleryImages.length === 1 ? "zdjęcie" : "zdjęcia"}.`} Każdy plik może mieć do 50 MB; system automatycznie go zmniejszy i zoptymalizuje.</small></label> : !(product.imagePath || product.imageSourceUrl) && <label className="admin-wide admin-file-field">Albo wybierz zdjęcie z dysku<input name="imageFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>Zdjęcie źródłowe może mieć do 50 MB. System automatycznie zmniejszy je do 1600 px i zapisze plik nie większy niż około 2,4 MB.</small></label>}
           {product.sourceDescription && <div className="admin-wide admin-description-proposal"><span className="admin-eyebrow">Propozycja z Dotykački</span><p>{product.sourceDescription}</p><button type="button" className="admin-secondary" onClick={() => { setDescriptionPl(product.sourceDescription ?? ""); markFormDirty(); }}>Użyj jako opisu w menu</button></div>}
           <label className="admin-wide">Opis polski<textarea name="descriptionPl" rows={4} value={descriptionPl} onChange={(event) => setDescriptionPl(event.target.value)} placeholder="Opis widoczny dla gościa — możesz go poprawić przed publikacją" /></label>
           <label className="admin-wide">Opis angielski<textarea name="descriptionEn" rows={4} defaultValue={product.descriptionEn ?? ""} /></label>
@@ -1791,6 +2011,22 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
         <div className="admin-checks"><label><input type="checkbox" name="autoTranslate" defaultChecked={product.autoTranslate !== false} /> Automatycznie aktualizuj wersję angielską po zmianie polskiej treści</label></div>
         <p className="admin-field-help">Tłumaczenie obejmuje nazwę i opis produktu oraz kraj, region, styl i walory smakowe wina. Nazwy własne win pozostają bez zmian.</p>
       </fieldset>
+
+      {forestLifeSyrup && <fieldset className="admin-syrup-backdrop-fieldset">
+        <legend>Tło podglądu syropu <small>oddzielne od zdjęcia butelki</small></legend>
+        <p className="admin-field-help">Miniatura i zdjęcie główne pozostają bez zmian. To zdjęcie wypełni prawą połowę podglądu produktu, a butelka zostanie pokazana na nim na pierwszym planie.</p>
+        {(product.detailBackdropPath || product.detailBackdropSourceUrl) ? <div className="admin-syrup-backdrop-preview">
+          <div>{product.detailBackdropPath && <img className="admin-syrup-backdrop-photo" src={product.detailBackdropPath} alt="Tło podglądu" />}{(product.imagePath || product.imageSourceUrl) && <img className="admin-syrup-backdrop-bottle" src={product.imagePath ?? product.imageSourceUrl ?? ""} alt={`Butelka ${product.name}`} />}<span>LEŚNE ŻYCIE</span></div>
+          <button type="button" className="admin-image-remove" disabled={saving} onClick={() => void onRemoveBackdrop()}>Usuń tło</button>
+        </div> : <div className="admin-form-grid">
+          <div className="admin-wide admin-image-url-row">
+            <label>Link do zdjęcia składnika<input type="url" placeholder="https://…" value={backdropSourceUrl} onChange={(event) => setBackdropSourceUrl(event.target.value)} /></label>
+            <button type="button" className="admin-secondary" disabled={saving || !backdropSourceUrl.trim()} onClick={() => void onBackdropImport(backdropSourceUrl.trim())}>{saving ? "Pobieram…" : "Pobierz i ustaw jako tło"}</button>
+            <small>System zapisze własną, zoptymalizowaną kopię. Fotografia nie zastąpi zdjęcia butelki.</small>
+          </div>
+          <label className="admin-wide admin-file-field">Albo wybierz tło z urządzenia<input name="backdropFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>Zdjęcie zostanie proporcjonalnie zmniejszone do maksymalnie 1600 px bez wycinania tła.</small></label>
+        </div>}
+      </fieldset>}
 
       <fieldset>
         <legend>Prezentacja w karcie</legend>
@@ -1871,11 +2107,13 @@ function ProductFeatureFields({ kind, attributes }: { kind: string; attributes: 
     input("producer", "Producent"),
     wide("dietaryInfo", "Cechy szczególne", "np. wegańskie · bez glutenu"),
   ] : kind === "cocktails" ? [
-    input("cocktailType", "Rodzaj", "np. spritz, koktajl klasyczny, shot, wódka na butelkę"),
-    input("cocktailBase", "Alkohol bazowy"),
-    input("tasteProfile", "Profil smakowy", "np. wytrawny · cytrusowy"),
-    input("servingStyle", "Sposób podania", "np. kieliszek coupe · dużo lodu · pomarańcza"),
-    input("alcoholPercentage", "Zawartość alkoholu", "jeżeli chcemy ją pokazywać"),
+    input("cocktailType", "Rodzaj pozycji", "np. spritz, koktajl klasyczny, sour, shot, alkohol na butelkę"),
+    input("cocktailBase", "Alkohol bazowy", "np. gin · wódka · rum; pierwszy składnik traktujemy jako dominujący"),
+    input("tasteProfile", "Profil smakowy", "np. wytrawny · cytrusowy · gorzki"),
+    input("servingStyle", "Sposób podania", "np. coupe albo highball; wybierz główny sposób"),
+    input("alcoholPercentage", "Zawartość alkoholu", "np. 40% dla czystego alkoholu; opcjonalnie dla koktajlu"),
+    input("origin", "Kraj lub region pochodzenia", "szczególnie dla alkoholi butelkowych"),
+    input("volume", "Pojemność / porcja", "np. 40 ml, 700 ml"),
   ] : kind === "cold" || kind === "zero" ? [
     input("volume", "Objętość / wariant"),
     input("origin", "Producent lub pochodzenie"),

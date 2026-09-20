@@ -83,6 +83,7 @@ export async function currentWaiter(request?: Request) {
   const [employee] = await getDb().select({
     dotykackaId: waiterEmployees.dotykackaId,
     name: waiterEmployees.name,
+    canManageMenuVisibility: waiterEmployees.canManageMenuVisibility,
   }).from(waiterEmployees).where(and(
     eq(waiterEmployees.dotykackaId, dotykackaId),
     eq(waiterEmployees.enabled, true),

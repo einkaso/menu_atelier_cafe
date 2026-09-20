@@ -15,9 +15,12 @@ test("classifies the Dotykacka WHISKEY category as spirits", async () => {
 });
 
 test("classifies both cakes and desserts as one sweet menu section", async () => {
-  const { sectionFor } = await vite.ssrLoadModule("/lib/menu-categories.ts");
+  const { sectionFor, waiterCategoryName } = await vite.ssrLoadModule("/lib/menu-categories.ts");
   assert.equal(sectionFor("Ciasta"), "cakes");
   assert.equal(sectionFor("Desery"), "cakes");
+  assert.equal(waiterCategoryName("Ciasta"), "NA SŁODKO");
+  assert.equal(waiterCategoryName("Desery"), "NA SŁODKO");
+  assert.equal(waiterCategoryName("Kawy"), "Kawy");
 });
 
 test("classifies Dotykacka drinks and alcohol as one Alko Bar section", async () => {

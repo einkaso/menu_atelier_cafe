@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hasTag, isShelfProduct, menuProductDestinations, menuProductIsAvailable, regularProductStockIsAvailable, shelfHasPositiveStock, shouldManageMenuProduct, shouldSyncMenuProduct } from "../lib/menu-tags.ts";
+import { hasTag, isIngredientInventoryCategory, isInventoryTaggedIngredient, isShelfProduct, menuProductDestinations, menuProductIsAvailable, productTakeawayAvailable, productTemperatures, regularProductStockIsAvailable, shelfHasPositiveStock, shouldManageMenuProduct, shouldSyncMenuProduct } from "../lib/menu-tags.ts";
 
 test("recognizes the PÓŁKA tag regardless of case, whitespace or missing Polish diacritics", () => {
   assert.equal(isShelfProduct(["MENU", " PÓŁKA "]), true);
@@ -14,6 +14,18 @@ test("keeps exact tag semantics after normalization", () => {
   assert.equal(hasTag(["PÓŁKAT"] , "PÓŁKA"), false);
 });
 
+test("maps WARM and COLD tags to available serving temperatures", () => {
+  assert.deepEqual(productTemperatures(["MENU", "WARM"]), ["warm"]);
+  assert.deepEqual(productTemperatures(["cold", " WARM "]), ["warm", "cold"]);
+  assert.deepEqual(productTemperatures(["MENU", "WARMER"]), []);
+});
+
+test("recognizes only the exact TOGO tag as takeaway availability", () => {
+  assert.equal(productTakeawayAvailable(["MENU", "TOGO"]), true);
+  assert.equal(productTakeawayAvailable(["MENU", "to go"]), false);
+  assert.equal(productTakeawayAvailable(["MENU", "TOGOTHER"]), false);
+});
+
 test("imports a shelf product without MENU but ignores unrelated POS products", () => {
   assert.equal(shouldSyncMenuProduct(["PÓŁKA"], "menu"), true);
   assert.equal(shouldSyncMenuProduct(["MENU"], "menu"), true);
@@ -24,6 +36,15 @@ test("imports inventory-tracked products for administration without publishing t
   assert.equal(shouldManageMenuProduct(["SYROP"], "MENU", true), true);
   assert.equal(shouldSyncMenuProduct(["SYROP"], "MENU"), false);
   assert.equal(shouldManageMenuProduct(["SYROP"], "MENU", false), false);
+});
+
+test("uses INWENT as the authoritative inventory rule only in the Ingredients category", () => {
+  assert.equal(isIngredientInventoryCategory("Składniki"), true);
+  assert.equal(isIngredientInventoryCategory(" SKLADNIKI "), true);
+  assert.equal(isIngredientInventoryCategory("Napoje"), false);
+  assert.equal(isInventoryTaggedIngredient("Składniki", [" INWENT "]), true);
+  assert.equal(isInventoryTaggedIngredient("Składniki", ["INWENTARZ"]), false);
+  assert.equal(isInventoryTaggedIngredient("Napoje", ["INWENT"]), false);
 });
 
 test("publishes shelf products only when their stock is greater than zero", () => {

@@ -4,11 +4,13 @@ import { menuAddons, menuCategories, menuProducts, productContent, waiterExtraPr
 import { productImageUrl } from "../../../../lib/image-import";
 import { currentWaiter } from "../../../../lib/waiter-auth";
 import { isAlternativeCoffeeBeanGroup, isAlternativeCoffeeMethod, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
-import { acceptsFlavorSyrup, FLAVOR_SYRUP_GROUP, isForestLifeSyrupCategory, isGenericFlavorSyrupOption } from "../../../../lib/flavor-syrups";
+import { acceptsFlavorSyrup, FLAVOR_SYRUP_GROUP, isForestLifeSyrupCategory, isGenericFlavorSyrupOption, isLemonadeProduct } from "../../../../lib/flavor-syrups";
 import { isWholeVodkaBottleName } from "../../../../lib/alcohol-sale-warning";
-import { menuProductIsAvailable, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
-import { sectionFor } from "../../../../lib/menu-categories";
+import { menuProductIsAvailable, productTakeawayAvailable, productTemperatures, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
+import { sectionFor, waiterCategoryName } from "../../../../lib/menu-categories";
 import { isZeroAlcoholValue } from "../../../../lib/wine-characteristics";
+import { inferredAlcoBarAttributes } from "../../../../lib/alco-characteristics";
+import { menuProductVisibleForGuest } from "../../../../lib/menu-visibility";
 
 export const dynamic = "force-dynamic";
 const MENU_TAG = process.env.DOTYKACKA_MENU_TAG?.trim() || "MENU";
@@ -56,12 +58,15 @@ export async function GET(request: Request) {
       sourceOrder: menuProducts.sourceSortOrder,
       price: menuProducts.priceWithVat,
       currency: menuProducts.currency,
+      display: menuProducts.display,
       stockDeduct: menuProducts.stockDeduct,
       stockOverdraft: menuProducts.stockOverdraft,
       stockQuantity: menuProducts.stockQuantity,
       tags: menuProducts.tags,
       licenseCodes: menuProducts.licenseCodes,
       imagePath: productContent.imagePath,
+      manualHidden: productContent.manualHidden,
+      waiterVisibilityOverride: productContent.waiterVisibilityOverride,
       country: productContent.country,
       wineStyle: productContent.wineStyle,
       wineColor: productContent.wineColor,
@@ -69,14 +74,16 @@ export async function GET(request: Request) {
       sweetness: productContent.sweetness,
       veganStatus: productContent.veganStatus,
       attributes: productContent.attributes,
+      descriptionPl: productContent.descriptionPl,
+      sourceDescription: menuProducts.sourceDescription,
       staffInstructions: productContent.staffInstructions,
       staffMedia: productContent.staffMedia,
     }).from(menuProducts)
       .innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
       .leftJoin(productContent, eq(menuProducts.id, productContent.productId))
       .where(and(
-        eq(menuProducts.menuTagged, true), eq(menuProducts.display, true), eq(menuProducts.deleted, false),
-        eq(menuCategories.display, true), sql`coalesce(${productContent.manualHidden}, false) = false`,
+        eq(menuProducts.menuTagged, true), eq(menuProducts.deleted, false),
+        eq(menuCategories.display, true),
       )).orderBy(sql`coalesce(${menuCategories.menuSortOrder}, ${menuCategories.sortOrder}, 2147483647)`, asc(menuCategories.name), sql`coalesce(${menuProducts.menuSortOrder}, ${menuProducts.sourceSortOrder}, 2147483647)`, asc(menuProducts.name)),
     db.select({
       id: waiterExtraProducts.id,
@@ -99,7 +106,7 @@ export async function GET(request: Request) {
     db.select({ parentId: menuAddons.parentDotykackaId, id: menuAddons.addonDotykackaId, groupName: menuAddons.groupName, name: menuAddons.name, price: menuAddons.priceWithVat, currency: menuAddons.currency, sortOrder: menuAddons.sortOrder })
       .from(menuAddons).orderBy(asc(menuAddons.sortOrder), asc(menuAddons.name)),
   ]);
-  const addonGroupsByProduct = new Map<string, Map<string, { name: string; required: boolean; multiple: boolean; options: Array<{ id: string; name: string; price: string | null; currency: string }> }>>();
+  const addonGroupsByProduct = new Map<string, Map<string, { name: string; required: boolean; multiple: boolean; maxSelections?: number; options: Array<{ id: string; name: string; price: string | null; currency: string }> }>>();
   for (const addon of addons) {
     const groupName = addon.groupName?.trim() || "Dodatki";
     const groups = addonGroupsByProduct.get(addon.parentId) ?? new Map();
@@ -133,7 +140,9 @@ export async function GET(request: Request) {
       ...group,
       options: group.options.filter((option) => !isGenericFlavorSyrupOption(option.name)),
     })).filter((group) => group.options.length > 0);
-    return [...withoutGenericSyrup, { name: FLAVOR_SYRUP_GROUP, required: false, multiple: false, options: flavorSyrupOptions }];
+    const lemonade = isLemonadeProduct(product.name);
+    const syrupOptions = lemonade ? flavorSyrupOptions.map((option) => ({ ...option, price: "0" })) : flavorSyrupOptions;
+    return [...withoutGenericSyrup, { name: FLAVOR_SYRUP_GROUP, required: false, multiple: lemonade, maxSelections: lemonade ? 2 : 1, options: syrupOptions }];
   };
   const availableProducts = products.filter((product) => menuProductIsAvailable(
     product.tags, MENU_TAG, product.stockDeduct, product.stockOverdraft, product.stockQuantity,
@@ -150,7 +159,10 @@ export async function GET(request: Request) {
     products: [...availableProducts.map((product) => {
       const kind = sectionFor(product.category);
       const pairedWine = product.wineCode ? wineDetailsByCode.get(product.wineCode) : undefined;
-      const attributes = product.attributes ?? pairedWine?.attributes ?? {};
+      const storedAttributes = product.attributes ?? pairedWine?.attributes ?? {};
+      const attributes = kind === "cocktails"
+        ? { ...inferredAlcoBarAttributes(product.name, product.descriptionPl || product.sourceDescription, product.category), ...storedAttributes }
+        : storedAttributes;
       const licenseCodes = Array.from(new Set([...product.licenseCodes, ...(pairedWine?.licenseCodes ?? [])]));
       const serving = kind === "wine" ? (isByGlass(product.tags, product.name) ? "glass" : "bottle")
         : kind === "whisky" ? (hasBottleTag(product.tags) ? "bottle" : "serving")
@@ -158,6 +170,7 @@ export async function GET(request: Request) {
             : kind === "cocktails" && isWholeVodkaBottleName(product.name) ? "bottle" : null;
       return {
         ...product,
+        category: waiterCategoryName(product.category),
         kind,
         serving,
         country: product.country ?? pairedWine?.country ?? null,
@@ -167,8 +180,11 @@ export async function GET(request: Request) {
         sweetness: product.sweetness ?? pairedWine?.sweetness ?? null,
         vegan: (product.veganStatus ?? pairedWine?.veganStatus) === "YES",
         alcoholFree: isAlcoholFree(product.tags, licenseCodes, product.name, product.wineStyle ?? pairedWine?.wineStyle ?? null, attributes.alcoholPercentage),
+        temperatures: productTemperatures(product.tags),
+        takeaway: productTakeawayAvailable(product.tags),
         attributes,
         outsideMenu: false,
+        hiddenFromGuest: !menuProductVisibleForGuest(product.display, product.manualHidden, product.waiterVisibilityOverride),
         image: productImageUrl(product.imagePath),
         staffManual: product.staffInstructions?.trim() || product.staffMedia?.length ? {
           instructions: product.staffInstructions?.trim() ?? "",
@@ -178,7 +194,7 @@ export async function GET(request: Request) {
       };
     }), ...extraProducts.filter((product) => regularProductStockIsAvailable(
       product.stockDeduct, product.stockOverdraft, product.stockQuantity,
-    )).map((product) => ({ ...product, kind: "other", serving: null, country: null, wineStyle: null, wineColor: null, sparklingType: null, sweetness: null, veganStatus: "UNKNOWN", vegan: false, alcoholFree: false, attributes: {}, outsideMenu: true, image: null, staffManual: null, addonGroups: [] }))],
+    )).map((product) => ({ ...product, kind: "other", serving: null, country: null, wineStyle: null, wineColor: null, sparklingType: null, sweetness: null, veganStatus: "UNKNOWN", vegan: false, alcoholFree: false, temperatures: [], takeaway: false, attributes: {}, outsideMenu: true, hiddenFromGuest: false, image: null, staffManual: null, addonGroups: [] }))],
     surveyQuestions,
     posActionsEnabled: process.env.WAITER_POS_ACTIONS_ENABLED === "true",
   });

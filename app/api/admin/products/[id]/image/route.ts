@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 
 async function removeImageWhenUnused(storedPath: string | null | undefined) {
   if (!storedPath) return;
-  const references = await getDb().select({ imagePath: productContent.imagePath, galleryPaths: productContent.galleryPaths }).from(productContent);
-  if (!references.some((reference) => reference.imagePath === storedPath || (reference.galleryPaths ?? []).includes(storedPath))) {
+  const references = await getDb().select({ imagePath: productContent.imagePath, galleryPaths: productContent.galleryPaths, detailBackdropPath: productContent.detailBackdropPath }).from(productContent);
+  if (!references.some((reference) => reference.imagePath === storedPath || reference.detailBackdropPath === storedPath || (reference.galleryPaths ?? []).includes(storedPath))) {
     await removeProductImageFile(storedPath);
   }
 }
@@ -37,6 +37,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     .leftJoin(suppliers, eq(menuProducts.dotykackaSupplierId, suppliers.dotykackaId))
     .where(eq(menuProducts.id, productId)).limit(1);
   if (!product) return Response.json({ error: "Produkt nie istnieje." }, { status: 404 });
+
+  const related = product.wineCode ? await db.select({ id: menuProducts.id }).from(menuProducts)
+    .where(and(eq(menuProducts.wineCode, product.wineCode), ne(menuProducts.id, productId))) : [];
+  const targetIds = [productId, ...related.map((item) => item.id)];
+  const existingImages = await db.select({ imagePath: productContent.imagePath, imageSourceUrl: productContent.imageSourceUrl })
+    .from(productContent).where(inArray(productContent.productId, targetIds));
+  if (existingImages.some((item) => item.imagePath || item.imageSourceUrl)) {
+    return Response.json({ error: "Produkt ma już zapisane zdjęcie. Aby je zmienić, najpierw kliknij „Usuń zdjęcie”." }, { status: 409 });
+  }
 
   try {
     const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
@@ -78,20 +87,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       if (!(image instanceof File)) return Response.json({ error: "Nie wybrano zdjęcia." }, { status: 400 });
       imagePath = await importUploadedProductImage(productId, image);
     }
-    const related = product.wineCode ? await db.select({ id: menuProducts.id }).from(menuProducts)
-      .where(and(eq(menuProducts.wineCode, product.wineCode), ne(menuProducts.id, productId))) : [];
-    const targetIds = [productId, ...related.map((item) => item.id)];
-    const previousImages = await db.select({ imagePath: productContent.imagePath }).from(productContent)
-      .where(inArray(productContent.productId, targetIds));
     const values = { imagePath, imageSourceUrl, updatedAt: new Date() };
     for (const targetId of targetIds) {
       await db.insert(productContent).values({ productId: targetId, ...values }).onConflictDoUpdate({
         target: productContent.productId,
         set: values,
       });
-    }
-    for (const previous of new Set(previousImages.map((item) => item.imagePath).filter((value): value is string => Boolean(value) && value !== imagePath))) {
-      await removeImageWhenUnused(previous);
     }
     return Response.json({ status: "ok", imagePath, imageSourceUrl, updatedAt: values.updatedAt });
   } catch (error) {

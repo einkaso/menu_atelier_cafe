@@ -28,3 +28,9 @@ test("builds a spirits query for whisky, cognac and brandy", async () => {
   const url = new URL(manualProductSearchUrl("Springbank 10 yo 46% 50ml", "whisky"));
   assert.equal(url.searchParams.get("q"), '"Springbank 10 yo 46%" whisky koniak brandy');
 });
+
+test("builds an Alko Bar query that asks for characteristics and product photography", async () => {
+  const { manualProductSearchUrl } = await vite.ssrLoadModule("/lib/manual-product-search.ts");
+  const url = new URL(manualProductSearchUrl("Sarti Spritz", "cocktails"));
+  assert.equal(url.searchParams.get("q"), '"Sarti Spritz" alkohol drink koktajl skład profil smakowy zdjęcie');
+});

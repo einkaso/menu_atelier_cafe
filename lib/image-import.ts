@@ -21,10 +21,12 @@ const contentTypes: Record<string, string> = {
 
 const filenamePattern = /^\d+-[a-f0-9]{16}\.(?:jpg|png|webp|avif)$/;
 
-async function storeProductImage(productId: number, bytes: Buffer) {
+async function storeProductImage(productId: number, bytes: Buffer, removeBackground = true) {
   const browserCompatible = await prepareUploadedImage(bytes);
-  const prepared = await removeLightImageBackground(browserCompatible).catch(() => ({ bytes: browserCompatible, backgroundRemoved: false }));
-  const optimized = await optimizeProductImage(prepared.bytes);
+  const prepared = removeBackground
+    ? await removeLightImageBackground(browserCompatible).catch(() => ({ bytes: browserCompatible, backgroundRemoved: false }))
+    : { bytes: browserCompatible, backgroundRemoved: false };
+  const optimized = await optimizeProductImage(prepared.bytes, undefined, !removeBackground);
   const detected = detectUploadedImageType(optimized);
   if (!detected || !contentTypes[detected.mime]) throw new Error("Plik nie jest prawidłowym zdjęciem JPG, PNG, WebP lub AVIF.");
   const fingerprint = createHash("sha256").update(optimized).digest("hex").slice(0, 16);
@@ -81,7 +83,7 @@ async function validateUrl(rawUrl: string) {
   return url;
 }
 
-export async function importProductImage(productId: number, sourceUrl: string) {
+async function downloadPublicImage(sourceUrl: string) {
   let url = await validateUrl(sourceUrl);
   let response: Response | null = null;
   for (let redirects = 0; redirects < 4; redirects += 1) {
@@ -109,7 +111,15 @@ export async function importProductImage(productId: number, sourceUrl: string) {
   const bytes = Buffer.from(await response.arrayBuffer());
   if (!bytes.length || bytes.length > MAX_BYTES) throw new Error("Zdjęcie jest puste albo większe niż 32 MB.");
   if (!detectUploadedImageType(bytes)) throw new Error("Plik musi być zdjęciem JPG, PNG, WebP, AVIF, HEIC lub HEIF.");
-  return storeProductImage(productId, bytes);
+  return bytes;
+}
+
+export async function importProductImage(productId: number, sourceUrl: string) {
+  return storeProductImage(productId, await downloadPublicImage(sourceUrl));
+}
+
+export async function importProductBackdrop(productId: number, sourceUrl: string) {
+  return storeProductImage(productId, await downloadPublicImage(sourceUrl), false);
 }
 
 export async function importUploadedProductImage(productId: number, file: File) {
@@ -118,4 +128,12 @@ export async function importUploadedProductImage(productId: number, file: File) 
   if (!bytes.length || bytes.length > MAX_UPLOAD_BYTES) throw new Error("Zdjęcie jest puste albo większe niż 50 MB.");
   if (!detectUploadedImageType(bytes)) throw new Error("Wybierz zdjęcie JPG, PNG, WebP, AVIF, HEIC lub HEIF.");
   return storeProductImage(productId, bytes);
+}
+
+export async function importUploadedProductBackdrop(productId: number, file: File) {
+  if (!file.size || file.size > MAX_UPLOAD_BYTES) throw new Error("Zdjęcie źródłowe może mieć maksymalnie 50 MB.");
+  const bytes = Buffer.from(await file.arrayBuffer());
+  if (!bytes.length || bytes.length > MAX_UPLOAD_BYTES) throw new Error("Zdjęcie jest puste albo większe niż 50 MB.");
+  if (!detectUploadedImageType(bytes)) throw new Error("Wybierz zdjęcie JPG, PNG, WebP, AVIF, HEIC lub HEIF.");
+  return storeProductImage(productId, bytes, false);
 }

@@ -4,6 +4,7 @@ import { menuCategories, menuOfferSettings, menuProducts, productContent } from 
 import { isAdmin } from "../../../../lib/admin-auth";
 import { translatePolishTexts, translationConfigured } from "../../../../lib/translation";
 import { hasTag as hasMenuTag } from "../../../../lib/menu-tags";
+import { menuProductVisibleForGuest } from "../../../../lib/menu-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,13 @@ async function readOfferState() {
       tags: menuProducts.tags,
       categoryDisplay: menuCategories.display,
       manualHidden: productContent.manualHidden,
+      waiterVisibilityOverride: productContent.waiterVisibilityOverride,
     }).from(menuProducts)
       .leftJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
       .leftJoin(productContent, eq(menuProducts.id, productContent.productId)),
   ]);
-  const visible = products.filter((product) => product.menuTagged && hasMenuTag(product.tags, "MENU") && product.display && !product.deleted
-    && product.categoryDisplay !== false && !product.manualHidden
+  const visible = products.filter((product) => product.menuTagged && hasMenuTag(product.tags, "MENU") && !product.deleted
+    && product.categoryDisplay !== false && menuProductVisibleForGuest(product.display, product.manualHidden, product.waiterVisibilityOverride)
     && !(product.stockDeduct && product.stockOverdraft === "DISABLE" && Number(product.stockQuantity ?? 0) <= 0));
   const setting = saved[0];
   return {

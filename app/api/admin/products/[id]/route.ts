@@ -3,7 +3,6 @@ import { z } from "zod";
 import { getDb } from "../../../../../db";
 import { menuProducts, productContent } from "../../../../../db/schema";
 import { isAdmin } from "../../../../../lib/admin-auth";
-import { importProductImage } from "../../../../../lib/image-import";
 import { preserveProductAttributeTranslations, productAttributesNeedTranslation, productAttributesPl, translateMenuContent, translateProductAttributes, translationSourceHash } from "../../../../../lib/translation";
 
 export const dynamic = "force-dynamic";
@@ -67,19 +66,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .leftJoin(productContent, eq(menuProducts.id, productContent.productId))
     .where(eq(menuProducts.id, productId)).limit(1);
   if (!product) return Response.json({ error: "Produkt nie istnieje." }, { status: 404 });
-  const requestedImageUrl = parsed.data.imageSourceUrl || null;
-  let imagePath = product.imagePath;
-  try {
-    if (requestedImageUrl && (requestedImageUrl !== product.imageSourceUrl || !product.imagePath)) {
-      imagePath = await importProductImage(productId, requestedImageUrl);
-    }
-    // An empty URL removes an image imported from a URL, but must not erase a
-    // file uploaded directly from the administrator's device.
-    if (!requestedImageUrl && product.imageSourceUrl) imagePath = null;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Nie udało się zapisać zdjęcia.";
-    return Response.json({ error: message }, { status: 422 });
-  }
+  // Zapis opisu i parametrów nie może zmieniać zdjęcia. Import, zastąpienie i
+  // usunięcie obrazu obsługuje wyłącznie dedykowany endpoint /image, dzięki
+  // czemu zdjęcie pozostaje do czasu świadomego kliknięcia „Usuń zdjęcie”.
+  const imageSourceUrl = product.imageSourceUrl;
+  const imagePath = product.imagePath;
   const autoTranslate = parsed.data.autoTranslate ?? product.autoTranslate ?? true;
   const sourceAttributes = productAttributesPl(parsed.data.attributes ?? product.attributes);
   const translateAttributes = productAttributesNeedTranslation(sourceAttributes, product.attributes);
@@ -124,7 +115,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     attributes: translatedAttributes ?? preserveProductAttributeTranslations(sourceAttributes, product.attributes),
     sparklingType: parsed.data.sparklingType === undefined ? product.sparklingType : parsed.data.sparklingType,
     veganStatus: parsed.data.veganStatus ?? product.veganStatus ?? "UNKNOWN",
-    imageSourceUrl: requestedImageUrl,
+    imageSourceUrl,
     imagePath,
     updatedAt: new Date(),
   };
@@ -150,8 +141,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       tastingNotesEn: values.tastingNotesEn,
       autoTranslate: values.autoTranslate,
       translationSourceHash: values.translationSourceHash,
-      imageSourceUrl: values.imageSourceUrl,
-      imagePath: values.imagePath,
       country: values.country,
       region: values.region,
       grapes: values.grapes,

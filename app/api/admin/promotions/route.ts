@@ -3,6 +3,7 @@ import { getDb } from "../../../../db";
 import { menuCategories, menuProducts, productContent } from "../../../../db/schema";
 import { isAdmin } from "../../../../lib/admin-auth";
 import { hasTag } from "../../../../lib/menu-tags";
+import { menuProductVisibleForGuest } from "../../../../lib/menu-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +12,10 @@ function hasPromo(tags: string[]) {
 }
 
 function isVisible(product: {
-  menuTagged: boolean; display: boolean; deleted: boolean; manualHidden: boolean | null;
+  menuTagged: boolean; display: boolean; deleted: boolean; manualHidden: boolean | null; waiterVisibilityOverride: boolean | null;
   stockDeduct: boolean; stockOverdraft: string; stockQuantity: string | null;
 }) {
-  if (!product.menuTagged || !product.display || product.deleted || product.manualHidden) return false;
+  if (!product.menuTagged || product.deleted || !menuProductVisibleForGuest(product.display, product.manualHidden, product.waiterVisibilityOverride)) return false;
   return !(product.stockDeduct && product.stockOverdraft === "DISABLE" && Number(product.stockQuantity ?? 0) <= 0);
 }
 
@@ -35,6 +36,7 @@ export async function GET() {
       featured: productContent.featured,
       featuredSortOrder: productContent.featuredSortOrder,
       manualHidden: productContent.manualHidden,
+      waiterVisibilityOverride: productContent.waiterVisibilityOverride,
     }).from(menuProducts)
       .leftJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
       .leftJoin(productContent, eq(menuProducts.id, productContent.productId))

@@ -1,4 +1,12 @@
-export type ManualSearchKind = "wine" | "whisky" | "beer" | "product";
+export type ManualSearchKind = "wine" | "whisky" | "beer" | "cocktails" | "product";
+
+export function manualProductSearchTerms(kind: ManualSearchKind) {
+  if (kind === "wine") return "wino";
+  if (kind === "whisky") return "whisky koniak brandy";
+  if (kind === "beer") return "piwo";
+  if (kind === "cocktails") return "alkohol drink koktajl skład profil smakowy zdjęcie";
+  return "produkt";
+}
 
 export function productSearchTitle(name: string) {
   return name
@@ -11,6 +19,6 @@ export function productSearchTitle(name: string) {
 
 export function manualProductSearchUrl(name: string, kind: ManualSearchKind) {
   const title = productSearchTitle(name) || name.trim();
-  const query = `"${title}" ${kind === "wine" ? "wino" : kind === "whisky" ? "whisky koniak brandy" : kind === "beer" ? "piwo" : "produkt"}`;
+  const query = `"${title}" ${manualProductSearchTerms(kind)}`;
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }

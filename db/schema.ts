@@ -88,11 +88,14 @@ export const productContent = pgTable("product_content", {
   imagePath: text("image_path"),
   galleryPaths: jsonb("gallery_paths").$type<string[]>().notNull().default([]),
   imageSourceUrl: text("image_source_url"),
+  detailBackdropPath: text("detail_backdrop_path"),
+  detailBackdropSourceUrl: text("detail_backdrop_source_url"),
   featured: boolean("featured").notNull().default(false),
   featuredSortOrder: integer("featured_sort_order"),
   contentApproved: boolean("content_approved").notNull().default(false),
   hideWhenOutOfStock: boolean("hide_when_out_of_stock").notNull().default(false),
   manualHidden: boolean("manual_hidden").notNull().default(false),
+  waiterVisibilityOverride: boolean("waiter_visibility_override"),
   country: text("country"),
   region: text("region"),
   grapes: text("grapes"),
@@ -210,10 +213,29 @@ export const waiterEmployees = pgTable("waiter_employees", {
   deleted: boolean("deleted").notNull().default(false),
   accessLevel: text("access_level"),
   requirePinAlways: boolean("require_pin_always").notNull().default(false),
+  canManageMenuVisibility: boolean("can_manage_menu_visibility").notNull().default(false),
   pinHash: text("pin_hash"),
   sourceVersion: timestamp("source_version", { withTimezone: true }),
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("waiter_employees_dotykacka_id_uq").on(table.dotykackaId)]);
+
+export const menuVisibilityEvents = pgTable("menu_visibility_events", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id"),
+  productDotykackaId: text("product_dotykacka_id").notNull(),
+  productName: text("product_name").notNull(),
+  categoryName: text("category_name").notNull(),
+  previousVisible: boolean("previous_visible").notNull(),
+  visible: boolean("visible").notNull(),
+  reason: text("reason").notNull(),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("menu_visibility_events_created_idx").on(table.createdAt),
+  index("menu_visibility_events_employee_idx").on(table.employeeDotykackaId),
+  index("menu_visibility_events_product_idx").on(table.productDotykackaId),
+]);
 
 export const waiterEmployeeThankYouMedia = pgTable("waiter_employee_thank_you_media", {
   id: serial("id").primaryKey(),

@@ -7,18 +7,21 @@ import GuestReceiptPicker from "./guest-receipt-picker";
 import GuestReceiptView from "./guest-receipt-view";
 import type { GuestReceipt } from "../../lib/guest-receipt";
 import { isAlternativeCoffeeMethod } from "../../lib/coffee-addons";
+import { FLAVOR_SYRUP_GROUP, isLemonadeProduct } from "../../lib/flavor-syrups";
 import { shouldShowAlcoholSaleWarning } from "../../lib/alcohol-sale-warning";
 import { clearWaiterSessionToken, saveWaiterSessionToken, waiterSessionHeaders } from "./waiter-session-client";
 
-type Employee = { dotykackaId: string; name: string };
+type Employee = { dotykackaId: string; name: string; canManageMenuVisibility: boolean };
 type Table = { dotykackaId: string; name: string };
 type Addon = { id: string; name: string; price: string | null; currency: string };
-type AddonGroup = { name: string; required: boolean; multiple: boolean; options: Addon[] };
+type AddonGroup = { name: string; required: boolean; multiple: boolean; maxSelections?: number; options: Addon[] };
 type StaffManual = { instructions: string; media: Array<{ id: string; path: string; type: "IMAGE" | "VIDEO"; name: string }> };
-type Product = { id: number; dotykackaId: string; name: string; category: string; price: string | null; currency: string; image: string | null; staffManual: StaffManual | null; addonGroups: AddonGroup[]; outsideMenu: boolean; kind: string; serving: "glass" | "bottle" | "draught" | "serving" | null; wineColor: string | null; wineStyle: string | null; sweetness: string | null; sparklingType: "SPARKLING" | "NATURALLY_SPARKLING" | null; country: string | null; vegan: boolean; alcoholFree: boolean; attributes: Record<string, string> };
-type CartItem = { product: Product; quantity: number; note: string; customizations: Addon[] };
+type ServingTemperature = "warm" | "cold";
+type FulfillmentChoice = "dine-in" | "takeaway";
+type Product = { id: number; dotykackaId: string; name: string; category: string; price: string | null; currency: string; image: string | null; staffManual: StaffManual | null; addonGroups: AddonGroup[]; temperatures: ServingTemperature[]; takeaway: boolean; outsideMenu: boolean; hiddenFromGuest: boolean; kind: string; serving: "glass" | "bottle" | "draught" | "serving" | null; wineColor: string | null; wineStyle: string | null; sweetness: string | null; sparklingType: "SPARKLING" | "NATURALLY_SPARKLING" | null; country: string | null; vegan: boolean; alcoholFree: boolean; attributes: Record<string, string> };
+type CartItem = { product: Product; quantity: number; note: string; customizations: Addon[]; temperature: ServingTemperature | null; takeaway: boolean };
 type SurveyQuestion = { id: number; prompt: string; kind: "YES_NO" | "SINGLE_CHOICE"; options: string[]; required: boolean };
-type DrinkFilters = { color: string; taste: string; sparkling: string; serving: string; country: string; vegan: boolean; zero: boolean; beerStyle: string; alcohol: string; spiritType: string; spiritStyle: string; spiritTaste: string; spiritOrigin: string; spiritAge: string };
+type DrinkFilters = { color: string; taste: string; sparkling: string; serving: string; country: string; vegan: boolean; zero: boolean; beerStyle: string; alcohol: string; spiritType: string; spiritStyle: string; spiritTaste: string; spiritOrigin: string; spiritAge: string; alcoType: string; alcoBase: string; alcoTaste: string; alcoServing: string };
 
 const moneyFormatter = new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const money = (value: number) => moneyFormatter.format(value);
@@ -26,7 +29,7 @@ const OUTSIDE_MENU = "Poza menu";
 const ALL = "Wszystkie";
 const SEARCH_DELAY_MS = 350;
 const RESULT_PAGE_SIZE = 36;
-const emptyDrinkFilters = (): DrinkFilters => ({ color: ALL, taste: ALL, sparkling: "all", serving: "all", country: ALL, vegan: false, zero: false, beerStyle: "all", alcohol: "all", spiritType: ALL, spiritStyle: ALL, spiritTaste: ALL, spiritOrigin: ALL, spiritAge: ALL });
+const emptyDrinkFilters = (): DrinkFilters => ({ color: ALL, taste: ALL, sparkling: "all", serving: "all", country: ALL, vegan: false, zero: false, beerStyle: "all", alcohol: "all", spiritType: ALL, spiritStyle: ALL, spiritTaste: ALL, spiritOrigin: ALL, spiritAge: ALL, alcoType: ALL, alcoBase: ALL, alcoTaste: ALL, alcoServing: ALL });
 const waiterTeaImageByName: Record<string, string> = {
   "english breakfast": "/tea/english-breakfast.jpg",
   "earl grey": "/tea/earl-grey.jpg",
@@ -57,7 +60,7 @@ function waiterAlternativeCoffeeImage(product: Product) {
   if (/aero\s*press/.test(name)) return "/coffee-methods/aeropress.jpg";
   if (/chemex/.test(name)) return "/coffee-methods/chemex.jpg";
   if (/drip|v\s*60/.test(name)) return "/coffee-methods/drip.jpg";
-  return waiterProductImage(product);
+  return waiterProductImage(product) ?? "/coffee-methods/churchill-sapphire-mug.webp";
 }
 
 function beerStyleKey(product: Product) {
@@ -69,6 +72,10 @@ function beerStyleKey(product: Product) {
   if (/\bale\b|blonde|grimbergen/.test(text)) return "ale";
   if (/somersby|hardmade|cydr|smakow/.test(text)) return "flavoured";
   return "other";
+}
+
+function waiterAlcoTokens(product: Product, key: string) {
+  return (product.attributes?.[key] ?? "").split(/\s*[·,;]\s*/).map((value) => value.trim()).filter(Boolean);
 }
 
 function matchesDrinkFilters(product: Product, filters: DrinkFilters) {
@@ -88,6 +95,11 @@ function matchesDrinkFilters(product: Product, filters: DrinkFilters) {
     && (filters.spiritOrigin === ALL || product.attributes?.origin === filters.spiritOrigin)
     && (filters.spiritAge === ALL || product.attributes?.ageStatement === filters.spiritAge)
     && (filters.serving === "all" || product.serving === filters.serving);
+  if (product.kind === "cocktails") return (filters.alcoType === ALL || waiterAlcoTokens(product, "cocktailType").includes(filters.alcoType))
+    && (filters.alcoBase === ALL || waiterAlcoTokens(product, "cocktailBase").includes(filters.alcoBase))
+    && (filters.alcoTaste === ALL || waiterAlcoTokens(product, "tasteProfile").includes(filters.alcoTaste))
+    && (filters.alcoServing === ALL || waiterAlcoTokens(product, "servingStyle").includes(filters.alcoServing))
+    && (filters.alcohol === "all" || (filters.alcohol === "zero" ? product.alcoholFree : !product.alcoholFree));
   return true;
 }
 
@@ -97,6 +109,19 @@ function servingLabel(product: Product) {
   if (product.serving === "serving") return "50 ml";
   if (product.serving === "bottle") return "butelka";
   return "";
+}
+
+function temperatureLabel(value: ServingTemperature) {
+  return value === "warm" ? "Na ciepło" : "Na zimno";
+}
+
+function TemperatureIcon({ kind }: { kind: ServingTemperature }) {
+  return kind === "warm" ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5a2 2 0 0 1 4 0v8.4a4 4 0 1 1-4 0V5Zm2 3v8M17 5h3M17 9h2M17 13h3"/></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5a2 2 0 0 1 4 0v8.4a4 4 0 1 1-4 0V5Zm2 7v4M18 4v8M14.5 6l7 4m0-4-7 4"/></svg>;
+}
+
+function WaiterTemperatureChoice({ temperatures }: { temperatures: ServingTemperature[] }) {
+  if (!temperatures.length) return null;
+  return <div className="waiter-temperature-choice"><span>{temperatures.length > 1 ? "DO WYBORU" : "PODANIE"}</span>{temperatures.map((kind) => <b className={`is-${kind}`} key={kind}><TemperatureIcon kind={kind}/>{temperatureLabel(kind)}</b>)}</div>;
 }
 
 function AlcoholSaleWarning({ product, onClose }: { product: Product; onClose: () => void }) {
@@ -177,6 +202,7 @@ function StaffManualDialog({ product, onClose }: { product: Product; onClose: ()
 
 function WaiterDrinkFilters({ kind, products, filters, onChange }: { kind: string; products: Product[]; filters: DrinkFilters; onChange: (next: DrinkFilters) => void }) {
   const values = (read: (product: Product) => string | null | undefined) => Array.from(new Set(products.map(read).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b, "pl"));
+  const attributeValues = (key: string) => Array.from(new Set(products.flatMap((product) => waiterAlcoTokens(product, key)))).sort((a, b) => a.localeCompare(b, "pl"));
   const pairs = (items: string[]): Array<[string, string]> => items.map((value) => [value, value]);
   const set = <K extends keyof DrinkFilters,>(key: K, value: DrinkFilters[K]) => onChange({ ...filters, [key]: value });
   const changed = JSON.stringify(filters) !== JSON.stringify(emptyDrinkFilters());
@@ -191,6 +217,7 @@ function WaiterDrinkFilters({ kind, products, filters, onChange }: { kind: strin
     {kind === "wine" && <>{group("Kolor", "color", pairs(wineColors))}{group("Smak", "taste", pairs(wineTastes))}{group("Musowanie", "sparkling", [["STILL", "Spokojne"], ["SPARKLING", "Musujące"], ["NATURALLY_SPARKLING", "Naturalnie musujące"]])}{group("Podanie", "serving", [["glass", "Na kieliszki"], ["bottle", "Na butelki"]])}{(products.some((product) => product.vegan) || products.some((product) => product.alcoholFree)) && <div className="waiter-filter-row"><strong>Cechy</strong><div className="waiter-filter-chips">{products.some((product) => product.vegan) && <button type="button" className={filters.vegan ? "is-selected" : ""} aria-pressed={filters.vegan} onClick={() => set("vegan", !filters.vegan)}>Wegańskie</button>}{products.some((product) => product.alcoholFree) && <button type="button" className={filters.zero ? "is-selected" : ""} aria-pressed={filters.zero} onClick={() => set("zero", !filters.zero)}>0%</button>}</div></div>}{select("Kraj", "country", values((product) => product.country))}</>}
     {kind === "beer" && <>{group("Styl", "beerStyle", beerStyles.map((value): [string, string] => [value, styleLabels[value] ?? value]))}{group("Alkohol", "alcohol", [["alcoholic", "Alkoholowe"], ["zero", "0%"]])}{group("Podanie", "serving", [["bottle", "Butelka"], ["draught", "Z nalewaka"]])}{select("Pochodzenie", "country", origins)}</>}
     {kind === "whisky" && <>{group("Rodzaj trunku", "spiritType", pairs(values((product) => product.attributes?.spiritType)))}{group("Styl", "spiritStyle", pairs(values((product) => product.attributes?.spiritStyle)))}{group("Profil smaku", "spiritTaste", pairs(values((product) => product.attributes?.tasteProfile)))}{select("Pochodzenie", "spiritOrigin", origins)}{group("Wiek", "spiritAge", pairs(values((product) => product.attributes?.ageStatement)))}{group("Podanie", "serving", [["serving", "50 ml"], ["bottle", "Butelka"]])}</>}
+    {kind === "cocktails" && <>{group("Rodzaj", "alcoType", pairs(attributeValues("cocktailType")))}{group("Baza", "alcoBase", pairs(attributeValues("cocktailBase")))}{group("Profil smaku", "alcoTaste", pairs(attributeValues("tasteProfile")))}{group("Podanie", "alcoServing", pairs(attributeValues("servingStyle")))}{group("Alkohol", "alcohol", [["alcoholic", "Alkoholowe"], ["zero", "0%"]])}</>}
   </section>;
 }
 
@@ -202,12 +229,15 @@ export default function WaiterClient() {
   const [tableId, setTableId] = useState("");
   const [guestCount, setGuestCount] = useState(1);
   const [category, setCategory] = useState("Wszystkie");
+  const [showHiddenMenuItems, setShowHiddenMenuItems] = useState(false);
   const [query, setSearchQuery] = useState("");
   const [visibleLimit, setVisibleLimit] = useState(RESULT_PAGE_SIZE);
   const [drinkFilters, setDrinkFilters] = useState<DrinkFilters>(emptyDrinkFilters);
   const [cart, setCart] = useState<Record<string, CartItem>>({});
   const [configuring, setConfiguring] = useState<Product | null>(null);
   const [addonSelections, setAddonSelections] = useState<Record<string, string[]>>({});
+  const [temperatureSelection, setTemperatureSelection] = useState<ServingTemperature | null>(null);
+  const [fulfillmentSelection, setFulfillmentSelection] = useState<FulfillmentChoice | null>(null);
   const [orderNote, setOrderNote] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [surveying, setSurveying] = useState(false);
@@ -223,6 +253,9 @@ export default function WaiterClient() {
   const [inventoryTaskCount, setInventoryTaskCount] = useState(0);
   const [manualProduct, setManualProduct] = useState<Product | null>(null);
   const [alcoholSaleWarning, setAlcoholSaleWarning] = useState<Product | null>(null);
+  const [visibilityChange, setVisibilityChange] = useState<{ product: Product; visible: boolean } | null>(null);
+  const [visibilityReason, setVisibilityReason] = useState("");
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
   const manualTaps = useRef({ productId: "", count: 0, at: 0 });
   const setQuery = useCallback((value: string) => {
     setSearchQuery(value);
@@ -332,14 +365,18 @@ export default function WaiterClient() {
     const regular = Array.from(new Set(products.filter((product) => !product.outsideMenu).map((product) => product.category))).sort((a, b) => a.localeCompare(b, "pl"));
     return ["Wszystkie", ...regular, ...(products.some((product) => product.outsideMenu) ? [OUTSIDE_MENU] : [])];
   }, [products]);
-  const categoryProducts = useMemo(() => products.filter((product) => !product.outsideMenu && product.category === category), [products, category]);
-  const activeDrinkKind = categoryProducts.find((product) => ["wine", "beer", "whisky"].includes(product.kind))?.kind ?? "";
+  const hiddenMenuItemCount = useMemo(() => category === "Wszystkie" || category === OUTSIDE_MENU ? 0 : products.filter((product) => !product.outsideMenu && product.category === category && product.hiddenFromGuest).length, [products, category]);
+  const categoryProducts = useMemo(() => products.filter((product) => !product.outsideMenu && product.category === category && product.hiddenFromGuest === showHiddenMenuItems), [products, category, showHiddenMenuItems]);
+  const activeDrinkKind = categoryProducts.find((product) => ["wine", "beer", "whisky", "cocktails"].includes(product.kind))?.kind ?? "";
   const normalizedQuery = query.trim().toLocaleLowerCase("pl");
   const productSearchTexts = useMemo(() => new Map(products.map((product) => [product.dotykackaId, `${product.name} ${product.category}`.toLocaleLowerCase("pl")])), [products]);
   const matchingProducts = useMemo(() => products.filter((product) => {
-    const matchesView = category === OUTSIDE_MENU ? product.outsideMenu : !product.outsideMenu && (category === "Wszystkie" || product.category === category);
+    const matchesView = category === OUTSIDE_MENU
+      ? product.outsideMenu
+      : (!product.outsideMenu && !product.hiddenFromGuest && category === "Wszystkie")
+        || (!product.outsideMenu && product.hiddenFromGuest === showHiddenMenuItems && product.category === category);
     return matchesView && matchesDrinkFilters(product, drinkFilters) && (!normalizedQuery || productSearchTexts.get(product.dotykackaId)?.includes(normalizedQuery));
-  }), [products, category, normalizedQuery, drinkFilters, productSearchTexts]);
+  }), [products, category, showHiddenMenuItems, normalizedQuery, drinkFilters, productSearchTexts]);
   const visible = matchingProducts.slice(0, visibleLimit);
   const visibleAlternativeMethods = visible.filter((product) => isAlternativeCoffeeMethod(product.name));
   const firstAlternativeMethodId = visibleAlternativeMethods[0]?.dotykackaId;
@@ -366,16 +403,18 @@ export default function WaiterClient() {
     });
   }
 
-  function addConfigured(product: Product, customizations: Addon[]) {
-    const lineKey = `${product.dotykackaId}:${customizations.map((addon) => addon.id).sort().join(",") || "standard"}`;
-    setCart((current) => ({ ...current, [lineKey]: { product, customizations, note: current[lineKey]?.note ?? "", quantity: (current[lineKey]?.quantity ?? 0) + 1 } }));
+  function addConfigured(product: Product, customizations: Addon[], temperature: ServingTemperature | null, fulfillment: FulfillmentChoice) {
+    const takeaway = fulfillment === "takeaway";
+    const lineKey = `${product.dotykackaId}:${temperature ?? "standard"}:${takeaway ? "togo" : "onsite"}:${customizations.map((addon) => addon.id).sort().join(",") || "standard"}`;
+    setCart((current) => ({ ...current, [lineKey]: { product, customizations, temperature, takeaway, note: current[lineKey]?.note ?? "", quantity: (current[lineKey]?.quantity ?? 0) + 1 } }));
     if (shouldShowAlcoholSaleWarning(product)) setAlcoholSaleWarning(product);
-    setConfiguring(null); setAddonSelections({});
+    setConfiguring(null); setAddonSelections({}); setTemperatureSelection(null); setFulfillmentSelection(null);
   }
 
-  function addProduct(product: Product) {
-    if (!product.addonGroups.length) return addConfigured(product, []);
-    setAddonSelections({}); setConfiguring(product);
+  function addProduct(product: Product, fulfillment: FulfillmentChoice = "dine-in") {
+    const fixedTemperature = product.temperatures.length === 1 ? product.temperatures[0] : null;
+    if (!product.addonGroups.length && product.temperatures.length < 2) return addConfigured(product, [], fixedTemperature, fulfillment);
+    setAddonSelections({}); setTemperatureSelection(fixedTemperature); setFulfillmentSelection(fulfillment); setConfiguring(product);
   }
 
   function removeProduct(product: Product) {
@@ -385,8 +424,27 @@ export default function WaiterClient() {
 
   function chooseCategory(nextCategory: string) {
     setCategory(nextCategory);
+    setShowHiddenMenuItems(false);
     setDrinkFilters(emptyDrinkFilters());
     setVisibleLimit(RESULT_PAGE_SIZE);
+  }
+
+  async function saveVisibilityChange() {
+    if (!visibilityChange || !visibilityReason || visibilitySaving) return;
+    setVisibilitySaving(true); setError("");
+    const response = await fetch("/api/waiter/menu-visibility", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: waiterSessionHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({ productId: visibilityChange.product.id, visible: visibilityChange.visible, reason: visibilityReason }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) setError(body.error ?? "Nie udało się zmienić widoczności produktu.");
+    else {
+      setProducts((current) => current.map((product) => product.id === visibilityChange.product.id ? { ...product, hiddenFromGuest: !visibilityChange.visible } : product));
+      setVisibilityChange(null); setVisibilityReason("");
+    }
+    setVisibilitySaving(false);
   }
 
   function openProductManual(product: Product, at: number) {
@@ -403,17 +461,17 @@ export default function WaiterClient() {
     const quantity = quantityByProduct.get(product.dotykackaId) ?? 0;
     const service = servingLabel(product);
     const image = alternative ? waiterAlternativeCoffeeImage(product) : waiterProductImage(product);
-    return <article key={product.dotykackaId} className={`${product.outsideMenu ? "is-outside-menu" : ""}${alternative ? " is-alternative-coffee" : ""}`.trim()}>
+    return <article key={product.dotykackaId} className={`${product.outsideMenu ? "is-outside-menu" : ""}${product.hiddenFromGuest ? " is-hidden-menu" : ""}${alternative ? " is-alternative-coffee" : ""}`.trim()}>
       <button type="button" className="waiter-product-manual-hotspot" onPointerUp={() => openProductManual(product, Date.now())} aria-label={`Zdjęcie produktu ${product.name}`}>{image ? <img src={image} alt={alternative ? `Metoda parzenia ${product.name}` : product.kind === "tea" ? `Napar i liście herbaty ${product.name}` : ""} loading="lazy" decoding="async" draggable={false}/> : <span className="waiter-product-placeholder"/>}</button>
-      <div><small>{alternative ? "Kawa alternatywna · ziarno i dodatki" : `${product.category}${service ? ` · ${service}` : product.outsideMenu ? " · poza menu" : product.addonGroups.length > 0 ? " · wybór wariantu" : ""}`}</small><h2>{product.name}</h2><strong>{money(Number(product.price ?? 0))} zł</strong></div>
+      <div><small>{product.hiddenFromGuest ? "UKRYTE DLA GOŚCIA · " : ""}{alternative ? "Kawa alternatywna · ziarno i dodatki" : `${product.category}${service ? ` · ${service}` : product.outsideMenu ? " · poza menu" : product.addonGroups.length > 0 || product.temperatures.length > 1 ? " · wybór wariantu" : ""}`}</small><h2>{product.name}</h2><strong>{money(Number(product.price ?? 0))} zł</strong><WaiterTemperatureChoice temperatures={product.temperatures}/>{isLemonadeProduct(product.name)&&product.addonGroups.some(group=>group.name===FLAVOR_SYRUP_GROUP)&&<button type="button" className="waiter-flavor-action" onClick={()=>addProduct(product)}>Wybierz smak</button>}{product.takeaway&&<button type="button" className="waiter-takeaway-action" onClick={()=>addProduct(product,"takeaway")}>Zapakuj na wynos</button>}{employee?.canManageMenuVisibility&&!product.outsideMenu&&<button type="button" className={`waiter-visibility-action${product.hiddenFromGuest?" is-enable":" is-disable"}`} onClick={()=>{setVisibilityReason("");setVisibilityChange({product,visible:product.hiddenFromGuest})}}>{product.hiddenFromGuest?"Włącz w menu gościa":"Ukryj w menu gościa"}</button>}</div>
       <div className="waiter-quantity"><button aria-label={`Odejmij ${product.name}`} disabled={!quantity} onClick={() => removeProduct(product)}>−</button><b>{quantity}</b><button aria-label={`Dodaj ${product.name}`} onClick={() => addProduct(product)}>+</button></div>
     </article>;
   }
 
   function confirmConfiguration() {
-    if (!configuring || configuring.addonGroups.some((group) => group.required && !addonSelections[group.name]?.length)) return;
+    if (!configuring || (configuring.temperatures.length > 1 && !temperatureSelection) || configuring.addonGroups.some((group) => group.required && !addonSelections[group.name]?.length)) return;
     const byId = new Map(configuring.addonGroups.flatMap((group) => group.options).map((addon) => [addon.id, addon]));
-    addConfigured(configuring, Object.values(addonSelections).flat().map((id) => byId.get(id)).filter((addon): addon is Addon => Boolean(addon)));
+    addConfigured(configuring, Object.values(addonSelections).flat().map((id) => byId.get(id)).filter((addon): addon is Addon => Boolean(addon)), temperatureSelection, fulfillmentSelection ?? "dine-in");
   }
 
   function itemNote(lineKey: string, note: string) {
@@ -423,7 +481,7 @@ export default function WaiterClient() {
   async function sendOrder() {
     if (!tableId || !items.length || !posEnabled) return;
     setSending(true); setError("");
-    const response = await fetch("/api/waiter/orders", { method: "POST", headers: waiterSessionHeaders({ "content-type": "application/json" }), body: JSON.stringify({ tableId, guestCount, note: orderNote, surveyAnswers, items: items.map((item) => ({ productId: item.product.dotykackaId, quantity: item.quantity, note: item.note, customizations: item.customizations.map((addon) => addon.id) })) }) });
+    const response = await fetch("/api/waiter/orders", { method: "POST", headers: waiterSessionHeaders({ "content-type": "application/json" }), body: JSON.stringify({ tableId, guestCount, note: orderNote, surveyAnswers, items: items.map((item) => ({ productId: item.product.dotykackaId, quantity: item.quantity, note: item.note, temperature: item.temperature, takeaway: item.takeaway, customizations: item.customizations.map((addon) => addon.id) })) }) });
     const body = await response.json().catch(() => ({})) as { error?: string };
     if (!response.ok) setError(body.error ?? "Nie udało się wysłać zamówienia.");
     else { clearWaiterSessionToken(); window.location.assign("/"); }
@@ -442,11 +500,11 @@ export default function WaiterClient() {
     return <main className="waiter-app"><header className="waiter-header"><button onClick={() => setSurveying(false)}>← Zamówienie</button><div><span>Krótka ankieta</span><strong>{employee.name}</strong></div><button onClick={logout}>Wyloguj</button></header><section className="waiter-survey"><div className="waiter-review-title"><span>OSTATNI KROK</span><h1>Kilka pytań</h1><p>Odpowiedzi zapiszą się z zamówieniem, bez danych osobowych gościa.</p></div>{surveyQuestions.map((question, index) => <fieldset key={question.id}><legend><b>{index + 1}</b>{question.prompt}{question.required && <small>wymagane</small>}</legend><div>{question.options.map((option) => <button type="button" className={surveyAnswers[String(question.id)] === option ? "is-selected" : ""} key={option} onClick={() => setSurveyAnswers((current) => ({ ...current, [String(question.id)]: option }))}>{option}</button>)}</div></fieldset>)}{error && <p className="waiter-error" role="alert">{error}</p>}<footer><button className="waiter-survey-skip" onClick={() => setSurveying(false)}>Wróć i popraw</button><button disabled={!requiredComplete || !posEnabled || sending} onClick={sendOrder}>{sending ? "Wysyłam…" : posEnabled ? "Wyślij zamówienie" : "Wysyłka jeszcze zablokowana"}</button>{!posEnabled && <small>Możesz sprawdzić cały przebieg i ankietę. Połączenie z POS uruchomimy dopiero po teście.</small>}</footer></section></main>;
   }
 
-  if (reviewing) return <main className="waiter-app"><header className="waiter-header"><button onClick={() => setReviewing(false)}>← Wróć</button><div><span>Zamówienie</span><strong>{employee.name}</strong></div><button onClick={logout}>Wyloguj</button></header><section className="waiter-review"><div className="waiter-review-title"><span>SPRAWDŹ PRZED WYSŁANIEM</span><h1>Stolik {tables.find((table) => table.dotykackaId === tableId)?.name ?? "—"}</h1><p>{guestCount} {guestCount === 1 ? "gość" : "gości"} · {itemCount} pozycji</p></div>{items.map((item) => <article className="waiter-review-item" key={item.lineKey}><div><h2>{item.product.name}</h2>{item.customizations.length > 0 && <p className="waiter-item-options">{item.customizations.map((addon) => addon.name).join(" · ")}</p>}<strong>{money(itemUnitPrice(item) * item.quantity)} zł</strong></div><div className="waiter-quantity"><button onClick={() => changeLine(item.lineKey, -1)}>−</button><b>{item.quantity}</b><button onClick={() => changeLine(item.lineKey, 1)}>+</button></div><label>Uwagi do pozycji<input value={item.note} maxLength={500} onChange={(event) => itemNote(item.lineKey, event.target.value)} placeholder="np. bez lodu, osobno…"/></label></article>)}<label className="waiter-order-note">Uwagi do całego zamówienia<textarea value={orderNote} maxLength={1000} onChange={(event) => setOrderNote(event.target.value)} placeholder="Informacja dla baru lub kuchni"/></label>{error && <p className="waiter-error" role="alert">{error}</p>}<footer><div><span>Razem</span><strong>{money(total)} zł</strong></div><button disabled={!items.length || (!surveyQuestions.length && !posEnabled)} onClick={() => surveyQuestions.length ? setSurveying(true) : void sendOrder()}>{surveyQuestions.length ? "Dalej: krótka ankieta →" : posEnabled ? "Wyślij do Dotykački" : "Wysyłka jeszcze zablokowana"}</button>{!posEnabled && !surveyQuestions.length && <small>Najpierw sprawdzimy połączenie na środowisku testowym. Ten ekran nie może teraz utworzyć zamówienia ani paragonu.</small>}</footer></section>{alcoholSaleWarning&&<AlcoholSaleWarning product={alcoholSaleWarning} onClose={()=>setAlcoholSaleWarning(null)}/>}</main>;
+  if (reviewing) return <main className="waiter-app"><header className="waiter-header"><button onClick={() => setReviewing(false)}>← Wróć</button><div><span>Zamówienie</span><strong>{employee.name}</strong></div><button onClick={logout}>Wyloguj</button></header><section className="waiter-review"><div className="waiter-review-title"><span>SPRAWDŹ PRZED WYSŁANIEM</span><h1>Stolik {tables.find((table) => table.dotykackaId === tableId)?.name ?? "—"}</h1><p>{guestCount} {guestCount === 1 ? "gość" : "gości"} · {itemCount} pozycji</p></div>{items.map((item) => <article className="waiter-review-item" key={item.lineKey}><div><h2>{item.product.name}</h2>{(item.product.takeaway||item.temperature||item.customizations.length>0)&&<p className="waiter-item-options">{[item.product.takeaway?(item.takeaway?"Na wynos":"Na miejscu"):"",item.temperature?temperatureLabel(item.temperature):"",...item.customizations.map((addon)=>addon.name)].filter(Boolean).join(" · ")}</p>}<strong>{money(itemUnitPrice(item) * item.quantity)} zł</strong></div><div className="waiter-quantity"><button onClick={() => changeLine(item.lineKey, -1)}>−</button><b>{item.quantity}</b><button onClick={() => changeLine(item.lineKey, 1)}>+</button></div><label>Uwagi do pozycji<input value={item.note} maxLength={500} onChange={(event) => itemNote(item.lineKey, event.target.value)} placeholder="np. bez lodu, osobno…"/></label></article>)}<label className="waiter-order-note">Uwagi do całego zamówienia<textarea value={orderNote} maxLength={1000} onChange={(event) => setOrderNote(event.target.value)} placeholder="Informacja dla baru lub kuchni"/></label>{error && <p className="waiter-error" role="alert">{error}</p>}<footer><div><span>Razem</span><strong>{money(total)} zł</strong></div><button disabled={!items.length || (!surveyQuestions.length && !posEnabled)} onClick={() => surveyQuestions.length ? setSurveying(true) : void sendOrder()}>{surveyQuestions.length ? "Dalej: krótka ankieta →" : posEnabled ? "Wyślij do Dotykački" : "Wysyłka jeszcze zablokowana"}</button>{!posEnabled && !surveyQuestions.length && <small>Najpierw sprawdzimy połączenie na środowisku testowym. Ten ekran nie może teraz utworzyć zamówienia ani paragonu.</small>}</footer></section>{alcoholSaleWarning&&<AlcoholSaleWarning product={alcoholSaleWarning} onClose={()=>setAlcoholSaleWarning(null)}/>}</main>;
 
-  return <main className="waiter-app"><header className="waiter-header"><img src="/logo-cafe.png" alt="Atelier Café"/><div><span>Zalogowany pracownik</span><strong>{employee.name}</strong></div><aside className="waiter-finance-entry"><div className="waiter-header-actions"><Link className="waiter-inventory-entry" href="/kelner/inventory">Inwentaryzacja{inventoryTaskCount > 0 && <b>{inventoryTaskCount}</b>}</Link><button className="waiter-guest-receipt-entry" onClick={() => setArea("guest-receipts")}>Rachunek dla gościa</button><button className="waiter-settlement-entry" onClick={() => setArea("settlement")}>Rozliczenie</button></div><span>Zatwierdzone napiwki do wypłaty: <b>{money(Number(approvedTips.total))} zł</b>{approvedTips.count > 0 && <small> · {approvedTips.count} {approvedTips.count === 1 ? "pozycja" : "pozycje"}</small>}</span></aside><button onClick={logout}>Wyloguj</button></header>{inventoryTaskCount > 0 && <Link className="waiter-inventory-alert" href="/kelner/inventory"><span>Masz {inventoryTaskCount} {inventoryTaskCount === 1 ? "zadanie inwentaryzacyjne" : "zadania inwentaryzacyjne"} do wykonania</span><b>Otwórz zadania →</b></Link>}<section className="waiter-context"><label>Stolik<select value={tableId} onChange={(event) => setTableId(event.target.value)}><option value="">Wybierz stolik</option>{tables.map((table) => <option key={table.dotykackaId} value={table.dotykackaId}>{table.name}</option>)}</select></label><label>Liczba gości<div className="waiter-quantity"><button onClick={() => setGuestCount((value) => Math.max(1, value - 1))}>−</button><b>{guestCount}</b><button onClick={() => setGuestCount((value) => Math.min(30, value + 1))}>+</button></div></label><WaiterSearch onQueryChange={setQuery}/></section><nav className="waiter-categories">{categories.map((item) => <button key={item} className={`${category === item ? "is-active" : ""}${item === OUTSIDE_MENU ? " is-outside-menu" : ""}`} onClick={() => chooseCategory(item)}>{item}</button>)}</nav>{category === OUTSIDE_MENU && <aside className="waiter-outside-menu-note"><b>Pozycje spoza karty gościa</b><span>Aktywne produkty oznaczone jako wyświetlane w Dotykačce, bez tagów MENU i PÓŁKA.</span></aside>}{activeDrinkKind && <WaiterDrinkFilters kind={activeDrinkKind} products={categoryProducts} filters={drinkFilters} onChange={setDrinkFilters}/>}<section className="waiter-products">{visible.map((product) => {
+  return <main className="waiter-app"><header className="waiter-header"><img src="/logo-cafe.png" alt="Atelier Café"/><div><span>Zalogowany pracownik</span><strong>{employee.name}</strong></div><aside className="waiter-finance-entry"><div className="waiter-header-actions"><Link className="waiter-inventory-entry" href="/kelner/inventory">Inwentaryzacja{inventoryTaskCount > 0 && <b>{inventoryTaskCount}</b>}</Link><button className="waiter-guest-receipt-entry" onClick={() => setArea("guest-receipts")}>Rachunek dla gościa</button><button className="waiter-settlement-entry" onClick={() => setArea("settlement")}>Rozliczenie</button></div><span>Zatwierdzone napiwki do wypłaty: <b>{money(Number(approvedTips.total))} zł</b>{approvedTips.count > 0 && <small> · {approvedTips.count} {approvedTips.count === 1 ? "pozycja" : "pozycje"}</small>}</span></aside><button onClick={logout}>Wyloguj</button></header>{inventoryTaskCount > 0 && <Link className="waiter-inventory-alert" href="/kelner/inventory"><span>Masz {inventoryTaskCount} {inventoryTaskCount === 1 ? "zadanie inwentaryzacyjne" : "zadania inwentaryzacyjne"} do wykonania</span><b>Otwórz zadania →</b></Link>}<section className="waiter-context"><label>Stolik<select value={tableId} onChange={(event) => setTableId(event.target.value)}><option value="">Wybierz stolik</option>{tables.map((table) => <option key={table.dotykackaId} value={table.dotykackaId}>{table.name}</option>)}</select></label><label>Liczba gości<div className="waiter-quantity"><button onClick={() => setGuestCount((value) => Math.max(1, value - 1))}>−</button><b>{guestCount}</b><button onClick={() => setGuestCount((value) => Math.min(30, value + 1))}>+</button></div></label><WaiterSearch onQueryChange={setQuery}/></section><nav className="waiter-categories">{categories.map((item) => <button key={item} className={`${category === item ? "is-active" : ""}${item === OUTSIDE_MENU ? " is-outside-menu" : ""}`} onClick={() => chooseCategory(item)}>{item}</button>)}</nav>{category !== "Wszystkie" && category !== OUTSIDE_MENU && hiddenMenuItemCount > 0 && <aside className={`waiter-hidden-menu-toolbar${showHiddenMenuItems?" is-showing-hidden":""}`}><div><b>{showHiddenMenuItems?"Pozycje ukryte dla gościa":"Aktualna karta gościa"}</b><span>{showHiddenMenuItems?"Te produkty mają tag MENU, ale nie są teraz widoczne w cyfrowej karcie.":`${hiddenMenuItemCount} ${hiddenMenuItemCount===1?"pozycja ukryta":"pozycji ukrytych"} w tej kategorii.`}</span></div><button type="button" onClick={()=>{setShowHiddenMenuItems(value=>!value);setVisibleLimit(RESULT_PAGE_SIZE)}}>{showHiddenMenuItems?"Pokaż aktualne menu":`Pokaż ukryte (${hiddenMenuItemCount})`}</button></aside>}{category === OUTSIDE_MENU && <aside className="waiter-outside-menu-note"><b>Pozycje spoza karty gościa</b><span>Aktywne produkty oznaczone jako wyświetlane w Dotykačce, bez tagów MENU i PÓŁKA. W tej sekcji nie pokazujemy produktów wyłączonych w POS.</span></aside>}{activeDrinkKind && <WaiterDrinkFilters kind={activeDrinkKind} products={categoryProducts} filters={drinkFilters} onChange={setDrinkFilters}/>}<section className="waiter-products">{visible.map((product) => {
     if (!isAlternativeCoffeeMethod(product.name)) return productCard(product);
     if (product.dotykackaId !== firstAlternativeMethodId) return null;
     return <section className="waiter-alternative-coffee" key="alternative-coffee"><header><span>KAWY ALTERNATYWNE</span><h2>Wybierz metodę parzenia</h2><p>Metody są razem. Po wyborze wskaż ziarno, a następnie dowolne dodatki do kawy.</p></header><div>{visibleAlternativeMethods.map((method) => productCard(method, true))}</div></section>;
-  })}{resultsLimited && <div className="waiter-search-limit"><span>Pokazuję {visible.length} z {matchingProducts.length} wyników.{normalizedQuery ? " Możesz dopisać kolejne znaki albo wyświetlić więcej." : ""}</span><button type="button" onClick={() => setVisibleLimit((current) => current + RESULT_PAGE_SIZE)}>Pokaż kolejne</button></div>}{!visible.length && <p className="waiter-empty">Brak pozycji pasujących do wybranych filtrów.</p>}</section>{configuring && <div className="waiter-configurator-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setConfiguring(null); }}><section className="waiter-configurator" role="dialog" aria-modal="true" aria-labelledby="waiter-configurator-title"><header><div><span>{isAlternativeCoffeeMethod(configuring.name) ? "KROK 2 · ZIARNO I DODATKI" : "DODAJ JEDNĄ POZYCJĘ"}</span><h2 id="waiter-configurator-title">{configuring.name}</h2></div><button onClick={() => setConfiguring(null)} aria-label="Zamknij">×</button></header>{configuring.addonGroups.map((group) => { const selected = addonSelections[group.name] ?? []; return <fieldset key={group.name}><legend>{group.name}{group.required ? <small>wymagany wybór</small> : group.multiple ? <small>możesz wybrać kilka</small> : <small>opcjonalnie</small>}</legend><div>{!group.required && <button type="button" className={!selected.length ? "is-selected" : ""} onClick={() => setAddonSelections((current) => ({ ...current, [group.name]: [] }))}>Bez zmiany</button>}{group.options.map((addon) => <button type="button" key={addon.id} aria-pressed={selected.includes(addon.id)} className={selected.includes(addon.id) ? "is-selected" : ""} onClick={() => setAddonSelections((current) => { const previous = current[group.name] ?? []; const next = group.multiple ? (previous.includes(addon.id) ? previous.filter((id) => id !== addon.id) : [...previous, addon.id]) : [addon.id]; return { ...current, [group.name]: next }; })}><b>{addon.name}</b>{Number(addon.price ?? 0) > 0 && <small>+ {money(Number(addon.price))} zł</small>}</button>)}</div></fieldset>; })}<footer><button className="waiter-configurator-cancel" onClick={() => setConfiguring(null)}>Anuluj</button><button disabled={configuring.addonGroups.some((group) => group.required && !addonSelections[group.name]?.length)} onClick={confirmConfiguration}>Dodaj do zamówienia</button></footer></section></div>}{manualProduct && <StaffManualDialog product={manualProduct} onClose={() => setManualProduct(null)}/>} {alcoholSaleWarning&&<AlcoholSaleWarning product={alcoholSaleWarning} onClose={()=>setAlcoholSaleWarning(null)}/>}<footer className="waiter-cart"><div><b>{itemCount}</b><span>{itemCount === 1 ? "pozycja" : "pozycji"}<small>{money(total)} zł</small></span></div><button disabled={!itemCount || !tableId} onClick={() => setReviewing(true)}>Sprawdź zamówienie →</button></footer></main>;
+  })}{resultsLimited && <div className="waiter-search-limit"><span>Pokazuję {visible.length} z {matchingProducts.length} wyników.{normalizedQuery ? " Możesz dopisać kolejne znaki albo wyświetlić więcej." : ""}</span><button type="button" onClick={() => setVisibleLimit((current) => current + RESULT_PAGE_SIZE)}>Pokaż kolejne</button></div>}{!visible.length && <p className="waiter-empty">Brak pozycji pasujących do wybranych filtrów.</p>}</section>{visibilityChange&&<div className="waiter-visibility-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!visibilitySaving){setVisibilityChange(null);setVisibilityReason("")}}}><section className="waiter-visibility-dialog" role="dialog" aria-modal="true" aria-labelledby="waiter-visibility-title"><header><span>{visibilityChange.visible?"WŁĄCZENIE PRODUKTU":"UKRYCIE PRODUKTU"}</span><h2 id="waiter-visibility-title">{visibilityChange.product.name}</h2><p>{visibilityChange.visible?"Produkt pojawi się w menu gościa.":"Produkt zniknie z menu gościa, ale pozostanie dostępny w POS i w strefie kelnera."}</p></header><label>Powód zmiany<select value={visibilityReason} onChange={event=>setVisibilityReason(event.target.value)}><option value="">Wybierz obowiązkowy powód</option><option>Zmiana dostępności w witrynie</option><option>Produkt wyprzedany</option><option>Produkt ponownie dostępny</option><option>Decyzja osoby odpowiedzialnej za zmianę</option></select></label><aside>Operacja zostanie zapisana w historii administratora wraz z Twoim nazwiskiem i godziną.</aside><footer><button type="button" className="waiter-configurator-cancel" disabled={visibilitySaving} onClick={()=>{setVisibilityChange(null);setVisibilityReason("")}}>Anuluj</button><button type="button" disabled={!visibilityReason||visibilitySaving} onClick={()=>void saveVisibilityChange()}>{visibilitySaving?"Zapisuję…":visibilityChange.visible?"Włącz w menu":"Ukryj w menu"}</button></footer></section></div>}{configuring && <div className="waiter-configurator-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) { setConfiguring(null); setTemperatureSelection(null); setFulfillmentSelection(null); } }}><section className="waiter-configurator" role="dialog" aria-modal="true" aria-labelledby="waiter-configurator-title"><header><div><span>{isAlternativeCoffeeMethod(configuring.name) ? "KROK 2 · ZIARNO I DODATKI" : "DODAJ JEDNĄ POZYCJĘ"}</span><h2 id="waiter-configurator-title">{configuring.name}</h2></div><button onClick={() => { setConfiguring(null); setTemperatureSelection(null); setFulfillmentSelection(null); }} aria-label="Zamknij">×</button></header>{configuring.takeaway&&<fieldset className="waiter-takeaway-fieldset"><legend>Sposób wydania</legend><div><button type="button" className={fulfillmentSelection==="dine-in"?"is-selected":""} aria-pressed={fulfillmentSelection==="dine-in"} onClick={()=>setFulfillmentSelection("dine-in")}><b>Na miejscu</b></button><button type="button" className={`${fulfillmentSelection==="takeaway"?"is-selected ":""}is-takeaway`} aria-pressed={fulfillmentSelection==="takeaway"} onClick={()=>setFulfillmentSelection("takeaway")}><b>Na wynos</b></button></div></fieldset>}{configuring.temperatures.length>1&&<fieldset className="waiter-temperature-fieldset"><legend>Sposób podania<small>wymagany wybór</small></legend><div>{configuring.temperatures.map((kind)=><button type="button" key={kind} aria-pressed={temperatureSelection===kind} className={`${temperatureSelection===kind?"is-selected ":""}is-${kind}`} onClick={()=>setTemperatureSelection(kind)}><TemperatureIcon kind={kind}/><b>{temperatureLabel(kind)}</b></button>)}</div></fieldset>}{configuring.addonGroups.map((group) => { const selected = addonSelections[group.name] ?? []; return <fieldset key={group.name}><legend>{group.name}{group.required ? <small>wymagany wybór</small> : group.maxSelections ? <small>wybierz maks. {group.maxSelections}</small> : group.multiple ? <small>możesz wybrać kilka</small> : <small>opcjonalnie</small>}</legend><div>{!group.required && <button type="button" className={!selected.length ? "is-selected" : ""} onClick={() => setAddonSelections((current) => ({ ...current, [group.name]: [] }))}>Bez zmiany</button>}{group.options.map((addon) => <button type="button" key={addon.id} aria-pressed={selected.includes(addon.id)} disabled={!selected.includes(addon.id)&&Boolean(group.maxSelections&&selected.length>=group.maxSelections)} className={selected.includes(addon.id) ? "is-selected" : ""} onClick={() => setAddonSelections((current) => { const previous = current[group.name] ?? []; const next = group.multiple ? (previous.includes(addon.id) ? previous.filter((id) => id !== addon.id) : group.maxSelections&&previous.length>=group.maxSelections ? previous : [...previous, addon.id]) : [addon.id]; return { ...current, [group.name]: next }; })}><b>{addon.name}</b>{Number(addon.price ?? 0) > 0 && <small>+ {money(Number(addon.price))} zł</small>}</button>)}</div></fieldset>; })}<footer><button className="waiter-configurator-cancel" onClick={() => { setConfiguring(null); setTemperatureSelection(null); setFulfillmentSelection(null); }}>Anuluj</button><button disabled={(configuring.temperatures.length>1&&!temperatureSelection)||configuring.addonGroups.some((group) => group.required && !addonSelections[group.name]?.length)} onClick={confirmConfiguration}>Dodaj do zamówienia</button></footer></section></div>}{manualProduct && <StaffManualDialog product={manualProduct} onClose={() => setManualProduct(null)}/>} {alcoholSaleWarning&&<AlcoholSaleWarning product={alcoholSaleWarning} onClose={()=>setAlcoholSaleWarning(null)}/>}<footer className="waiter-cart"><div><b>{itemCount}</b><span>{itemCount === 1 ? "pozycja" : "pozycji"}<small>{money(total)} zł</small></span></div><button disabled={!itemCount || !tableId} onClick={() => setReviewing(true)}>Sprawdź zamówienie →</button></footer></main>;
 }

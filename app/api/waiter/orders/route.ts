@@ -4,15 +4,29 @@ import { getDb } from "../../../../db";
 import { menuAddons, menuCategories, menuProducts, waiterExtraProducts, waiterOrders, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
 import { currentWaiter, waiterCookie } from "../../../../lib/waiter-auth";
 import { isAlternativeCoffeeBeanGroup, isAlternativeCoffeeMethod, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
-import { acceptsFlavorSyrup, isForestLifeSyrupCategory, isGenericFlavorSyrupOption } from "../../../../lib/flavor-syrups";
-import { menuProductIsAvailable, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
+import { acceptsFlavorSyrup, isForestLifeSyrupCategory, isGenericFlavorSyrupOption, isLemonadeProduct } from "../../../../lib/flavor-syrups";
+import { menuProductIsAvailable, productTakeawayAvailable, productTemperatures, regularProductStockIsAvailable, type ServingTemperature } from "../../../../lib/menu-tags";
 import { DotykackaClient } from "../../../../lib/dotykacka/client";
 import { getDotykackaConfig } from "../../../../lib/dotykacka/config";
 
 const MENU_TAG = process.env.DOTYKACKA_MENU_TAG?.trim() || "MENU";
 
 type OrderInput = { tableId?: unknown; guestCount?: unknown; note?: unknown; items?: unknown; surveyAnswers?: unknown };
-type ItemInput = { productId?: unknown; quantity?: unknown; note?: unknown; customizations?: unknown };
+type ItemInput = { productId?: unknown; quantity?: unknown; note?: unknown; temperature?: unknown; takeaway?: unknown; customizations?: unknown };
+
+function requestedTemperature(value: unknown): ServingTemperature | null {
+  return value === "warm" || value === "cold" ? value : null;
+}
+
+function temperatureOptionsFor<T extends object>(product: T) {
+  const tags = "tags" in product && Array.isArray(product.tags) ? product.tags as string[] : [];
+  return productTemperatures(tags);
+}
+
+function takeawayAvailableFor<T extends object>(product: T) {
+  const tags = "tags" in product && Array.isArray(product.tags) ? product.tags as string[] : [];
+  return productTakeawayAvailable(tags);
+}
 
 function clearCookie(response: Response) {
   response.headers.append("Set-Cookie", `${waiterCookie.name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
@@ -40,7 +54,7 @@ export async function POST(request: Request) {
     db.select({
       id: menuProducts.id, dotykackaId: menuProducts.dotykackaId, name: menuProducts.name, category: menuCategories.name, price: menuProducts.priceWithVat,
       tags: menuProducts.tags, stockDeduct: menuProducts.stockDeduct, stockOverdraft: menuProducts.stockOverdraft, stockQuantity: menuProducts.stockQuantity,
-    }).from(menuProducts).innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId)).where(and(inArray(menuProducts.dotykackaId, productIds), eq(menuProducts.menuTagged, true), eq(menuProducts.display, true), eq(menuProducts.deleted, false))),
+    }).from(menuProducts).innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId)).where(and(inArray(menuProducts.dotykackaId, productIds), eq(menuProducts.menuTagged, true), eq(menuProducts.deleted, false))),
     db.select({
       id: waiterExtraProducts.id, dotykackaId: waiterExtraProducts.dotykackaId, name: waiterExtraProducts.name, category: waiterExtraProducts.category, price: waiterExtraProducts.priceWithVat,
       stockDeduct: waiterExtraProducts.stockDeduct, stockOverdraft: waiterExtraProducts.stockOverdraft, stockQuantity: waiterExtraProducts.stockQuantity,
@@ -80,7 +94,9 @@ export async function POST(request: Request) {
       const syrupFlavor = availableSyrupFlavors.get(id);
       if (syrupFlavor && genericSyrupAddon && acceptsFlavorSyrup(product?.category, product?.name)) {
         const directSyrupAddon = Array.from(direct.values()).find((addon) => isGenericFlavorSyrupOption(addon.name));
-        return { addon: directSyrupAddon ?? genericSyrupAddon, fallback: directSyrupAddon ? null : "syrup" as const, flavorName: syrupFlavor.name };
+        const syrupAddon = directSyrupAddon ?? genericSyrupAddon;
+        const includedInLemonade = isLemonadeProduct(product?.name);
+        return { addon: includedInLemonade ? { ...syrupAddon, price: "0" } : syrupAddon, fallback: includedInLemonade || !directSyrupAddon ? "syrup" as const : null, flavorName: syrupFlavor.name, includedInLemonade };
       }
       const native = direct.get(id);
       if (native) return { addon: native, fallback: null as "bean" | "addition" | "syrup" | null, flavorName: null };
@@ -91,11 +107,23 @@ export async function POST(request: Request) {
   };
   for (const item of items) {
     const productId = String(item.productId);
+    const product = byId.get(productId)!;
+    const temperatureOptions = temperatureOptionsFor(product);
+    const temperature = requestedTemperature(item.temperature);
+    const hasTemperatureInput = item.temperature !== undefined && item.temperature !== null && item.temperature !== "";
+    if (hasTemperatureInput && !temperature) return Response.json({ error: "Zamówienie zawiera nieprawidłowy sposób podania." }, { status: 400 });
+    if (temperatureOptions.length > 1 && (!temperature || !temperatureOptions.includes(temperature))) return Response.json({ error: "Wybierz wersję na ciepło albo na zimno." }, { status: 400 });
+    if (temperatureOptions.length === 1 && temperature && temperature !== temperatureOptions[0]) return Response.json({ error: "Wybrany sposób podania nie jest dostępny dla tego produktu." }, { status: 400 });
+    if (!temperatureOptions.length && temperature) return Response.json({ error: "Ten produkt nie ma wariantu temperatury." }, { status: 400 });
+    if (item.takeaway !== undefined && typeof item.takeaway !== "boolean") return Response.json({ error: "Zamówienie zawiera nieprawidłowy sposób wydania." }, { status: 400 });
+    if (item.takeaway === true && !takeawayAvailableFor(product)) return Response.json({ error: "Tego produktu nie można oznaczyć jako zamówienie na wynos." }, { status: 400 });
     const requestedIds = [...new Set((Array.isArray(item.customizations) ? item.customizations : []).map((value) => typeof value === "string" ? value : "").filter(Boolean))];
     const resolved = selectionsFor(productId, requestedIds);
     if (resolved.some((selection) => !selection)) return Response.json({ error: "Zamówienie zawiera niedostępny dodatek." }, { status: 400 });
-    if (resolved.filter((selection) => selection?.flavorName).length > 1) return Response.json({ error: "Wybierz jeden smak syropu do napoju." }, { status: 400 });
-    const selectedGroups = resolved.map((selection) => selection?.addon.groupName?.trim() || "Dodatki");
+    const flavorCount = resolved.filter((selection) => selection?.flavorName).length;
+    const maxFlavorCount = isLemonadeProduct(product.name) ? 2 : 1;
+    if (flavorCount > maxFlavorCount) return Response.json({ error: isLemonadeProduct(product.name) ? "Do lemoniady możesz wybrać maksymalnie dwa smaki." : "Wybierz jeden smak syropu do napoju." }, { status: 400 });
+    const selectedGroups = resolved.flatMap((selection) => selection?.flavorName && isLemonadeProduct(product.name) ? [] : [selection?.addon.groupName?.trim() || "Dodatki"]);
     const singleChoiceGroups = selectedGroups.filter((group) => !isCoffeeAddonGroup(group));
     if (new Set(singleChoiceGroups).size !== singleChoiceGroups.length) return Response.json({ error: "W tej grupie można wybrać tylko jeden wariant." }, { status: 400 });
     const requiredGroups = new Set(allowedAddons.filter((addon) => addon.parentId === productId && isAlternativeCoffeeBeanGroup(addon.groupName)).map((addon) => addon.groupName?.trim() || "Dodatki"));
@@ -104,18 +132,23 @@ export async function POST(request: Request) {
   }
   const normalizedItems = items.map((item) => {
     const product = byId.get(String(item.productId))!;
+    const temperatureOptions = temperatureOptionsFor(product);
+    const temperature = requestedTemperature(item.temperature) ?? (temperatureOptions.length === 1 ? temperatureOptions[0] : null);
+    const takeaway = item.takeaway === true && takeawayAvailableFor(product);
     const rawCustomizations = Array.isArray(item.customizations) ? item.customizations : [];
     const customizationIds = [...new Set(rawCustomizations.map((value) => typeof value === "string" ? value : "").filter(Boolean))];
     const selected = selectionsFor(product.dotykackaId, customizationIds).filter((selection): selection is NonNullable<typeof selection> => Boolean(selection));
     const beanNotes = selected.filter((selection) => selection.fallback === "bean").map((selection) => `Ziarno: ${selection.addon.name}`);
     const syrupNotes = selected.filter((selection) => selection.flavorName).map((selection) => `Syrop: ${selection.flavorName}`);
     const rawNote = typeof item.note === "string" ? item.note.trim().slice(0, 500) : "";
-    const note = [rawNote, ...beanNotes, ...syrupNotes].filter(Boolean).join(" · ") || undefined;
+    const temperatureNotes = temperature ? [`Sposób podania: ${temperature === "warm" ? "na ciepło" : "na zimno"}`] : [];
+    const fulfillmentNotes = takeaway ? ["Sposób wydania: na wynos"] : [];
+    const note = [rawNote, ...fulfillmentNotes, ...temperatureNotes, ...beanNotes, ...syrupNotes].filter(Boolean).join(" · ") || undefined;
     const unitPrice = Number(product.price ?? 0) + selected.reduce((sum, selection) => sum + Number(selection.addon.price ?? 0), 0);
     const customizations = selected.map(({ addon, fallback, flavorName }) => ({ customizationId: fallback ? "" : addon.customizationId ?? "", productId: addon.productId, name: flavorName ? `${addon.name}: ${flavorName}` : addon.name, price: addon.price ?? "0", fallback }));
     const posCustomizations = customizations.filter((addon) => !addon.fallback);
-    const standaloneAddons = customizations.filter((addon) => addon.fallback === "addition" || addon.fallback === "syrup");
-    return { productId: product.dotykackaId, localProductId: product.id, name: product.name, quantity: Number(item.quantity), unitPrice: String(unitPrice), note, customizations, posCustomizations, standaloneAddons };
+    const standaloneAddons = customizations.filter((addon) => addon.fallback === "addition" || (addon.fallback === "syrup" && !isLemonadeProduct(product.name)));
+    return { productId: product.dotykackaId, localProductId: product.id, name: product.name, quantity: Number(item.quantity), unitPrice: String(unitPrice), note, temperature, takeaway, customizations, posCustomizations, standaloneAddons };
   });
   const rawAnswers = body.surveyAnswers && typeof body.surveyAnswers === "object" ? body.surveyAnswers as Record<string, unknown> : {};
   const surveyAnswers = questions.flatMap((question) => {

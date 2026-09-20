@@ -91,7 +91,7 @@ Ankieta przed zamówieniem pozostaje w `waiter_survey_questions`. Osobna ankieta
 
 Kod QR wymaga ustawienia zmiennej `GOOGLE_REVIEW_URL` na dokładny, publiczny link „napisz opinię” z profilu Google firmy. Bez tej zmiennej rachunek i ankieta działają, ale kod QR jest ukryty.
 
-Szczegóły wdrożenia znajdują się w [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), a zasady integracji magazynowej w [`docs/DOTYKACKA_INVENTORY_INTEGRATION.md`](docs/DOTYKACKA_INVENTORY_INTEGRATION.md).
+Szczegóły wdrożenia znajdują się w [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), bieżące reguły produktów, kodów, tagów, filtrów i zdjęć w [`docs/MENU_CONFIGURATION.md`](docs/MENU_CONFIGURATION.md), a zasady integracji magazynowej w [`docs/DOTYKACKA_INVENTORY_INTEGRATION.md`](docs/DOTYKACKA_INVENTORY_INTEGRATION.md). Operacyjną listę przygotowania POS zawiera [`DOTYKACKA_CHECKLIST.md`](DOTYKACKA_CHECKLIST.md).
 
 ## Licencja i publikacja
 

@@ -83,7 +83,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (parsed.data.decision !== "KEEP_CURRENT") {
     const proposal = (source.proposedContent ?? {}) as WineSourceProposal;
     const imageCandidates = proposal.imageCandidates ?? [];
-    if (imageCandidates.length > 1 && !parsed.data.imageSourceUrl) {
+    const existingImages = await db.select({
+      productId: productContent.productId,
+      imagePath: productContent.imagePath,
+      imageSourceUrl: productContent.imageSourceUrl,
+    }).from(productContent).where(inArray(productContent.productId, productIds));
+    const everyProductNeedsAnImage = productIds.every((id) => {
+      const content = existingImages.find((item) => item.productId === id);
+      return !content?.imagePath && !content?.imageSourceUrl;
+    });
+    if (everyProductNeedsAnImage && imageCandidates.length > 1 && !parsed.data.imageSourceUrl) {
       return Response.json({ error: "Wybierz jedno ze znalezionych zdjęć przed zastosowaniem propozycji." }, { status: 400 });
     }
     if (parsed.data.imageSourceUrl && imageCandidates.length
@@ -99,10 +108,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const [current] = await db.select().from(productContent).where(eq(productContent.productId, targetProductId)).limit(1);
       const proposedSparklingType = proposal.sparklingType
         ?? detectSparklingType(proposal.wineColor, proposal.wineStyle, proposal.descriptionPl, proposal.tastingNotes);
+      const hasCurrentImage = Boolean(current?.imagePath || current?.imageSourceUrl);
       const proposedImage = parsed.data.imageSourceUrl ?? proposal.imageSourceUrl;
-      const imageSourceUrl = choose(proposedImage, current?.imageSourceUrl);
+      // Zaakceptowanie nowego opisu lub parametrów nigdy nie zmienia wcześniej
+      // zapisanego zdjęcia. Zdjęcie można zastąpić dopiero po jego świadomym
+      // usunięciu w dedykowanej sekcji obrazu.
+      const imageSourceUrl = hasCurrentImage ? current?.imageSourceUrl ?? null : choose(proposedImage, null);
       let imagePath = current?.imagePath ?? null;
-      if (imageSourceUrl && imageSourceUrl !== current?.imageSourceUrl) {
+      if (!hasCurrentImage && imageSourceUrl) {
         try {
           imagePath = await importProductImage(targetProductId, imageSourceUrl);
         } catch (error) {

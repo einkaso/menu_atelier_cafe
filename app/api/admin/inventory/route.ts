@@ -4,6 +4,7 @@ import { getDb } from "../../../../db";
 import { dotykackaStockEvents, inventoryCatalogCategories, inventoryCatalogProducts, inventoryEvents, inventoryStageItems, inventoryStages, menuProducts, productContent, waiterEmployees } from "../../../../db/schema";
 import { currentAdmin } from "../../../../lib/admin-auth";
 import { cleanInventoryLocation, inventoryDifference, millisToQuantity, selectInventoryProducts } from "../../../../lib/inventory";
+import { isIngredientInventoryCategory } from "../../../../lib/menu-tags";
 
 export const dynamic = "force-dynamic";
 
@@ -202,6 +203,14 @@ export async function PATCH(request: Request) {
   if (typeof body.productDotykackaId !== "string") return Response.json({ error: "Nieprawidłowy produkt magazynowy." }, { status: 400 });
   let values: { inventoryTracked?: boolean; inventoryCountingMode?: string; servingsPerContainer?: number };
   if (body.action === "SET_PRODUCT_TRACKING" && typeof body.inventoryTracked === "boolean") {
+    const [product] = await getDb().select({ categoryName: inventoryCatalogCategories.name })
+      .from(inventoryCatalogProducts)
+      .leftJoin(inventoryCatalogCategories, eq(inventoryCatalogProducts.categoryDotykackaId, inventoryCatalogCategories.dotykackaId))
+      .where(eq(inventoryCatalogProducts.dotykackaId, body.productDotykackaId))
+      .limit(1);
+    if (isIngredientInventoryCategory(product?.categoryName)) {
+      return Response.json({ error: "Dla kategorii Składniki wybór jest sterowany tagiem INWENT w Dotykačce." }, { status: 409 });
+    }
     values = { inventoryTracked: body.inventoryTracked };
   } else if (body.action === "SET_WINE_SERVINGS" && (body.servingsPerContainer === 5 || body.servingsPerContainer === 6)) {
     values = { inventoryCountingMode: "WINE_BOTTLE", servingsPerContainer: body.servingsPerContainer };

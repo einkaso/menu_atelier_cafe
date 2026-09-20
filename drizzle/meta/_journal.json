@@ -239,6 +239,20 @@
       "when": 1789818978238,
       "tag": "0033_gray_zuras",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789911548000,
+      "tag": "0034_waiter_menu_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1789923600000,
+      "tag": "0035_product_detail_backdrop",
+      "breakpoints": true
     }
   ]
 }

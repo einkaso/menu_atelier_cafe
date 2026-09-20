@@ -4,6 +4,7 @@ import { menuCategories, menuProducts, productContent } from "../../../../db/sch
 import { isAdmin } from "../../../../lib/admin-auth";
 import { sectionFor, suggestCategoryOrder } from "../../../../lib/menu-categories";
 import { hasTag, isShelfProduct, shelfHasPositiveStock } from "../../../../lib/menu-tags";
+import { menuProductVisibleForGuest } from "../../../../lib/menu-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export async function GET() {
         tags: menuProducts.tags,
         menuTagged: menuProducts.menuTagged,
         manualHidden: productContent.manualHidden,
+        waiterVisibilityOverride: productContent.waiterVisibilityOverride,
         hideWhenOutOfStock: productContent.hideWhenOutOfStock,
       }).from(menuProducts)
         .leftJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
@@ -43,7 +45,8 @@ export async function GET() {
 
     const rows = categories.map((category) => {
       const visible = products.filter((product) => product.categoryId === category.id
-        && product.menuTagged && hasTag(product.tags, "MENU") && product.display && !product.deleted && !product.manualHidden
+        && product.menuTagged && hasTag(product.tags, "MENU") && !product.deleted
+        && menuProductVisibleForGuest(product.display, product.manualHidden, product.waiterVisibilityOverride)
         && !(product.stockDeduct && product.stockOverdraft === "DISABLE" && Number(product.stockQuantity ?? 0) <= 0));
       return {
         ...category,

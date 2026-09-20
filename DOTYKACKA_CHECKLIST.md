@@ -26,6 +26,9 @@ Ten dokument jest stale aktualizowaną listą ustawień, które trzeba wykonać 
 ## 1. Dostęp i licencja
 
 - [ ] Potwierdzić, że posiadana licencja Dotykački obsługuje receptury (KOMPLET lub wyższa).
+- [ ] Dla piwa lanego prowadzić surowiec KEG w litrach i utworzyć opakowanie magazynowe odpowiadające pojemności beczki (Bosman: 30 l).
+- [ ] Produktom sprzedażowym piwa lanego wyłączyć bezpośrednie odliczanie z magazynu; odpis realizuje receptura z uwzględnieniem straty (Bosman 0,5 l: 0,515 l, Bosman 0,3 l: 0,309 l).
+- [ ] W kategorii `Składniki` oznaczać tagiem `INWENT` wszystkie i tylko te surowce, które mają trafiać do zleceń inwentaryzacyjnych. Usunięcie tagu wyłącza produkt po następnej synchronizacji.
 - [ ] Uzyskać `DOTYKACKA_REFRESH_TOKEN` z prawem odczytu produktów, kategorii i magazynu.
 - [ ] Ustalić `DOTYKACKA_CLOUD_ID`.
 - [ ] Ustalić `DOTYKACKA_WAREHOUSE_ID` właściwego magazynu kawiarni.
@@ -35,7 +38,7 @@ Ten dokument jest stale aktualizowaną listą ustawień, które trzeba wykonać 
 ## 2. Kategorie — przyszłe zakładki menu
 
 - [ ] Przejrzeć wszystkie kategorie w Dotykačce i usunąć lub ukryć nieużywane.
-- [ ] Ustalić ostateczne nazwy kategorii widoczne dla gości, np. Jedzenie, Kawa, Herbata, Matcha, Napoje, Ciasta i desery, Wina, Koktajle, Strefa 0%, Piwo.
+- [ ] Ustalić ostateczne nazwy kategorii źródłowych. Aplikacja łączy ciasta i desery w kartę `NA SŁODKO` w menu gościa i kelnera, a drinki oraz obsługiwane kategorie alkoholi w `Alko Bar`.
 - [ ] Ustawić kategorie w kolejności, w jakiej mają występować na tablecie.
 - [ ] Sprawdzić poprawność polskich nazw, wielkich liter i literówek.
 - [ ] Sprawdzić, które kategorie mają być widoczne w menu.
@@ -86,10 +89,10 @@ Ten dokument jest stale aktualizowaną listą ustawień, które trzeba wykonać 
 - Kod `WINxx` zapisujemy w polu PLU produktu w Dotykačce. Nie dopisujemy go już do nazwy; aplikacja odczytuje go z PLU i pokazuje osobno.
 - Butelka i kieliszek tego samego wina używają wspólnego kodu `WINxx`; opis i dane wina są współdzielone przez oba produkty.
 - Uzupełniaj EAN oraz dostawcę przy przyjęciu towaru, jeśli są dostępne — aplikacja zapisuje oba identyfikatory. Brak EAN nie blokuje publikacji.
-- Dla win i piw panel może bezpłatnie wyszukać dane produktu. Najpierw sprawdza stronę rozpoznanego dostawcy, a produkt posiadający EAN także w katalogu Open Food Facts.
+- Dla win, piw, whisky, brandy, koniaków i pozycji Alko Baru panel może wyszukać dane oraz zdjęcia produktu. Najpierw sprawdza stronę rozpoznanego dostawcy, a produkt posiadający EAN także w katalogu Open Food Facts.
 - EAN i kod dostawcy zwiększają trafność wyszukiwania, ale system potrafi szukać również po nazwie produktu i dostawcy.
 - Jeżeli bezpłatne źródła nie wystarczą, otwórz wyszukiwanie ręczne, wybierz właściwą stronę producenta lub sklepu i wklej jej adres w panelu. System sam odczyta z niej pola i zdjęcia.
-- Znalezione opisy, parametry, zdjęcia i adresy źródeł pozostają propozycją. Administrator wybiera jedno zdjęcie i decyduje, czy odrzucić dane, uzupełnić tylko braki czy zastosować propozycję.
+- Znalezione opisy, parametry, zdjęcia i adresy źródeł pozostają propozycją. Administrator decyduje, czy odrzucić dane, uzupełnić tylko braki czy zastosować propozycję. Już zapisane zdjęcie pozostaje bez zmian niezależnie od zdjęć znalezionych w nowym źródle; aby je zastąpić, najpierw trzeba kliknąć „Usuń zdjęcie”, a dopiero potem zaimportować nowe.
 - Zmiana dostawcy ani utworzenie kolejnego produktu z tym samym `WINxx` nie blokuje publikacji. Aplikacja automatycznie wykorzystuje wcześniej przygotowaną kartę wina.
 - Nowe źródło może automatycznie uzupełnić puste pola, ale nie zastępuje istniejącego opisu.
 - W panelu funkcja **Aktualizuj o nowe/inne dane** pozwala opcjonalnie wrócić do nowych źródeł i wybrać:
@@ -104,9 +107,9 @@ Ten dokument jest stale aktualizowaną listą ustawień, które trzeba wykonać 
 - [ ] Rozważyć zablokowanie sprzedaży poniżej stanu magazynowego.
 - [ ] Przypisać produkt do kategorii `Wina` i oznaczyć etykietą `menu`.
 - [ ] Dane takie jak kraj, region, szczep, kolor, poziom słodyczy, styl i aromaty uzupełniać w panelu naszej aplikacji.
-- [ ] Dla nowego wina lub piwa użyć funkcji „Sprawdź bezpłatne źródła”; gdy potrzeba, wkleić adres znalezionej strony produktu. Sprawdzić adresy źródłowe i wybrać właściwe zdjęcie przed akceptacją.
+- [ ] Dla nowego wina, piwa, mocnego alkoholu lub pozycji Alko Baru użyć funkcji „Sprawdź bezpłatne źródła”; gdy potrzeba, wkleić adres znalezionej strony produktu. Sprawdzić adresy źródłowe i propozycje przed akceptacją.
 - [ ] Status „wegańskie” ustawiać na „Tak — potwierdzone” wyłącznie na podstawie wyraźnej informacji producenta lub wiarygodnego źródła.
-- [ ] Sprawdzić, czy filtr win pokazuje dostępne kombinacje: rodzaj, smak, kieliszek/butelka, 0%, wegańskie oraz kraj.
+- [ ] Sprawdzić, czy filtr win pokazuje dostępne kombinacje: kolor, smak, musowanie, kieliszek/butelka, 0%, wegańskie oraz kraj.
 - [ ] W panelu menu, w zakładce „Połączenie”, wybrać właściwy oddział Dotykački. Bez oddziału aplikacja nie może pobrać raportu sprzedaży.
 - [ ] Po synchronizacji sprawdzić komunikat raportu: liczbę pozycji sprzedażowych oraz liczbę win ze sprzedażą w ostatnich 30 dniach.
 - [ ] Oznaczenie „Wybór naszych gości” jest wyliczane automatycznie z liczby sprzedanych sztuk z ostatnich 30 dni. Ze względu na limit API okres jest pobierany w odcinkach dobowych i sumowany przez aplikację.
@@ -144,6 +147,25 @@ Ten dokument jest stale aktualizowaną listą ustawień, które trzeba wykonać 
 - [ ] Przypisać grupę `DODATKI DO KAWY` do każdej kawy przez „Połączenia / dodatki”. Aplikacja pobierze wyłącznie tę grupę do sekcji „Dopasuj swoją kawę”; grupy `KAWY` nie należy używać jako listy dodatków.
 - [ ] Sprawdzić po synchronizacji: dodatkowe espresso, wszystkie rodzaje mleka, bitą śmietanę, syrop, dodatkowe mleko i DCAF.
 - [ ] Kawy paczkowane przeznaczone do sprzedaży na wynos oznaczać jednocześnie tagami `MENU` oraz `ZIARNO`.
+- [ ] AeroPress, Chemex, Drip i V60 utrzymywać w podgrupie kaw alternatywnych, a dostępne ziarna w grupie dodatków zawierającej słowo `ZIARNO` lub `ZIARNA`.
+- [ ] Sprawdzić w menu gościa, że metoda i ziarno są aktywne od początku. Interfejs sugeruje metodę jako krok pierwszy, ale pozwala zacząć od ziarna.
+- [ ] Sprawdzić w menu kelnerskim, że przed dodaniem kawy alternatywnej wybrano dokładnie jedno ziarno, a następnie można dołączyć dowolną liczbę zwykłych dodatków do kawy.
+- [ ] Syropy Leśne Życie przeznaczone jako dodatek utrzymywać z włączonym stanem magazynowym. Pełne butelki sprzedawane z półki oznaczać tagiem `PÓŁKA`.
+
+## 7A. Alko Bar i warianty obsługi
+
+- [ ] Uzupełnić w panelu rodzaj pozycji, bazę, profil smaku, sposób podania, moc, pochodzenie i objętość. System może zaproponować wartości z nazwy, opisu lub znalezionej strony, ale ręczny zapis ma pierwszeństwo.
+- [ ] Sprawdzić te same filtry w menu gościa i kelnera: rodzaj, baza, profil smaku, podanie oraz alkoholowe/0%.
+- [ ] Dla produktów oferowanych na ciepło i zimno używać tagów `WARM` i `COLD`. Oba tagi wymuszają wybór wariantu w strefie kelnera.
+- [ ] Tag `TOGO` dodaje kelnerowi opcję „Zapakuj na wynos”; bez jej wybrania produkt pozostaje domyślnie zamówieniem na miejscu. Tag nie dodaje ikony w menu gościa.
+- [ ] Dla pełnych butelek alkoholu sprawdzić ostrzeżenie działające od 21:58 do 06:02. Pozycje 0% oraz porcje nie uruchamiają ostrzeżenia.
+- [ ] Nie używać tagów `BABY` ani `BABYONLY` — funkcja została wycofana i tagi nie sterują menu.
+
+## 7B. Zdjęcia produktów
+
+- [ ] Zdjęcia z urządzenia mogą być JPG, PNG, WebP, AVIF, HEIC lub HEIF i mieć do 50 MB. Aplikacja koryguje orientację, zmniejsza je do maksymalnie 1600 px i optymalizuje do około 2,4 MB.
+- [ ] Dla „Na słono” można zapisać maksymalnie pięć zdjęć oraz wskazać, które ma być pierwsze.
+- [ ] Nowy opis, link źródłowy ani akceptacja nowych danych nie mogą usunąć lub podmienić wcześniej zapisanego zdjęcia. Aby wstawić inne, najpierw używamy przycisku „Usuń zdjęcie”, a dopiero potem importujemy nowe.
 
 ## 8. Herbata
 
@@ -161,6 +183,7 @@ Ten dokument jest stale aktualizowaną listą ustawień, które trzeba wykonać 
 - [ ] Sprawdzić polską oraz angielską wersję menu.
 - [ ] Sprawdzić co najmniej jedno wino na butelkę i jedno na kieliszek.
 - [ ] Sprawdzić jeden produkt ze zdjęciem i jedną pozycję polecaną.
+- [ ] Sprawdzić jeden produkt Alko Baru w filtrach gościa i kelnera oraz zapisać mu nowy opis, upewniając się, że wcześniejsze zdjęcie pozostało bez zmian.
 - [ ] Dopiero po przejściu całej listy zastąpić dotychczasowy plik PDF nową aplikacją.
 
 ## Decyzje do podjęcia

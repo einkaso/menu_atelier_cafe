@@ -90,6 +90,21 @@ test("extracts filterable whisky characteristics without treating bottle size as
   assert.equal(proposal.attributes.tasteProfile, "Dymny i torfowy");
 });
 
+test("extracts filterable Alko Bar characteristics and a product image", async () => {
+  const { extractProductPageProposal } = await vite.ssrLoadModule("/lib/product-enrichment.ts");
+  const html = `<html><head><title>Sarti Spritz</title><meta property="og:description" content="Owocowy i cytrusowy spritz na bazie Sarti Rosa i prosecco, podawany w kieliszku do wina."><meta property="og:image" content="https://example.com/sarti-spritz.jpg"></head><body><dl><dt>Rodzaj drinka</dt><dd>Spritz</dd><dt>Alkohol bazowy</dt><dd>Prosecco i aperitif</dd><dt>Profil smakowy</dt><dd>Owocowy, cytrusowy</dd><dt>Sposób podania</dt><dd>Kieliszek do wina</dd><dt>Alkohol</dt><dd>11%</dd><dt>Pojemność</dt><dd>250 ml</dd></dl></body></html>`;
+  const proposal = extractProductPageProposal(html, "https://example.com/sarti-spritz", { name: "Sarti Spritz", kind: "cocktails" });
+
+  assert.equal(proposal.attributes.cocktailType, "Spritz");
+  assert.match(proposal.attributes.cocktailBase, /Prosecco/);
+  assert.match(proposal.attributes.cocktailBase, /Aperitif/);
+  assert.match(proposal.attributes.tasteProfile, /Cytrusowy/);
+  assert.equal(proposal.attributes.servingStyle, "Kieliszek do wina");
+  assert.equal(proposal.attributes.alcoholPercentage, "11%");
+  assert.equal(proposal.attributes.volume, "250 ml");
+  assert.equal(proposal.imageSourceUrl, "https://example.com/sarti-spritz.jpg");
+});
+
 test("extracts WooCommerce product properties without treating navigation labels as wine facts", async () => {
   const { extractProductPageProposal } = await vite.ssrLoadModule("/lib/product-enrichment.ts");
   const product = {

@@ -4,11 +4,13 @@ import { inventoryCatalogProducts, menuAddons, menuCategories, menuGroupOrders, 
 import { categoryTranslations, sectionFor } from "../../../lib/menu-categories";
 import { suggestProductGroup, translateProductGroup } from "../../../lib/product-order";
 import { productImageUrl } from "../../../lib/image-import";
+import { menuProductVisibleForGuest } from "../../../lib/menu-visibility";
 import { isAlternativeCoffeeBeanGroup, isCoffeeAddonGroup } from "../../../lib/coffee-addons";
 import { isForestLifeSyrupCategory, isGenericFlavorSyrupOption } from "../../../lib/flavor-syrups";
-import { hasTag, isShelfProduct, menuProductDestinations, menuProductIsAvailable, shelfHasPositiveStock } from "../../../lib/menu-tags";
+import { hasTag, isShelfProduct, menuProductDestinations, menuProductIsAvailable, productTemperatures, shelfHasPositiveStock } from "../../../lib/menu-tags";
 import { productAttributesEn, productAttributesPl } from "../../../lib/translation";
 import { isZeroAlcoholValue } from "../../../lib/wine-characteristics";
+import { inferredAlcoBarAttributes } from "../../../lib/alco-characteristics";
 
 export const dynamic = "force-dynamic";
 const APP_BUILD_VERSION = process.env.NEXT_PUBLIC_APP_BUILD_VERSION ?? "development";
@@ -31,7 +33,7 @@ function categoryKey(id: number | null) {
 
 function publicCategory(visualKind: string, categoryId: number | null): { id: string; pl?: string; en?: string } {
   if (visualKind === "cakes") return { id: "cakes", pl: "NA SŁODKO", en: "SWEET" };
-  if (visualKind === "cocktails") return { id: "alco-bar", pl: "Alko Bar", en: "Alco Bar" };
+  if (visualKind === "cocktails") return { id: "alco-bar", pl: "ALKO BAR", en: "ALKO BAR" };
   return { id: categoryKey(categoryId) };
 }
 
@@ -140,10 +142,12 @@ export async function GET() {
       tastingNotesEn: productContent.tastingNotesEn,
       imagePath: productContent.imagePath,
       galleryPaths: productContent.galleryPaths,
+      detailBackdropPath: productContent.detailBackdropPath,
       featured: productContent.featured,
       featuredSortOrder: productContent.featuredSortOrder,
       hideWhenOutOfStock: productContent.hideWhenOutOfStock,
       manualHidden: productContent.manualHidden,
+      waiterVisibilityOverride: productContent.waiterVisibilityOverride,
       country: productContent.country,
       region: productContent.region,
       grapes: productContent.grapes,
@@ -171,7 +175,7 @@ export async function GET() {
       salesByWineCode.set(item.wineCode, (salesByWineCode.get(item.wineCode) ?? 0) + Number(item.salesCount30d ?? 0));
     }
     const individuallyVisibleRows = rows.filter((item) => {
-      if (!item.menuTagged || !item.display || item.deleted || item.categoryDisplay === false || item.manualHidden) return false;
+      if (!item.menuTagged || item.deleted || item.categoryDisplay === false || !menuProductVisibleForGuest(item.display, item.manualHidden, item.waiterVisibilityOverride)) return false;
       return menuProductIsAvailable(item.tags, MENU_TAG, item.stockDeduct, item.stockOverdraft, item.stockQuantity);
     });
     const availableBottleKeys = new Set(individuallyVisibleRows
@@ -253,8 +257,15 @@ export async function GET() {
       const alcoholFree = isAlcoholFree(item.tags, item.licenseCodes, item.name, item.wineStyle, item.attributes?.alcoholPercentage);
       const publicAttributes = productAttributesPl(item.attributes);
       const publicAttributesEn = productAttributesEn(item.attributes);
-      delete publicAttributes.volume;
-      delete publicAttributesEn.volume;
+      if (visualKind === "cocktails") {
+        const inferredAttributes = inferredAlcoBarAttributes(item.name, item.descriptionPl || item.sourceDescription, groupPl);
+        Object.assign(publicAttributes, { ...inferredAttributes, ...publicAttributes });
+        Object.assign(publicAttributesEn, { ...inferredAttributes, ...publicAttributesEn });
+      }
+      if (visualKind !== "beer" && visualKind !== "cocktails") {
+        delete publicAttributes.volume;
+        delete publicAttributesEn.volume;
+      }
       const extraCategories = standardMenuProduct ? [
         ...(alcoholFree && categoryKey(item.categoryId) !== "zero" ? ["zero"] : []),
         ...(activeSeason && hasTag(item.tags, activeSeason.toLocaleLowerCase("pl")) ? ["seasonal-offer"] : []),
@@ -302,6 +313,7 @@ export async function GET() {
       sweetness: item.sweetness || undefined,
       grapes: item.grapes || undefined,
       image: isArabicaBagProduct(item.name) ? ARABICA_BAG_IMAGE : productImageUrl(item.imagePath) || undefined,
+      backdropImage: isForestLifeSyrupCategory(item.category) ? productImageUrl(item.detailBackdropPath) || undefined : undefined,
       gallery: visualKind === "food" ? Array.from(new Set([item.imagePath, ...(item.galleryPaths ?? [])]))
         .map((imagePath) => productImageUrl(imagePath))
         .filter((imagePath): imagePath is string => Boolean(imagePath))
@@ -313,6 +325,7 @@ export async function GET() {
       tastingNotesEn: item.tastingNotesEn || item.tastingNotes || undefined,
       attributes: publicAttributes,
       attributesEn: publicAttributesEn,
+      temperatures: productTemperatures(item.tags),
       takeHome: hasTag(item.tags, "ziarno"),
       byGlass,
       glassEligible: visualKind === "wine" && Boolean(item.wineCode && glassEligibleBottleKeys.has(`${item.categoryId ?? "other"}:${item.wineCode}`)),
@@ -366,6 +379,7 @@ export async function GET() {
         tastingNotesEn: primary.tastingNotesEn || secondary.tastingNotesEn,
         attributes: { ...(secondary.attributes ?? {}), ...(primary.attributes ?? {}) },
         attributesEn: { ...(secondary.attributesEn ?? {}), ...(primary.attributesEn ?? {}) },
+        temperatures: Array.from(new Set([...current.temperatures, ...product.temperatures])),
         featured: current.featured || product.featured,
         promo: current.promo || product.promo,
         promoOrder: Math.min(current.promoOrder, product.promoOrder),

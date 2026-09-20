@@ -9,7 +9,8 @@ import { sectionFor } from "../menu-categories";
 import { translateMenuContent, translatePolishTexts, translationConfigured, translationSourceHash } from "../translation";
 import { matchLatestDeliveryNoteSuppliers } from "./delivery-notes";
 import { isAlternativeCoffeeBeanGroup, isSupportedCoffeeOptionGroup } from "../coffee-addons";
-import { shouldManageMenuProduct, shouldSyncMenuProduct } from "../menu-tags";
+import { isIngredientInventoryCategory, isInventoryTaggedIngredient, shouldManageMenuProduct, shouldSyncMenuProduct } from "../menu-tags";
+import { isForestLifeSyrupCategory } from "../flavor-syrups";
 import { detectSparklingType } from "../wine-characteristics";
 
 const sourceDate = (value?: string | null) => value && !Number.isNaN(Date.parse(value)) ? new Date(value) : null;
@@ -71,13 +72,16 @@ export async function syncDotykackaMenu() {
       servingsPerContainer: inventoryCatalogProducts.servingsPerContainer,
     }).from(inventoryCatalogProducts);
     const inventorySettingsByProduct = new Map(existingInventorySettings.map((product) => [product.dotykackaId, product]));
-    const selected = products.filter((product) => shouldManageMenuProduct(
-      product.tags ?? [],
-      config.menuTag,
-      inventorySettingsByProduct.get(String(product.id))?.inventoryTracked === true,
-    ));
-    const selectedIds = selected.map((product) => String(product.id));
     const categoryNames = new Map(categories.map((item) => [String(item.id), item.name]));
+    const selected = products.filter((product) => {
+      const categoryName = categoryNames.get(String(product._categoryId ?? ""));
+      const inventoryTracked = isIngredientInventoryCategory(categoryName)
+        ? isInventoryTaggedIngredient(categoryName, product.tags ?? [])
+        : inventorySettingsByProduct.get(String(product.id))?.inventoryTracked === true;
+      return shouldManageMenuProduct(product.tags ?? [], config.menuTag, inventoryTracked)
+        || isForestLifeSyrupCategory(categoryName);
+    });
+    const selectedIds = selected.map((product) => String(product.id));
     const categoryById = new Map(categories.map((item) => [String(item.id), item]));
     const waiterExtras = products.filter((product) => {
       const category = categoryById.get(String(product._categoryId ?? ""));
@@ -152,6 +156,8 @@ export async function syncDotykackaMenu() {
       const categoryName = categoryNames.get(String(product._categoryId ?? "")) ?? "";
       const isWineBottle = categoryName.trim().toLocaleUpperCase("pl") === "WINA" && !/(kieliszek|glass)/i.test(product.name);
       const isWineGlass = categoryName.trim().toLocaleUpperCase("pl") === "WINA" && /(kieliszek|glass)/i.test(product.name);
+      const ingredientCategory = isIngredientInventoryCategory(categoryName);
+      const inventoryTaggedIngredient = isInventoryTaggedIngredient(categoryName, product.tags ?? []);
       const previousSettings = inventorySettingsByProduct.get(productId);
       const sparklingType = detectSparklingType(product.name, product.description, ...(product.features ?? []), ...(product.tags ?? []));
       const detectedServings = sparklingType ? 6 : 5;
@@ -162,7 +168,7 @@ export async function syncDotykackaMenu() {
         display: product.display !== false,
         deleted: product.deleted === true,
         stockDeduct: product.stockDeduct === true,
-        inventoryTracked: isWineGlass ? false : previousSettings?.inventoryTracked ?? false,
+        inventoryTracked: isWineGlass ? false : ingredientCategory ? inventoryTaggedIngredient : previousSettings?.inventoryTracked ?? false,
         inventoryCountingMode: isWineBottle
           ? previousSettings?.inventoryCountingMode ?? (sparklingType === "NATURALLY_SPARKLING" ? "BOTTLE_ONLY" : "WINE_BOTTLE")
           : previousSettings?.inventoryCountingMode ?? "QUANTITY",

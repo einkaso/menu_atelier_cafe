@@ -5,6 +5,7 @@ import { reportPaymentTotals, snapshotDelta } from "../lib/cash-day.ts";
 import { cleanInventoryLocation, inventoryDifference, millisToQuantity, nonNegativeWholeNumber, quantityToMillis, selectInventoryProducts, wineBottleQuantityMillis } from "../lib/inventory.ts";
 import { moneyToCents, settlementTotals } from "../lib/waiter-settlement.ts";
 import { isAlcoholTakeawayRestrictionTime, isWholeVodkaBottleName, shouldShowAlcoholSaleWarning } from "../lib/alcohol-sale-warning.ts";
+import { menuProductVisibleForGuest } from "../lib/menu-visibility.ts";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -13,6 +14,11 @@ test("opens the hidden waiter login only after three logo taps", async () => {
   assert.match(source, /logoTaps>=2/);
   assert.match(source, /window\.location\.assign\("\/kelner"\)/);
   assert.match(source, /onClick=\{tapLogo\}/);
+});
+
+test("merges cakes and desserts into one NA SŁODKO waiter category", async () => {
+  const catalog = await read("app/api/waiter/catalog/route.ts");
+  assert.match(catalog, /category: waiterCategoryName\(product\.category\)/);
 });
 
 test("warns about whole-bottle alcohol sales during the Warsaw restriction window", async () => {
@@ -43,6 +49,38 @@ test("shows and authenticates only active Dotykacka employees", async () => {
     assert.match(source, /eq\(waiterEmployees\.enabled, true\)/);
     assert.match(source, /eq\(waiterEmployees\.deleted, false\)/);
   }
+});
+
+test("limits waiter menu visibility changes to individually authorized and audited employees", async () => {
+  assert.equal(menuProductVisibleForGuest(true, false, null), true);
+  assert.equal(menuProductVisibleForGuest(false, false, null), false);
+  assert.equal(menuProductVisibleForGuest(true, false, false), false);
+  assert.equal(menuProductVisibleForGuest(false, false, true), true);
+  assert.equal(menuProductVisibleForGuest(false, true, true), false);
+
+  const [schema, migration, endpoint, permission, adminScreen, waiterScreen, historyApi, docs] = await Promise.all([
+    read("db/schema.ts"),
+    read("drizzle/0034_waiter_menu_visibility.sql"),
+    read("app/api/waiter/menu-visibility/route.ts"),
+    read("app/api/admin/waiter/employees/[dotykackaId]/visibility/route.ts"),
+    read("app/admin/waiters/waiter-admin-client.tsx"),
+    read("app/kelner/waiter-client.tsx"),
+    read("app/api/admin/menu-visibility/route.ts"),
+    read("docs/MENU_CONFIGURATION.md"),
+  ]);
+  assert.match(schema, /canManageMenuVisibility: boolean\("can_manage_menu_visibility"\)\.notNull\(\)\.default\(false\)/);
+  assert.match(schema, /menuVisibilityEvents = pgTable\("menu_visibility_events"/);
+  assert.match(migration, /"can_manage_menu_visibility" boolean DEFAULT false NOT NULL/);
+  assert.match(endpoint, /if \(!employee\.canManageMenuVisibility\)/);
+  assert.match(endpoint, /MENU_VISIBILITY_REASONS\.includes/);
+  assert.match(endpoint, /Produkt został ukryty przez administratora/);
+  assert.match(endpoint, /tx\.insert\(menuVisibilityEvents\)/);
+  assert.match(permission, /typeof body\.enabled !== "boolean"/);
+  assert.match(adminScreen, /Uprawnienie jest domyślnie wyłączone/);
+  assert.match(waiterScreen, /Pokaż ukryte/);
+  assert.match(waiterScreen, /Operacja zostanie zapisana w historii administratora/);
+  assert.match(historyApi, /limit\(500\)/);
+  assert.match(docs, /Każda zmiana wymaga wyboru przyczyny/);
 });
 
 test("keeps the waiter route and session compatible with an iPad PWA", async () => {
@@ -145,7 +183,9 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(schema, /inventoryCountEntries = pgTable\("inventory_count_entries"/);
   assert.match(migration, /CREATE TABLE "inventory_exports"/);
   assert.match(sync, /await tx\.delete\(inventoryCatalogProducts\)/);
-  assert.match(sync, /shouldManageMenuProduct\([\s\S]*inventorySettingsByProduct\.get\(String\(product\.id\)\)\?\.inventoryTracked === true/);
+  assert.match(sync, /const inventoryTracked = isIngredientInventoryCategory\(categoryName\)[\s\S]*inventorySettingsByProduct\.get\(String\(product\.id\)\)\?\.inventoryTracked === true/);
+  assert.match(sync, /ingredientCategory \? inventoryTaggedIngredient : previousSettings\?\.inventoryTracked/);
+  assert.match(adminRoute, /Dla kategorii Składniki wybór jest sterowany tagiem INWENT/);
   assert.match(sync, /const menuTagged = shouldSyncMenuProduct\(product\.tags \?\? \[\], config\.menuTag\)/);
   assert.match(adminRoute, /eq\(inventoryCatalogProducts\.inventoryTracked, true\)/);
   assert.match(adminRoute, /SET_PRODUCT_TRACKING/);
@@ -282,6 +322,48 @@ test("keeps separately configured coffees as distinct order lines", async () => 
   assert.match(orders, /items: normalizedItems\.flatMap/);
 });
 
+test("supports WARM and COLD serving choices throughout waiter ordering", async () => {
+  const [catalog, client, orders, admin, css] = await Promise.all([
+    read("app/api/waiter/catalog/route.ts"), read("app/kelner/waiter-client.tsx"), read("app/api/waiter/orders/route.ts"), read("app/admin/admin-panel.tsx"), read("app/kelner/waiter.css"),
+  ]);
+  assert.match(catalog, /temperatures: productTemperatures\(product\.tags\)/);
+  assert.match(client, /function WaiterTemperatureChoice/);
+  assert.match(client, /temperature: item\.temperature/);
+  assert.match(client, /configuring\.temperatures\.length>1/);
+  assert.match(client, /M10 5a2 2 0 0 1 4 0v8\.4a4 4 0 1 1-4 0V5/);
+  assert.match(orders, /productTemperatures\(tags\)/);
+  assert.match(orders, /Sposób podania:/);
+  assert.match(admin, /tag: "WARM"/);
+  assert.match(admin, /tag: "COLD"/);
+  assert.match(css, /\.waiter-temperature-choice/);
+  assert.match(css, /\.waiter-temperature-fieldset button\.is-selected/);
+});
+
+test("uses the blue mug only as a fallback icon without advertising it", async () => {
+  const [client, css] = await Promise.all([
+    read("app/kelner/waiter-client.tsx"), read("app/kelner/waiter.css"),
+  ]);
+  assert.match(client, /\/coffee-methods\/churchill-sapphire-mug\.webp/);
+  assert.doesNotMatch(client, /Podajemy w kubku Churchill|waiter-alternative-serving-cup/);
+  assert.doesNotMatch(css, /\.waiter-alternative-serving-cup\{/);
+});
+
+test("keeps TOGO optional, defaults to dine-in, and sends takeaway as an order note", async () => {
+  const [guestApi, guestClient, catalog, client, orders, admin, css] = await Promise.all([
+    read("app/api/menu/route.ts"), read("app/menu-client.tsx"), read("app/api/waiter/catalog/route.ts"), read("app/kelner/waiter-client.tsx"), read("app/api/waiter/orders/route.ts"), read("app/admin/admin-panel.tsx"), read("app/kelner/waiter.css"),
+  ]);
+  assert.doesNotMatch(guestApi, /productTakeawayAvailable/);
+  assert.doesNotMatch(guestClient, /TakeawayIcon|TakeawayChoice/);
+  assert.match(catalog, /takeaway: productTakeawayAvailable\(product\.tags\)/);
+  assert.match(client, /function addProduct\(product: Product, fulfillment: FulfillmentChoice = "dine-in"\)/);
+  assert.match(client, />Zapakuj na wynos<\/button>/);
+  assert.doesNotMatch(client, /function TakeawayIcon/);
+  assert.match(client, /takeaway: item\.takeaway/);
+  assert.match(orders, /Sposób wydania: na wynos/);
+  assert.match(admin, /tag: "TOGO"/);
+  assert.match(css, /\.waiter-takeaway-action/);
+});
+
 test("documents the complete waiter, coffee, wine, and whiskey rules in admin", async () => {
   const source = await read("app/admin/admin-panel.tsx");
   assert.match(source, /Strefa kelnera i zamówienia/);
@@ -293,7 +375,7 @@ test("documents the complete waiter, coffee, wine, and whiskey rules in admin", 
   assert.match(source, /Produkt z tagiem PÓŁKA można dodać tylko przy stanie większym od zera/);
   assert.match(source, /Osobny widok „Poza menu” zawiera aktywne, nieusunięte produkty/);
   assert.match(source, /Wysyłanie do POS jest obecnie technicznie zablokowane/);
-  assert.match(source, /Ostatnia aktualizacja zasad: 14 września 2026/);
+  assert.match(source, /Ostatnia aktualizacja zasad: 20 września 2026/);
 });
 
 test("keeps active Dotykacka products outside the guest menu in a separate waiter view", async () => {
@@ -306,7 +388,8 @@ test("keeps active Dotykacka products outside the guest menu in a separate waite
   assert.match(sync, /await tx\.delete\(waiterExtraProducts\)/);
   assert.match(catalog, /outsideMenu: true/);
   assert.match(client, /const OUTSIDE_MENU = "Poza menu"/);
-  assert.match(client, /category === OUTSIDE_MENU \? product\.outsideMenu : !product\.outsideMenu/);
+  assert.match(client, /category === OUTSIDE_MENU[\s\S]*\? product\.outsideMenu/);
+  assert.match(client, /!product\.outsideMenu && product\.hiddenFromGuest === showHiddenMenuItems/);
   assert.match(orders, /from\(waiterExtraProducts\)\.where/);
 });
 
@@ -352,6 +435,7 @@ test("gives waiters the guest drink filters and operational serving information"
   assert.match(catalog, /wineColor: productContent\.wineColor/);
   assert.match(catalog, /sparklingType: productContent\.sparklingType/);
   assert.match(catalog, /attributes: productContent\.attributes/);
+  assert.match(catalog, /inferredAlcoBarAttributes\(product\.name, product\.descriptionPl \|\| product\.sourceDescription, product\.category\)/);
   assert.match(catalog, /const kind = sectionFor\(product\.category\)/);
   assert.match(catalog, /isByGlass\(product\.tags, product\.name\)/);
   assert.match(catalog, /wineDetailsByCode/);
@@ -362,6 +446,11 @@ test("gives waiters the guest drink filters and operational serving information"
   assert.match(client, /\["glass", "Na kieliszki"\]/);
   assert.match(client, /\["draught", "Z nalewaka"\]/);
   assert.match(client, /activeDrinkKind/);
+  assert.match(client, /\["wine", "beer", "whisky", "cocktails"\]/);
+  assert.match(client, /waiterAlcoTokens\(product, "cocktailType"\)/);
+  assert.match(client, /group\("Baza", "alcoBase"/);
+  assert.match(client, /group\("Profil smaku", "alcoTaste"/);
+  assert.match(client, /group\("Podanie", "alcoServing"/);
   assert.match(client, /servingLabel\(product\)/);
   assert.match(css, /\.waiter-drink-filters/);
   assert.match(css, /\.waiter-filter-chips button\.is-selected/);
@@ -411,10 +500,12 @@ test("keeps a staff-only preparation manual behind three product-photo taps", as
   assert.match(storageSetup, /-o menuapp -g menuapp/);
 });
 
-test("lets admins remove product images and optimizes oversized files", async () => {
-  const [admin, imageRoute, imageImport, imageBackground, uploadedImage] = await Promise.all([
+test("lets admins remove product images, preserves them while saving new data, and optimizes oversized files", async () => {
+  const [admin, imageRoute, contentRoute, sourceRoute, imageImport, imageBackground, uploadedImage] = await Promise.all([
     read("app/admin/admin-panel.tsx"),
     read("app/api/admin/products/[id]/image/route.ts"),
+    read("app/api/admin/products/[id]/route.ts"),
+    read("app/api/admin/products/[id]/wine-sources/route.ts"),
     read("lib/image-import.ts"),
     read("lib/image-background.ts"),
     read("lib/uploaded-image.ts"),
@@ -425,6 +516,14 @@ test("lets admins remove product images and optimizes oversized files", async ()
   assert.match(imageRoute, /export async function DELETE/);
   assert.match(imageRoute, /imagePath: null, imageSourceUrl: null/);
   assert.match(imageRoute, /removeImageWhenUnused/);
+  assert.match(imageRoute, /Produkt ma już zapisane zdjęcie/);
+  assert.match(imageRoute, /status: 409/);
+  assert.match(contentRoute, /const imageSourceUrl = product\.imageSourceUrl/);
+  assert.match(contentRoute, /const imagePath = product\.imagePath/);
+  assert.doesNotMatch(contentRoute, /imageSourceUrl: values\.imageSourceUrl/);
+  assert.match(sourceRoute, /const hasCurrentImage = Boolean\(current\?\.imagePath \|\| current\?\.imageSourceUrl\)/);
+  assert.match(sourceRoute, /hasCurrentImage \? current\?\.imageSourceUrl \?\? null/);
+  assert.match(admin, /obecne zdjęcie pozostanie bez zmian/);
   assert.match(imageImport, /optimizeProductImage\(prepared\.bytes/);
   assert.match(imageImport, /MAX_UPLOAD_BYTES = 50 \* 1024 \* 1024/);
   assert.match(admin, /MAX_LOCAL_IMAGE_BYTES = 50 \* 1024 \* 1024/);

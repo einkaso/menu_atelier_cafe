@@ -17,6 +17,11 @@ export function sectionFor(category: string | null) {
   return categoryRules.find(([, pattern]) => pattern.test(normalized))?.[0] ?? "food";
 }
 
+export function waiterCategoryName(category: string | null) {
+  if (sectionFor(category) === "cakes") return "NA SŁODKO";
+  return category?.trim() || "Pozostałe";
+}
+
 export const categoryTranslations: Record<string, string> = {
   food: "Food",
   coffee: "Coffee",

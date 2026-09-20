@@ -40,7 +40,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!product) return Response.json({ error: "Produkt nie istnieje." }, { status: 404 });
 
   const section = product.wineCode ? "wine" : sectionFor(product.category);
-  const discoveryKind = section === "wine" || section === "whisky" || section === "beer" ? section : "product";
+  const discoveryKind = section === "wine" || section === "whisky" || section === "beer" || section === "cocktails" ? section : "product";
 
   const discoveryInput = {
     name: product.name,

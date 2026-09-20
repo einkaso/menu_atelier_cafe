@@ -15,8 +15,8 @@ function uniqueImages(imagePath: string | null, galleryPaths: string[] | null | 
 
 async function removeImageWhenUnused(storedPath: string | null | undefined) {
   if (!storedPath) return;
-  const references = await getDb().select({ imagePath: productContent.imagePath, galleryPaths: productContent.galleryPaths }).from(productContent);
-  if (!references.some((reference) => reference.imagePath === storedPath || (reference.galleryPaths ?? []).includes(storedPath))) {
+  const references = await getDb().select({ imagePath: productContent.imagePath, galleryPaths: productContent.galleryPaths, detailBackdropPath: productContent.detailBackdropPath }).from(productContent);
+  if (!references.some((reference) => reference.imagePath === storedPath || reference.detailBackdropPath === storedPath || (reference.galleryPaths ?? []).includes(storedPath))) {
     await removeProductImageFile(storedPath);
   }
 }
@@ -77,6 +77,39 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const message = error instanceof Error ? error.message : "Nie udało się zapisać zdjęć galerii.";
     return Response.json({ error: message }, { status: 422 });
   }
+}
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  if (!(await isAdmin())) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const productId = Number((await context.params).id);
+  if (!Number.isInteger(productId) || productId < 1) return Response.json({ error: "Nieprawidłowy produkt." }, { status: 400 });
+  const productResult = await savoryProduct(productId);
+  if (productResult.error) return productResult.error;
+  const body = await request.json().catch(() => null) as { imagePath?: unknown } | null;
+  if (typeof body?.imagePath !== "string" || !body.imagePath.trim()) {
+    return Response.json({ error: "Nie wskazano zdjęcia głównego." }, { status: 400 });
+  }
+
+  const db = getDb();
+  const [content] = await db.select({ imagePath: productContent.imagePath, galleryPaths: productContent.galleryPaths }).from(productContent)
+    .where(eq(productContent.productId, productId)).limit(1);
+  const currentImages = uniqueImages(content?.imagePath ?? null, content?.galleryPaths);
+  const requestedUrl = productImageUrl(body.imagePath);
+  const selectedPath = currentImages.find((imagePath) => productImageUrl(imagePath) === requestedUrl);
+  if (!selectedPath) return Response.json({ error: "Zdjęcie nie należy do tej galerii." }, { status: 404 });
+
+  const reordered = [selectedPath, ...currentImages.filter((imagePath) => imagePath !== selectedPath)];
+  const values = {
+    imagePath: reordered[0] ?? null,
+    galleryPaths: reordered.slice(1),
+    updatedAt: new Date(),
+  };
+  await db.update(productContent).set(values).where(eq(productContent.productId, productId));
+  return Response.json({
+    status: "ok",
+    gallery: reordered.map((imagePath) => productImageUrl(imagePath)).filter((imagePath): imagePath is string => Boolean(imagePath)),
+    updatedAt: values.updatedAt,
+  });
 }
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
