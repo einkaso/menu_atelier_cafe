@@ -112,7 +112,8 @@ Wyszukiwanie informacji dla Alko Baru używa nazwy produktu i fraz dotyczących 
 - Przy brakującym zdjęciu ziarna kawy alternatywnej pokazujemy neutralną ikonę niebieskiego kubka zamiast standardowej filiżanki. Nie publikujemy osobnej reklamy producenta kubka.
 - Dostępne syropy Leśne Życie są pobierane z ich kategorii i dodatniego stanu. Przy kawie, matchy i herbacie są płatnym dodatkiem zgodnie z ceną pozycji „Syrop smakowy”. Przy lemoniadzie można wybrać maksymalnie dwa smaki bez dopłaty, ponieważ ich koszt jest już zawarty w cenie lemoniady. Pełna butelka z tagiem `PÓŁKA` pozostaje osobnym produktem z własną ceną.
 - Wszystkie produkty z kategorii `Syropy Leśne Życie` są zawsze synchronizowane do panelu administratora, również przy stanie zerowym i bez tagu `MENU`. Dzięki temu można wcześniej dodać im zdjęcia i opisy. W menu gościa oraz na liście smaków nadal pokazujemy tylko pozycje z dodatnim stanem.
-- Każdy syrop może mieć oddzielne `tło podglądu`: zdjęcie butelki nadal służy jako miniatura i pozostaje na pierwszym planie, natomiast fotografia głównego składnika wypełnia prawą połowę okna produktu. Brak tła przywraca dotychczasowe granatowe pole; zapis lub usunięcie tła nigdy nie zmienia zdjęcia butelki.
+- Każdy syrop musi otrzymać oddzielne `tło podglądu`: oficjalną fotografię głównego składnika bez butelki i napisów. Zdjęcie butelki nadal służy jako miniatura i pozostaje na pierwszym planie, a fotografia składnika wypełnia prawą połowę okna produktu. Brak tła przywraca granatowe pole; zapis lub usunięcie tła nigdy nie zmienia zdjęcia butelki.
+- Wszystkie obecne i przyszłe produkty z kategorii `Syropy Leśne Życie` automatycznie korzystają z jednego układu. Butelka jest wyświetlana o kolejne 20% większa (łącznie około 44% względem układu pierwotnego), wyśrodkowana poziomo i przesunięta w dół o 8% własnej wysokości, aby jej dolna krawędź znajdowała się bliżej ceny. Nie należy ręcznie przygotowywać różnych rozmiarów butelek dla poszczególnych smaków.
 
 ## Zdjęcia, galerie i instrukcje pracownicze
 
@@ -122,6 +123,15 @@ Wyszukiwanie informacji dla Alko Baru używa nazwy produktu i fraz dotyczących 
 - Tła podglądu syropów są przechowywane osobno od zdjęć głównych i galerii. System zachowuje pełny kadr fotografii, zmniejsza ją do maksymalnie 1600 px i nie uruchamia mechanizmu wycinania jasnego tła przeznaczonego dla butelek.
 - Wyszukiwarka internetowa może zaproponować kilka zdjęć. Jeżeli produkt nie ma zdjęcia, administrator wybiera fotografię do pierwszego zapisu. Jeżeli zdjęcie jest już zapisane, akceptacja nowego opisu lub parametrów zawsze je zachowuje — niezależnie od nowych propozycji. Aby zastąpić obraz, trzeba najpierw kliknąć „Usuń zdjęcie”, a dopiero potem zaimportować nowy.
 - Instrukcja dla pracownika może zawierać tekst, zdjęcia JPG/PNG/WebP/AVIF/HEIC/HEIF/GIF oraz filmy MP4/WebM. Otwiera się po trzech dotknięciach zdjęcia produktu w strefie kelnera.
+
+## Korekty napiwków pracowników
+
+- Napiwki zapisane podczas rozliczenia zmiany pozostają danymi źródłowymi i nie są nadpisywane ani kasowane.
+- Administrator może w panelu „Rozliczenia” dopisać napiwek albo zapisać korektę pomniejszającą dla konkretnego aktywnego pracownika. Każdy wpis wymaga daty, kwoty i powodu.
+- Ręczny wpis od razu wpływa na saldo napiwków pracownika oraz na kwotę widoczną w jego strefie kelnerskiej. Korekta pomniejszająca może rozliczyć błąd wcześniejszego podziału.
+- Niewypłacony ręczny wpis można wycofać, podając obowiązkowy powód. System zachowuje pierwotny wpis, administratora, czas i informację o wycofaniu.
+- Wpisu oznaczonego jako wypłacony nie można usunąć. Ewentualną pomyłkę rozlicza się przeciwną korektą z opisem, dzięki czemu historia finansowa pozostaje pełna.
+- Oznaczenie napiwków jako wypłaconych obejmuje zarówno zatwierdzone kwoty z rozliczeń, jak i aktywne ręczne korekty składające się na saldo pracownika.
 
 ## Kontrola po zmianach
 

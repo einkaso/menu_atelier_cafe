@@ -486,6 +486,27 @@ export const waiterTipAllocations = pgTable("waiter_tip_allocations", {
   index("waiter_tip_allocations_settlement_idx").on(table.settlementId),
 ]);
 
+export const waiterTipAdjustments = pgTable("waiter_tip_adjustments", {
+  id: serial("id").primaryKey(),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  businessDate: date("business_date").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  reason: text("reason").notNull(),
+  payoutStatus: text("payout_status").notNull().default("DUE"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  voidedBy: text("voided_by"),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  voidReason: text("void_reason"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("waiter_tip_adjustments_employee_idx").on(table.employeeDotykackaId),
+  index("waiter_tip_adjustments_date_idx").on(table.businessDate),
+  index("waiter_tip_adjustments_status_idx").on(table.payoutStatus),
+]);
+
 export const waiterSettlementEvents = pgTable("waiter_settlement_events", {
   id: serial("id").primaryKey(),
   settlementId: integer("settlement_id").notNull().references(() => waiterSettlements.id, { onDelete: "cascade" }),

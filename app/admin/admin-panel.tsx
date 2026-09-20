@@ -2014,7 +2014,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
 
       {forestLifeSyrup && <fieldset className="admin-syrup-backdrop-fieldset">
         <legend>Tło podglądu syropu <small>oddzielne od zdjęcia butelki</small></legend>
-        <p className="admin-field-help">Miniatura i zdjęcie główne pozostają bez zmian. To zdjęcie wypełni prawą połowę podglądu produktu, a butelka zostanie pokazana na nim na pierwszym planie.</p>
+        <p className="admin-field-help">Miniatura i zdjęcie główne pozostają bez zmian. Wybierz szeroki lub pionowy kadr głównego składnika bez butelki i napisów. Zdjęcie wypełni prawą połowę podglądu, a system automatycznie pokaże powiększoną butelkę niżej, na pierwszym planie i bliżej ceny.</p>
         {(product.detailBackdropPath || product.detailBackdropSourceUrl) ? <div className="admin-syrup-backdrop-preview">
           <div>{product.detailBackdropPath && <img className="admin-syrup-backdrop-photo" src={product.detailBackdropPath} alt="Tło podglądu" />}{(product.imagePath || product.imageSourceUrl) && <img className="admin-syrup-backdrop-bottle" src={product.imagePath ?? product.imageSourceUrl ?? ""} alt={`Butelka ${product.name}`} />}<span>LEŚNE ŻYCIE</span></div>
           <button type="button" className="admin-image-remove" disabled={saving} onClick={() => void onRemoveBackdrop()}>Usuń tło</button>

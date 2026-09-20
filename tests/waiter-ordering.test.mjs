@@ -587,6 +587,7 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(schema, /waiterCashDays = pgTable\("waiter_cash_days"/);
   assert.match(schema, /waiterSettlements = pgTable\("waiter_settlements"/);
   assert.match(schema, /waiterTipAllocations = pgTable\("waiter_tip_allocations"/);
+  assert.match(schema, /waiterTipAdjustments = pgTable\("waiter_tip_adjustments"/);
   assert.match(schema, /waiterSettlementEvents = pgTable\("waiter_settlement_events"/);
   assert.match(calculations, /openingCash \+ input\.posCash \+ cardToCash - cashToCard \+ cashTips - expensesTotal/);
   assert.match(calculations, /input\.posCard - cardToCash \+ cashToCard \+ cardTips/);
@@ -601,6 +602,9 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(waiterRoute, /closedByDotykackaId: employee\.dotykackaId/);
   assert.match(snapshot, /salesReport\(periodFrom, capturedAt\)/);
   assert.match(adminRoute, /MARK_TIPS_PAID/);
+  assert.match(adminRoute, /ADD_TIP_ADJUSTMENT/);
+  assert.match(adminRoute, /VOID_TIP_ADJUSTMENT/);
+  assert.match(adminRoute, /Wypłaconego wpisu nie można wycofać/);
   assert.match(adminRoute, /waiterCashDays/);
   assert.match(adminRoute, /settlementStatus !== "VERIFIED"/);
   assert.match(adminRoute, /NEEDS_CORRECTION/);
@@ -629,6 +633,9 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.ok(form.indexOf("<h2>Napiwki</h2>") < form.indexOf("<span>KROK 1</span>"));
   assert.match(admin, /Dni kasowe/);
   assert.match(admin, /Napiwki według pracownika/);
+  assert.match(admin, /Ręczne wpisy napiwków/);
+  assert.match(admin, /Dopisz napiwek/);
+  assert.match(admin, /Odejmij \/ skoryguj/);
   assert.match(admin, /Stan oczekiwany teraz/);
   assert.match(admin, /Migawka Dotykački/);
   assert.match(admin, /Pobierz CSV/);
@@ -636,6 +643,8 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(waiterClient, /fetch\("\/api\/waiter\/tips"/);
   assert.match(tipsRoute, /payoutStatus, "DUE"/);
   assert.match(tipsRoute, /waiterSettlements\.status, "VERIFIED"/);
+  assert.match(tipsRoute, /waiterTipAdjustments\.payoutStatus, "DUE"/);
+  assert.match(tipsRoute, /Math\.max\(0, total\)/);
 });
 
 test("keeps each cash checkpoint on the last physical count instead of recounting earlier sales", () => {

@@ -88,7 +88,10 @@ test("layers a separately managed ingredient backdrop behind each forest syrup b
   assert.match(menuClient, /forest-syrup-backdrop/);
   assert.match(menuClient, /forest-syrup-bottle/);
   assert.match(css, /\.forest-syrup-detail-visual>img\.forest-syrup-backdrop/);
+  assert.match(css, /\.forest-syrup-detail-visual>img\.forest-syrup-bottle\{[^}]*width:91\.2%;height:min\(570px,86\.4%\)/);
+  assert.match(css, /\.forest-syrup-detail-visual>img\.forest-syrup-bottle\{[^}]*transform:translateY\(8%\) scale\(1\.2\)/);
   assert.match(admin, /Tło podglądu syropu/);
+  assert.match(admin, /system automatycznie pokaże powiększoną butelkę niżej/);
   assert.match(admin, /Zdjęcie butelki pozostanie bez zmian/);
   assert.match(backdropRoute, /isForestLifeSyrupCategory\(product\.category\)/);
   assert.match(backdropRoute, /Produkt ma już tło podglądu/);
