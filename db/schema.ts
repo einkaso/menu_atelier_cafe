@@ -375,6 +375,7 @@ export const reservations = pgTable("reservations", {
   addedByName: text("added_by_name").notNull(),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancelledBy: text("cancelled_by"),
+  calendarSyncedAt: timestamp("calendar_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

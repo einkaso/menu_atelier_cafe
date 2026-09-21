@@ -130,6 +130,7 @@ test("keeps staff navigation visible and ordered in unified black top bars", asy
   assert.match(layout, /<WaiterStaffDock\/>/);
   assert.match(css, /\.waiter-section-header[^]*background: #000;/);
   assert.match(css, /\.waiter-section-header > img[^]*width: 158px/);
+  assert.match(css, /\.workforce-employee > header\.waiter-section-header[^]*margin: -28px calc\(-1 \* clamp\(18px, 4vw, 58px\)\) 0/);
   assert.match(css, /@media \(max-width: 760px\)[^]*\.waiter-main-tools[^]*overflow-x: auto/);
 });
 
@@ -147,6 +148,7 @@ test("reservation calendar supports secure import and iPhone subscription export
   assert.match(syncRoute, /reservationCalendar/);
   assert.match(adminReservations, /automatycznie co około 2 minuty/);
   assert.match(adminReservations, /Odśwież rezerwacje teraz/);
+  assert.match(adminReservations, /usunięte zdalnie/);
   assert.match(adminReservations, /scrollIntoView/);
   assert.match(adminReservations, /startEditing\(item\)/);
   assert.match(adminReservations, /Zapis do iCloud nie jest połączony/);
@@ -186,13 +188,16 @@ test("discovers the existing iCloud calendar for server-side write-back", async 
     assert.equal(eventUrl, "https://caldav.icloud.com/123/calendars/reservations/phone-event.ics");
     assert.equal(calls[3].init.method, "REPORT");
   } finally { globalThis.fetch = originalFetch; }
-  const [schema, migration, adminRoute, waiterRoute] = await Promise.all([
+  const [schema, migration, syncStateMigration, adminRoute, waiterRoute] = await Promise.all([
     read("db/schema.ts"),
     read("drizzle/0043_icloud_calendar_writeback.sql"),
+    read("drizzle/0045_reservation_calendar_sync_state.sql"),
     read("app/api/admin/reservations/route.ts"),
     read("app/api/waiter/reservations/route.ts"),
   ]);
   for (const source of [schema, migration]) for (const column of ["caldav_username_encrypted", "caldav_password_encrypted", "caldav_calendar_url_encrypted"]) assert.match(source, new RegExp(column));
+  assert.match(schema, /calendarSyncedAt: timestamp\("calendar_synced_at"/);
+  assert.match(syncStateMigration, /SET "calendar_synced_at" = "updated_at"/);
   assert.match(adminRoute, /CONNECT_ICLOUD/);
   assert.match(adminRoute, /syncReservationToIcloud/);
   assert.match(adminRoute, /validateReservation\(body, true\)/);
@@ -202,4 +207,9 @@ test("discovers the existing iCloud calendar for server-side write-back", async 
   const calendarSync = await read("lib/reservation-calendar-sync.ts");
   assert.match(calendarSync, /atelier-reservation-\(\\d\+\)@atelier-cafe/);
   assert.match(calendarSync, /db\.update\(reservations\)/);
+  assert.match(calendarSync, /CANCELLED_REMOTE/);
+  assert.match(calendarSync, /Usunięto w kalendarzu iCloud/);
+  assert.match(calendarSync, /remoteUids\.has\(uid\)/);
+  assert.match(icloudWriteback, /reservation\.updatedAt <= reservation\.calendarSyncedAt/);
+  assert.match(icloudWriteback, /readIcloudReservationEvents/);
 });

@@ -2,9 +2,9 @@ import "server-only";
 import { and, eq, gte } from "drizzle-orm";
 import { getDb } from "../db";
 import { reservationCalendarSettings, reservations } from "../db/schema";
-import { decryptCalendarUrl, encryptCalendarUrl } from "./workforce-calendar";
+import { decryptCalendarUrl, encryptCalendarUrl, parseCalendarEvents } from "./workforce-calendar";
 import { reservationsIcs } from "./reservations";
-import { caldavRequest, discoverIcloudCalendar, findIcloudEventUrl } from "./caldav-client";
+import { caldavRequest, discoverIcloudCalendar, findIcloudEventUrl, readIcloudCalendarData } from "./caldav-client";
 
 type Reservation = typeof reservations.$inferSelect;
 
@@ -58,6 +58,7 @@ export async function syncReservationToIcloud(reservation: Reservation) {
   if (reservation.status !== "BOOKED") {
     const response = await caldavRequest(url, connection.credentials, { method: "DELETE" });
     if (response.status !== 404 && !response.ok) throw new Error(`iCloud nie usunął rezerwacji (błąd ${response.status}).`);
+    await getDb().update(reservations).set({ calendarSyncedAt: new Date() }).where(eq(reservations.id, reservation.id));
     return { status: "deleted" as const };
   }
   const response = await caldavRequest(url, connection.credentials, {
@@ -66,7 +67,15 @@ export async function syncReservationToIcloud(reservation: Reservation) {
     body: reservationsIcs([reservation]),
   });
   if (!response.ok) throw new Error(`iCloud nie zapisał rezerwacji (błąd ${response.status}).`);
+  await getDb().update(reservations).set({ calendarSyncedAt: new Date() }).where(eq(reservations.id, reservation.id));
   return { status: "saved" as const };
+}
+
+export async function readIcloudReservationEvents(from: Date, to: Date) {
+  const connection = await storedConnection();
+  if (!connection) return null;
+  const chunks = await readIcloudCalendarData(connection.calendarUrl, connection.credentials, from, to);
+  return parseCalendarEvents(chunks.join("\n"), from, to, 2_000);
 }
 
 export async function syncAppReservationsToIcloud() {
@@ -75,6 +84,7 @@ export async function syncAppReservationsToIcloud() {
   const rows = await getDb().select().from(reservations).where(and(eq(reservations.source, "APP"), gte(reservations.endsAt, new Date(Date.now() - 30 * 24 * 3_600_000))));
   let exported = 0; let failed = 0;
   for (const reservation of rows) {
+    if (reservation.calendarSyncedAt && reservation.updatedAt <= reservation.calendarSyncedAt) continue;
     try { await syncReservationToIcloud(reservation); exported += 1; } catch { failed += 1; }
   }
   return { connected: true, exported, failed };

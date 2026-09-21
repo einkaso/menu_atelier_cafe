@@ -47,14 +47,7 @@ function parseIcsDate(value: string) {
 
 export type WorkforceCalendarEvent = { uid: string; title: string; description: string; location: string; startsAt: string; endsAt: string | null; allDay: boolean };
 
-export async function calendarEvents(feedUrl: string, from: Date, to: Date) {
-  const url = safeCalendarUrl(feedUrl);
-  const response = await fetch(url, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000), headers: { accept: "text/calendar,text/plain" } });
-  if (!response.ok) throw new Error(`Kalendarz zwrócił błąd ${response.status}.`);
-  const length = Number(response.headers.get("content-length") ?? 0);
-  if (length > 2_000_000) throw new Error("Kalendarz jest zbyt duży.");
-  const body = await response.text();
-  if (body.length > 2_000_000) throw new Error("Kalendarz jest zbyt duży.");
+export function parseCalendarEvents(body: string, from: Date, to: Date, limit = 100) {
   const events: WorkforceCalendarEvent[] = [];
   for (const block of unfold(body).split("BEGIN:VEVENT").slice(1)) {
     const content = block.split("END:VEVENT")[0] ?? "";
@@ -65,5 +58,16 @@ export async function calendarEvents(feedUrl: string, from: Date, to: Date) {
     if (Number.isNaN(startsAt.getTime()) || startsAt >= to || (endsAt ?? startsAt) < from) continue;
     events.push({ uid: clean(property("UID")) || `${startsAt.toISOString()}-${events.length}`, title: clean(property("SUMMARY")), description: clean(property("DESCRIPTION")), location: clean(property("LOCATION")), startsAt: startsAt.toISOString(), endsAt: endsAt && !Number.isNaN(endsAt.getTime()) ? endsAt.toISOString() : null, allDay: /^\d{8}$/.test(startRaw) });
   }
-  return events.sort((a, b) => a.startsAt.localeCompare(b.startsAt)).slice(0, 100);
+  return events.sort((a, b) => a.startsAt.localeCompare(b.startsAt)).slice(0, limit);
+}
+
+export async function calendarEvents(feedUrl: string, from: Date, to: Date) {
+  const url = safeCalendarUrl(feedUrl);
+  const response = await fetch(url, { cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000), headers: { accept: "text/calendar,text/plain" } });
+  if (!response.ok) throw new Error(`Kalendarz zwrócił błąd ${response.status}.`);
+  const length = Number(response.headers.get("content-length") ?? 0);
+  if (length > 2_000_000) throw new Error("Kalendarz jest zbyt duży.");
+  const body = await response.text();
+  if (body.length > 2_000_000) throw new Error("Kalendarz jest zbyt duży.");
+  return parseCalendarEvents(body, from, to);
 }

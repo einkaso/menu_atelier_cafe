@@ -31,6 +31,10 @@ function xmlEscape(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
+function caldavDate(value: Date) {
+  return value.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
 function isCalendarResponse(block: string) {
   const resourceType = block.match(/<(?:[\w.-]+:)?resourcetype\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?resourcetype>/i)?.[1] ?? "";
   return /<(?:[\w.-]+:)?calendar(?=[\s/>])[^>]*\/?>/i.test(resourceType);
@@ -102,4 +106,14 @@ export async function findIcloudEventUrl(calendarUrl: string, credentials: Calda
   const block = responses(xml).find((item) => property(item, "calendar-data").includes(`UID:${uid}`));
   const href = block ? property(block, "href") : "";
   return href ? new URL(href, response.url).toString() : null;
+}
+
+export async function readIcloudCalendarData(calendarUrl: string, credentials: CaldavCredentials, from: Date, to: Date) {
+  const response = await caldavRequest(calendarUrl, credentials, {
+    method: "REPORT",
+    headers: { depth: "1", "content-type": "application/xml; charset=utf-8" },
+    body: `<?xml version="1.0" encoding="UTF-8"?><c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/><c:calendar-data/></d:prop><c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"><c:time-range start="${caldavDate(from)}" end="${caldavDate(to)}"/></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>`,
+  });
+  if (response.status !== 207) throw new Error(`iCloud nie udostępnił wydarzeń (błąd ${response.status}).`);
+  return responses(await response.text()).map((block) => property(block, "calendar-data")).filter(Boolean);
 }

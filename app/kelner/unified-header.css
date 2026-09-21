@@ -71,6 +71,15 @@
   font-size: .68rem;
 }
 
+/* The schedule screen has page padding around its content. Let only its menu
+   bar escape that inset so the black header reaches both viewport edges. */
+@media (min-width: 561px) {
+  .workforce-employee > header.waiter-section-header {
+    width: auto;
+    margin: -28px calc(-1 * clamp(18px, 4vw, 58px)) 0;
+  }
+}
+
 .waiter-main-header {
   box-sizing: border-box;
   gap: 14px;
@@ -179,6 +188,11 @@
     flex-wrap: wrap;
     gap: 9px 12px;
     padding: 10px;
+  }
+
+  .workforce-employee > header.waiter-section-header {
+    width: 100%;
+    margin: 0;
   }
 
   .waiter-section-controls {

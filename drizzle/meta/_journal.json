@@ -316,6 +316,13 @@
       "when": 1790125200000,
       "tag": "0044_reservation_unknown_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1790128800000,
+      "tag": "0045_reservation_calendar_sync_state",
+      "breakpoints": true
     }
   ]
 }
