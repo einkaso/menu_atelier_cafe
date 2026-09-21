@@ -22,6 +22,7 @@ export function saveWaiterSessionToken(token: string | null | undefined) {
   } catch {
     // Keep logging in with the server-issued cookie when storage is unavailable.
   }
+  window.dispatchEvent(new Event("waiter-session-changed"));
 }
 
 export function clearWaiterSessionToken() {
@@ -32,6 +33,7 @@ export function clearWaiterSessionToken() {
   } catch {
     // There is no client-side fallback token to clear when storage is denied.
   }
+  window.dispatchEvent(new Event("waiter-session-changed"));
 }
 
 export function waiterSessionHeaders(initial?: HeadersInit) {

@@ -2,6 +2,8 @@ import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
 import { adminUsers, waiterEmployees, waiterEmployeeThankYouMedia, waiterSurveyQuestions, waiterTables } from "../../../../../db/schema";
 import { isAdmin } from "../../../../../lib/admin-auth";
+import { employeeQrPayload } from "../../../../../lib/workforce-secrets";
+import QRCode from "qrcode";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +13,16 @@ export async function GET() {
     getDb().select({
       dotykackaId: waiterEmployees.dotykackaId,
       name: waiterEmployees.name,
+      barcode: waiterEmployees.barcode,
       enabled: waiterEmployees.enabled,
       deleted: waiterEmployees.deleted,
       accessLevel: waiterEmployees.accessLevel,
       canManageMenuVisibility: waiterEmployees.canManageMenuVisibility,
+      thankYouMessage: waiterEmployees.thankYouMessage,
+      includeInSchedule: waiterEmployees.includeInSchedule,
+      hourlyRate: waiterEmployees.hourlyRate,
+      contactPhone: waiterEmployees.contactPhone,
+      contactEmail: waiterEmployees.contactEmail,
       pinHash: waiterEmployees.pinHash,
       syncedAt: waiterEmployees.syncedAt,
     }).from(waiterEmployees).where(and(eq(waiterEmployees.enabled, true), eq(waiterEmployees.deleted, false))).orderBy(asc(waiterEmployees.name)),
@@ -42,18 +50,23 @@ export async function GET() {
   const adminByEmployee = new Map(administrators.map((administrator) => [administrator.employeeDotykackaId, administrator]));
   const mediaByEmployee = new Map<string, typeof thankYouMedia>();
   for (const media of thankYouMedia) mediaByEmployee.set(media.employeeDotykackaId, [...(mediaByEmployee.get(media.employeeDotykackaId) ?? []), media]);
-  return Response.json({
-    employees: employees.map(({ pinHash, ...employee }) => {
+  const employeesWithQr = await Promise.all(employees.map(async ({ pinHash, ...employee }) => {
       const administrator = adminByEmployee.get(employee.dotykackaId);
       return {
         ...employee,
+        qrDataUrl: employee.barcode ? await QRCode.toDataURL(
+          employeeQrPayload(employee.dotykackaId, employee.barcode),
+          { width: 420, margin: 2, color: { dark: "#082f3c", light: "#ffffff" } },
+        ) : null,
         pinConfigured: Boolean(pinHash),
         adminConfigured: Boolean(administrator?.enabled),
         adminUsername: administrator?.username ?? null,
         adminLastLoginAt: administrator?.lastLoginAt ?? null,
         thankYouMedia: mediaByEmployee.get(employee.dotykackaId) ?? [],
       };
-    }),
+    }));
+  return Response.json({
+    employees: employeesWithQr,
     tables,
     surveyQuestions,
     posActionsEnabled: process.env.WAITER_POS_ACTIONS_ENABLED === "true",

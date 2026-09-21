@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { isIngredientInventoryCategory } from "../../../lib/menu-tags";
+import AdminSectionHeader from "../admin-section-header";
 import "./inventory.css";
 
 type Category = { dotykackaId: string; name: string; display: boolean; productCount: number; skippedConfirmedZeroCount: number };
@@ -158,7 +159,7 @@ export default function InventoryAdminClient() {
   const adminCanFinalize = Boolean(detail && adminEditableStatuses.includes(detail.status));
 
   return <main className="inventory-admin">
-    <header className="admin-topbar"><img src="/logo-cafe.png" alt="Marta Banaszek atelier-café"/><div><span className="admin-eyebrow">Kontrola magazynu</span><h1>Inwentaryzacja etapowa</h1></div><div className="admin-top-actions"><a className="admin-secondary" href="/admin/waiters">Pracownicy</a><a className="admin-secondary" href="/admin">Wróć do menu</a></div></header>
+    <AdminSectionHeader eyebrow="Kontrola magazynu" title="Inwentaryzacja etapowa" links={[{ href: "/admin/waiters", label: "Pracownicy" }]}/>
     {(message || error) && <div className={error ? "admin-status is-error" : "admin-status"}>{error || message}</div>}
     {!writeEnabled && <div className="inventory-safety"><b>Bezpieczny tryb wdrożeniowy</b><span>Liczenie, korekty i zatwierdzanie działają. Przycisk wysyłki do Dotykački pozostaje zablokowany do kontrolowanego testu.</span></div>}
     <div className="inventory-admin-content">

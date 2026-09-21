@@ -11,4 +11,5 @@ install -d -o menuapp -g menuapp -m 0750 \
   /var/lib/banaszek-menu/uploads \
   /var/lib/banaszek-menu/uploads/products \
   /var/lib/banaszek-menu/uploads/staff-manuals \
+  /var/lib/banaszek-menu/uploads/staff-instructions \
   /var/lib/banaszek-menu/uploads/employee-thanks

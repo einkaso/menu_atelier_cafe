@@ -1,0 +1,224 @@
+.waiter-staff-navigation {
+  display: flex !important;
+  min-width: 0;
+  flex-direction: row !important;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  text-align: left;
+}
+
+.waiter-top-brand {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.waiter-top-brand > img {
+  flex: 0 0 auto;
+}
+
+.waiter-top-brand > .waiter-staff-navigation {
+  flex: 0 0 auto;
+}
+
+.waiter-top-brand > .waiter-staff-navigation > a {
+  min-height: 42px;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.waiter-header:has(.waiter-instruction-reminder-backdrop, .waiter-workforce-alert-backdrop, .reservation-reminder-backdrop) {
+  z-index: 200;
+}
+
+.waiter-instruction-header,
+.workforce-employee > header,
+.waiter-reservations > header {
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  gap: 24px;
+}
+
+.waiter-staff-page-brand,
+.waiter-reservations > header > .waiter-reservations-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 18px;
+  text-align: left;
+}
+
+.waiter-instruction-header > .waiter-staff-page-brand > img,
+.workforce-employee > header > .waiter-staff-page-brand > img,
+.waiter-reservations > header > .waiter-staff-page-brand > img {
+  width: 120px;
+  justify-self: start;
+}
+
+.waiter-staff-page-brand > .waiter-staff-navigation {
+  gap: 7px;
+}
+
+.waiter-staff-page-brand > .waiter-staff-navigation > a {
+  min-height: 42px;
+  padding-inline: 12px;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+/* The instruction catalogue has its own light paper palette. Keep the staff
+   shortcuts explicitly dark so inherited link styles can never wash them out. */
+.waiter-instruction-header .waiter-staff-navigation > a,
+.waiter-instruction-header .waiter-staff-navigation > a:visited {
+  border-color: #73929a;
+  background: #082f3c;
+  color: #fff;
+  opacity: 1;
+}
+
+.waiter-instruction-header .waiter-staff-navigation > a:first-child,
+.waiter-instruction-header .waiter-staff-navigation > a:first-child:visited {
+  border-color: #f0a372;
+  background: #49273a;
+  color: #fff;
+}
+
+.waiter-staff-page-heading,
+.waiter-reservations > header > .waiter-reservations-heading {
+  display: grid;
+  text-align: center;
+}
+
+.waiter-instruction-header > a,
+.workforce-employee > header > a,
+.waiter-reservations > header > a {
+  justify-self: end;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, .3);
+  color: #fff;
+  text-decoration: none;
+  font-size: .7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1500px) {
+  .waiter-header {
+    gap: 10px;
+  }
+
+  .waiter-header img {
+    width: 125px;
+  }
+
+  .waiter-top-brand > .waiter-staff-navigation {
+    gap: 5px;
+  }
+
+  .waiter-top-brand > .waiter-staff-navigation > a {
+    min-height: 40px;
+    padding-inline: 10px;
+    font-size: .57rem;
+  }
+
+  .waiter-header-actions {
+    gap: 4px;
+  }
+
+  .waiter-header .waiter-inventory-entry,
+  .waiter-header button {
+    padding-inline: 10px;
+    font-size: .61rem;
+  }
+
+  .waiter-finance-entry > span {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .waiter-instruction-header,
+  .workforce-employee > header,
+  .waiter-reservations > header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .waiter-staff-page-heading,
+  .waiter-reservations > header > .waiter-reservations-heading {
+    display: none;
+  }
+
+  .waiter-staff-page-brand > .waiter-staff-navigation {
+    overflow-x: auto;
+  }
+
+  .waiter-staff-page-brand > .waiter-staff-navigation > a {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 1120px) {
+  .waiter-header img {
+    width: 108px;
+  }
+
+  .waiter-header > div {
+    display: none;
+  }
+
+  .waiter-top-brand > .waiter-staff-navigation > a {
+    padding-inline: 8px;
+    font-size: .54rem;
+  }
+
+  .waiter-header .waiter-inventory-entry,
+  .waiter-header button {
+    padding-inline: 8px;
+    font-size: .56rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .waiter-instruction-header,
+  .workforce-employee > header,
+  .waiter-reservations > header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 12px 10px;
+  }
+
+  .waiter-instruction-header > a {
+    grid-column: auto;
+  }
+
+  .waiter-staff-page-brand {
+    gap: 8px;
+  }
+
+  .waiter-instruction-header > .waiter-staff-page-brand > img,
+  .workforce-employee > header > .waiter-staff-page-brand > img,
+  .waiter-reservations > header > .waiter-staff-page-brand > img {
+    width: 92px;
+  }
+
+  .waiter-staff-page-brand > .waiter-staff-navigation {
+    gap: 4px;
+  }
+
+  .waiter-staff-page-brand > .waiter-staff-navigation > a {
+    min-height: 38px;
+    padding-inline: 8px;
+    font-size: .53rem;
+  }
+
+  .waiter-instruction-header > a,
+  .workforce-employee > header > a,
+  .waiter-reservations > header > a {
+    padding: 10px 9px;
+    font-size: .56rem;
+    white-space: nowrap;
+  }
+}

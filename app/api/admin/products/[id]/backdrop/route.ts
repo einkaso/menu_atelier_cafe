@@ -47,9 +47,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     path: productContent.detailBackdropPath,
     sourceUrl: productContent.detailBackdropSourceUrl,
   }).from(productContent).where(eq(productContent.productId, productId)).limit(1);
-  if (current?.path || current?.sourceUrl) {
-    return Response.json({ error: "Produkt ma już tło podglądu. Aby je zmienić, najpierw kliknij „Usuń tło”." }, { status: 409 });
-  }
 
   try {
     const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
@@ -73,6 +70,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       target: productContent.productId,
       set: values,
     });
+    await removeBackdropWhenUnused(current?.path);
     return Response.json({
       status: "ok",
       detailBackdropPath: productImageUrl(detailBackdropPath),

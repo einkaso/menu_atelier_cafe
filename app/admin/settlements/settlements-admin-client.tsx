@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import AdminSectionHeader from "../admin-section-header";
 
 type Correction = { direction: "CARD_TO_CASH" | "CASH_TO_CARD"; amount: string; reason: string };
 type Expense = { description: string; amount: string; receiptNumber?: string; receiptIncluded: boolean };
@@ -134,7 +135,7 @@ export default function SettlementsAdminClient() {
   }
 
   return <main className="settlements-admin">
-    <header className="admin-topbar"><img src="/logo-cafe.png" alt="Marta Banaszek atelier-café"/><div><span className="admin-eyebrow">Finanse operacyjne</span><h1>Rozliczenia zmian</h1></div><div className="admin-top-actions"><a className="admin-secondary" href="/admin/waiters">Pracownicy i PIN-y</a><a className="admin-secondary" href="/admin">Wróć do menu</a></div></header>
+    <AdminSectionHeader eyebrow="Finanse operacyjne" title="Rozliczenia zmian" links={[{ href: "/admin/waiters", label: "Pracownicy" }]}/>
     {(message || error) && <div className={error ? "admin-status is-error" : "admin-status"}>{error || message}</div>}
     <section className="settlements-toolbar"><label>Od<input type="date" value={from} onChange={(event) => setFrom(event.target.value)}/></label><label>Do<input type="date" value={to} onChange={(event) => setTo(event.target.value)}/></label><label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="ALL">Wszystkie</option><option value="SUBMITTED">Do sprawdzenia</option><option value="VERIFIED">Sprawdzone</option><option value="NEEDS_CORRECTION">Wymaga korekty</option></select></label><button className="admin-primary" onClick={() => void load()}>Odśwież</button><button className="admin-secondary" disabled={!settlements.length} onClick={exportCsv}>Pobierz CSV</button></section>
     <section className="settlements-summary"><article><span>Rozliczenia</span><strong>{summary.count}</strong><small>{unresolved} oczekuje na decyzję</small></article><article><span>Gotówka w kopertach</span><strong>{money(summary.envelopeCash)} zł</strong><small>Pozostawiono w kasach: {money(summary.cashLeft)} zł</small></article><article><span>Wydatki z kas</span><strong>{money(summary.expenses)} zł</strong><small>Dokumenty potwierdzone w rozliczeniach</small></article><article><span>Napiwki pracowników</span><strong>{money(summary.tips)} zł</strong><small>Do wypłaty: {money(tips.reduce((sum, item) => sum + item.due, 0))} zł</small></article><article className={Math.abs(summary.cashDifference) > .009 || Math.abs(summary.terminalDifference) > .009 ? "has-difference" : ""}><span>Suma różnic</span><strong>{money(summary.cashDifference)} / {money(summary.terminalDifference)} zł</strong><small>Gotówka / terminal</small></article></section>

@@ -17,4 +17,7 @@ console.log(JSON.stringify({
   productsTranslated: body.productsTranslated,
   coffeeAddonsTranslated: body.coffeeAddonsTranslated,
   translationWarning: body.translationWarning,
+  reservationCalendarStatus: body.reservationCalendar?.status,
+  reservationsImported: body.reservationCalendar?.imported,
+  reservationCalendarError: body.reservationCalendar?.error,
 }));

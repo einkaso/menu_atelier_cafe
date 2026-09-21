@@ -37,10 +37,11 @@ test("keeps pre-order and post-receipt surveys separate", async () => {
   assert.match(guest, /JUŻ PO RACHUNKU/);
 });
 
-test("shows a random personal thank-you animation from a three-item employee gallery", async () => {
-  const [schema, migration, server, guest, picker, orientation, orientationLock, waiterStyles, guestStyles, admin, mediaRoute] = await Promise.all([
+test("shows an editable personal thank-you with a random animation from the employee gallery", async () => {
+  const [schema, migration, messageMigration, server, guest, picker, orientation, orientationLock, waiterStyles, guestStyles, admin, mediaRoute, defaults] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0031_violet_alex_wilder.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0041_employee_thank_you_message.sql", import.meta.url), "utf8"),
     readFile(new URL("../lib/guest-receipt-server.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/kelner/guest-receipt-view.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/kelner/guest-receipt-picker.tsx", import.meta.url), "utf8"),
@@ -50,11 +51,16 @@ test("shows a random personal thank-you animation from a three-item employee gal
     readFile(new URL("../app/kelner/tablet-fixes.css", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/waiters/waiter-admin-client.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/waiter/employees/[dotykackaId]/thanks/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/employee-thank-you.ts", import.meta.url), "utf8"),
   ]);
   assert.match(schema, /waiterEmployeeThankYouMedia = pgTable\("waiter_employee_thank_you_media"/);
   assert.match(migration, /CREATE TABLE "waiter_employee_thank_you_media"/);
+  assert.match(schema, /thankYouMessage: text\("thank_you_message"\)/);
+  assert.match(messageMigration, /Dziękuję i zapraszam ponownie!/);
+  assert.match(defaults, /DEFAULT_EMPLOYEE_THANK_YOU = "Dziękuję i zapraszam ponownie!"/);
   assert.match(server, /Math\.floor\(Math\.random\(\) \* thankYouMedia\.length\)/);
-  assert.match(guest, /Dziękuję i zapraszam ponownie!/);
+  assert.match(server, /message: presentingEmployee\.thankYouMessage/);
+  assert.match(guest, /receipt\.servedBy\.message/);
   assert.match(guest, /autoPlay loop muted playsInline/);
   assert.match(guest, /src=\{servedBy\.mediaUrl!\}/);
   assert.doesNotMatch(guest, /URL\.createObjectURL\(blob\)/);
@@ -84,7 +90,11 @@ test("shows a random personal thank-you animation from a three-item employee gal
   assert.match(guestStyles, /\.guest-receipt-picker-screen \+ \.waiter-inventory-floating/);
   assert.match(waiterStyles, /@keyframes guest-thanks-pop/);
   assert.match(admin, /employee\.thankYouMedia\.length >= 3/);
+  assert.match(admin, /Przywróć domyślne/);
+  assert.match(admin, /saveThankYouMessage/);
   assert.match(mediaRoute, /existingMedia\.length >= 3/);
+  assert.match(mediaRoute, /export async function PATCH/);
+  assert.match(mediaRoute, /thankYouMessage: message/);
 });
 
 test("keeps the guest media cookie usable on HTTP tablets and secure on HTTPS", async () => {

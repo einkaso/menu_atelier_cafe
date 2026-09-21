@@ -195,7 +195,7 @@ export async function GET() {
     const savedGroupOrder = new Map(savedGroupRows.map((group) => [`${group.categoryId}:${group.groupName}`, group.sortOrder]));
     const groupOrder = new Map<string, number>();
     for (const item of visibleRows) {
-      const suggestion = suggestProductGroup(item.category, item.name);
+      const suggestion = suggestProductGroup(item.category, item.name, item.attributes);
       const group = usesAutomaticMenuGroup(suggestion) ? suggestion?.pl ?? "" : item.menuGroup || suggestion?.pl || "";
       const key = `${item.categoryId ?? "other"}:${group}`;
       const value = savedGroupOrder.get(key) ?? (usesAutomaticMenuGroup(suggestion) ? suggestion?.rank : item.menuSortOrder ?? suggestion?.rank) ?? 9999;
@@ -203,8 +203,8 @@ export async function GET() {
     }
     const orderedRows = [...visibleRows].sort((a, b) => {
       if (a.categoryId !== b.categoryId) return 0;
-      const aSuggestion = suggestProductGroup(a.category, a.name);
-      const bSuggestion = suggestProductGroup(b.category, b.name);
+      const aSuggestion = suggestProductGroup(a.category, a.name, a.attributes);
+      const bSuggestion = suggestProductGroup(b.category, b.name, b.attributes);
       const aGroup = usesAutomaticMenuGroup(aSuggestion) ? aSuggestion?.pl ?? "" : a.menuGroup || aSuggestion?.pl || "";
       const bGroup = usesAutomaticMenuGroup(bSuggestion) ? bSuggestion?.pl ?? "" : b.menuGroup || bSuggestion?.pl || "";
       const aGroupOrder = groupOrder.get(`${a.categoryId ?? "other"}:${aGroup}`) ?? 9999;
@@ -252,7 +252,7 @@ export async function GET() {
         : visualKind === "whisky"
           ? [{ kind: whiskyBottle ? "bottle" : "serving", price: price(item.price), productId: item.id }]
           : undefined;
-      const suggestedGroup = suggestProductGroup(item.category, item.name);
+      const suggestedGroup = suggestProductGroup(item.category, item.name, item.attributes);
       const groupPl = usesAutomaticMenuGroup(suggestedGroup) ? suggestedGroup?.pl : item.menuGroup || suggestedGroup?.pl || undefined;
       const alcoholFree = isAlcoholFree(item.tags, item.licenseCodes, item.name, item.wineStyle, item.attributes?.alcoholPercentage);
       const publicAttributes = productAttributesPl(item.attributes);

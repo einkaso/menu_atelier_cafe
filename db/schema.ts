@@ -209,15 +209,260 @@ export const waiterEmployees = pgTable("waiter_employees", {
   id: serial("id").primaryKey(),
   dotykackaId: text("dotykacka_id").notNull(),
   name: text("name").notNull(),
+  barcode: text("barcode"),
   enabled: boolean("enabled").notNull().default(true),
   deleted: boolean("deleted").notNull().default(false),
   accessLevel: text("access_level"),
   requirePinAlways: boolean("require_pin_always").notNull().default(false),
   canManageMenuVisibility: boolean("can_manage_menu_visibility").notNull().default(false),
   pinHash: text("pin_hash"),
+  thankYouMessage: text("thank_you_message").notNull().default("Dziękuję i zapraszam ponownie!"),
+  includeInSchedule: boolean("include_in_schedule").notNull().default(true),
+  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }),
+  contactPhone: text("contact_phone"),
+  contactEmail: text("contact_email"),
   sourceVersion: timestamp("source_version", { withTimezone: true }),
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("waiter_employees_dotykacka_id_uq").on(table.dotykackaId)]);
+
+export type WorkAvailabilityDay = {
+  date: string;
+  available: boolean;
+  from: string | null;
+  to: string | null;
+  note: string | null;
+};
+
+export type WorkOpeningDay = {
+  date: string;
+  closed: boolean;
+  from: string | null;
+  to: string | null;
+};
+
+export const workAvailabilityWeeks = pgTable("work_availability_weeks", {
+  id: serial("id").primaryKey(),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  weekStart: date("week_start").notNull(),
+  minShifts: integer("min_shifts").notNull().default(0),
+  maxShifts: integer("max_shifts").notNull().default(0),
+  days: jsonb("days").$type<WorkAvailabilityDay[]>().notNull().default([]),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("work_availability_employee_week_uq").on(table.employeeDotykackaId, table.weekStart),
+  index("work_availability_week_idx").on(table.weekStart),
+]);
+
+export const workSchedules = pgTable("work_schedules", {
+  id: serial("id").primaryKey(),
+  weekStart: date("week_start").notNull(),
+  status: text("status").notNull().default("DRAFT"),
+  version: integer("version").notNull().default(1),
+  openingHours: jsonb("opening_hours").$type<WorkOpeningDay[]>().notNull().default([]),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("work_schedules_week_uq").on(table.weekStart)]);
+
+export const workShifts = pgTable("work_shifts", {
+  id: serial("id").primaryKey(),
+  scheduleId: integer("schedule_id").notNull().references(() => workSchedules.id, { onDelete: "cascade" }),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  workDate: date("work_date").notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("work_shifts_schedule_idx").on(table.scheduleId),
+  index("work_shifts_employee_date_idx").on(table.employeeDotykackaId, table.workDate),
+]);
+
+export const workScheduleReceipts = pgTable("work_schedule_receipts", {
+  id: serial("id").primaryKey(),
+  scheduleId: integer("schedule_id").notNull().references(() => workSchedules.id, { onDelete: "cascade" }),
+  scheduleVersion: integer("schedule_version").notNull(),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  seenAt: timestamp("seen_at", { withTimezone: true }),
+  calendarUpdatedAt: timestamp("calendar_updated_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("work_schedule_receipts_employee_version_uq").on(table.scheduleId, table.scheduleVersion, table.employeeDotykackaId),
+  index("work_schedule_receipts_employee_idx").on(table.employeeDotykackaId),
+]);
+
+export const workTimeEntries = pgTable("work_time_entries", {
+  id: serial("id").primaryKey(),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  shiftId: integer("shift_id").references(() => workShifts.id, { onDelete: "set null" }),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  workedMinutes: integer("worked_minutes"),
+  source: text("source").notNull().default("QR_KIOSK"),
+  status: text("status").notNull().default("OPEN"),
+  approvedBy: text("approved_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("work_time_entries_employee_start_idx").on(table.employeeDotykackaId, table.startedAt),
+  index("work_time_entries_status_idx").on(table.status),
+]);
+
+export const workTimeEvents = pgTable("work_time_events", {
+  id: serial("id").primaryKey(),
+  entryId: integer("entry_id").references(() => workTimeEntries.id, { onDelete: "set null" }),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  action: text("action").notNull(),
+  kioskName: text("kiosk_name").notNull().default("Tablet wejściowy"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("work_time_events_employee_idx").on(table.employeeDotykackaId, table.occurredAt)]);
+
+export const workTimeCorrectionRequests = pgTable("work_time_correction_requests", {
+  id: serial("id").primaryKey(),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  workDate: date("work_date").notNull(),
+  requestedStart: timestamp("requested_start", { withTimezone: true }).notNull(),
+  requestedEnd: timestamp("requested_end", { withTimezone: true }).notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("PENDING"),
+  reviewedBy: text("reviewed_by"),
+  reviewNote: text("review_note"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("work_time_corrections_status_idx").on(table.status),
+  index("work_time_corrections_employee_idx").on(table.employeeDotykackaId, table.workDate),
+]);
+
+export const workforceCalendarSettings = pgTable("workforce_calendar_settings", {
+  key: text("key").primaryKey().default("main"),
+  name: text("name").notNull().default("Kalendarz wydarzeń"),
+  icalUrlEncrypted: text("ical_url_encrypted"),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const reservations = pgTable("reservations", {
+  id: serial("id").primaryKey(),
+  externalUid: text("external_uid"),
+  source: text("source").notNull().default("APP"),
+  guestName: text("guest_name"),
+  guestContact: text("guest_contact"),
+  partySize: integer("party_size"),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  location: text("location"),
+  specialRequest: text("special_request"),
+  status: text("status").notNull().default("BOOKED"),
+  tableReadyAt: timestamp("table_ready_at", { withTimezone: true }),
+  tableReadyByDotykackaId: text("table_ready_by_dotykacka_id"),
+  tableReadyByName: text("table_ready_by_name"),
+  specialRequestReadyAt: timestamp("special_request_ready_at", { withTimezone: true }),
+  specialRequestReadyByDotykackaId: text("special_request_ready_by_dotykacka_id"),
+  specialRequestReadyByName: text("special_request_ready_by_name"),
+  addedByDotykackaId: text("added_by_dotykacka_id"),
+  addedByName: text("added_by_name").notNull(),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: text("cancelled_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("reservations_external_uid_uq").on(table.externalUid),
+  index("reservations_starts_status_idx").on(table.startsAt, table.status),
+]);
+
+export const reservationNotifications = pgTable("reservation_notifications", {
+  id: serial("id").primaryKey(),
+  reservationId: integer("reservation_id").notNull().references(() => reservations.id, { onDelete: "cascade" }),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  twoHourNotifiedAt: timestamp("two_hour_notified_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("reservation_notifications_reservation_employee_uq").on(table.reservationId, table.employeeDotykackaId),
+  index("reservation_notifications_employee_idx").on(table.employeeDotykackaId),
+]);
+
+export const reservationEvents = pgTable("reservation_events", {
+  id: serial("id").primaryKey(),
+  reservationId: integer("reservation_id").notNull().references(() => reservations.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),
+  actorType: text("actor_type").notNull(),
+  actorId: text("actor_id").notNull(),
+  actorName: text("actor_name").notNull(),
+  details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("reservation_events_reservation_idx").on(table.reservationId, table.createdAt)]);
+
+export const reservationCalendarSettings = pgTable("reservation_calendar_settings", {
+  key: text("key").primaryKey().default("main"),
+  name: text("name").notNull().default("Rezerwacje Atelier Café"),
+  importIcalUrlEncrypted: text("import_ical_url_encrypted"),
+  caldavUsernameEncrypted: text("caldav_username_encrypted"),
+  caldavPasswordEncrypted: text("caldav_password_encrypted"),
+  caldavCalendarUrlEncrypted: text("caldav_calendar_url_encrypted"),
+  caldavCalendarName: text("caldav_calendar_name"),
+  caldavConnectedAt: timestamp("caldav_connected_at", { withTimezone: true }),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const staffInstructions = pgTable("staff_instructions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  attachments: jsonb("attachments").$type<StaffInstructionAttachment[]>().notNull().default([]),
+  status: text("status").notNull().default("DRAFT"),
+  revision: integer("revision").notNull().default(1),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+}, (table) => [
+  index("staff_instructions_status_idx").on(table.status),
+  index("staff_instructions_published_idx").on(table.publishedAt),
+]);
+
+export type StaffInstructionAttachment = {
+  id: string;
+  path: string;
+  type: "IMAGE" | "PDF";
+  name: string;
+  size: number;
+};
+
+export const staffInstructionReceipts = pgTable("staff_instruction_receipts", {
+  id: serial("id").primaryKey(),
+  instructionId: integer("instruction_id").notNull().references(() => staffInstructions.id, { onDelete: "cascade" }),
+  instructionRevision: integer("instruction_revision").notNull(),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  firstPresentedAt: timestamp("first_presented_at", { withTimezone: true }),
+  deferredAt: timestamp("deferred_at", { withTimezone: true }),
+  deferredUntil: timestamp("deferred_until", { withTimezone: true }),
+  acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("staff_instruction_receipts_instruction_employee_revision_uq").on(table.instructionId, table.employeeDotykackaId, table.instructionRevision),
+  index("staff_instruction_receipts_employee_idx").on(table.employeeDotykackaId),
+  index("staff_instruction_receipts_instruction_idx").on(table.instructionId),
+  index("staff_instruction_receipts_deferred_idx").on(table.deferredUntil),
+]);
 
 export const menuVisibilityEvents = pgTable("menu_visibility_events", {
   id: serial("id").primaryKey(),

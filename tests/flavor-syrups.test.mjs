@@ -26,11 +26,12 @@ test("offers syrup with coffee, matcha, tea and lemonade but not every cold drin
 });
 
 test("includes up to two lemonade flavours without adding a syrup charge", async () => {
-  const [menuClient, waiterClient, waiterCatalog, waiterOrders] = await Promise.all([
+  const [menuClient, waiterClient, waiterCatalog, waiterOrders, css] = await Promise.all([
     read("app/menu-client.tsx"),
     read("app/kelner/waiter-client.tsx"),
     read("app/api/waiter/catalog/route.ts"),
     read("app/api/waiter/orders/route.ts"),
+    read("app/globals.css"),
   ]);
   assert.match(menuClient, /Wybierz jeden smak albo połącz dwa/);
   assert.match(menuClient, /Cena smaku jest już zawarta/);
@@ -39,9 +40,10 @@ test("includes up to two lemonade flavours without adding a syrup charge", async
   assert.match(waiterCatalog, /price: "0"/);
   assert.match(waiterOrders, /maxFlavorCount = isLemonadeProduct\(product\.name\) \? 2 : 1/);
   assert.match(waiterOrders, /addon\.fallback === "syrup" && !isLemonadeProduct\(product\.name\)/);
+  assert.match(css, /\.lemonade-flavor-action\{[^}]*margin-top:1\.35rem/);
 });
 
-test("keeps the syrup chooser above its overlay and makes every forest syrup editable in admin", async () => {
+test("keeps the syrup chooser above its overlay and leaves forest syrups accessible through regular product filters", async () => {
   const [css, admin, sync] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/admin/admin-panel.tsx", import.meta.url), "utf8"),
@@ -52,7 +54,7 @@ test("keeps the syrup chooser above its overlay and makes every forest syrup edi
   assert.match(admin, /product\.category \?\? ""/);
   assert.match(admin, /normalizedProductSearch/);
   assert.match(admin, /Szukaj produktu lub kategorii/);
-  assert.match(admin, /Leśne Życie · zdjęcia i opisy/);
+  assert.doesNotMatch(admin, /Leśne Życie · zdjęcia i opisy/);
   assert.match(sync, /isForestLifeSyrupCategory\(categoryName\)/);
 });
 
@@ -87,14 +89,21 @@ test("layers a separately managed ingredient backdrop behind each forest syrup b
   assert.match(menuApi, /backdropImage: isForestLifeSyrupCategory\(item\.category\)/);
   assert.match(menuClient, /forest-syrup-backdrop/);
   assert.match(menuClient, /forest-syrup-bottle/);
+  assert.match(menuClient, /forestSyrupBackdropVariant/);
+  assert.match(menuClient, /name\.includes\("ananas"\)/);
+  assert.match(menuClient, /name\.includes\("malin"\)/);
   assert.match(css, /\.forest-syrup-detail-visual>img\.forest-syrup-backdrop/);
+  assert.match(css, /\.is-pineapple-backdrop>img\.forest-syrup-backdrop\{transform:translateX\(-11%\) scale\(1\.28\)\}/);
+  assert.match(css, /\.is-raspberry-backdrop>img\.forest-syrup-backdrop\{transform:translateX\(11%\) scale\(1\.28\)\}/);
   assert.match(css, /\.forest-syrup-detail-visual>img\.forest-syrup-bottle\{[^}]*width:91\.2%;height:min\(570px,86\.4%\)/);
   assert.match(css, /\.forest-syrup-detail-visual>img\.forest-syrup-bottle\{[^}]*transform:translateY\(8%\) scale\(1\.2\)/);
   assert.match(admin, /Tło podglądu syropu/);
-  assert.match(admin, /system automatycznie pokaże powiększoną butelkę niżej/);
+  assert.match(admin, /Dodaj, podmień albo usuń wyłącznie fotografię tła/);
+  assert.match(admin, /Podmień tło plikiem z urządzenia/);
   assert.match(admin, /Zdjęcie butelki pozostanie bez zmian/);
   assert.match(backdropRoute, /isForestLifeSyrupCategory\(product\.category\)/);
-  assert.match(backdropRoute, /Produkt ma już tło podglądu/);
+  assert.match(backdropRoute, /removeBackdropWhenUnused\(current\?\.path\)/);
+  assert.doesNotMatch(backdropRoute, /Produkt ma już tło podglądu/);
   assert.match(imageImport, /importProductBackdrop/);
   assert.match(imageImport, /storeProductImage\(productId, await downloadPublicImage\(sourceUrl\), false\)/);
 });

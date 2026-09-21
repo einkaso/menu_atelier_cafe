@@ -53,3 +53,9 @@ Należy wykonywać codzienny `pg_dump` bazy `menu` oraz kopię wolumenu `menu_up
 9. Dopiero po poprawnych healthcheckach ponownie uruchomić timer synchronizacji.
 
 Migracje dla prowadzenia kasy i kont administratorów są addytywne. Rollback kodu nie wymaga cofania bazy. Odtworzenie bazy usuwa późniejsze dane i wymaga osobnej decyzji.
+
+### Kontrola modułu pracowników po migracji 0042
+
+Po wykonaniu `npm run db:migrate` należy sprawdzić panel `/admin/waiters`. Wszyscy dotychczasowi pracownicy otrzymują domyślnie ustawienie „Grafik: TAK”; stawka, telefon i e-mail pozostają puste do ręcznego uzupełnienia. Synchronizacja z Dotykačką nie może nadpisywać tych wartości.
+
+Następnie należy wyłączyć testową osobę z grafiku i potwierdzić trzy zachowania: nie można dodać jej do nowej zmiany, nie może wysłać nowej dyspozycji, ale nadal pojawia się w miesięcznych godzinach i rozliczeniach. Po teście trzeba przywrócić właściwe ustawienie pracownika.

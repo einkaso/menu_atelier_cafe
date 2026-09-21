@@ -1,0 +1,187 @@
+.instructions-admin label > small {
+  font-size: .58rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.instructions-admin input[type="file"] {
+  padding: 8px;
+}
+
+.instructions-admin-attachments {
+  margin: 0 20px 18px;
+  padding: 14px;
+  border: 1px solid var(--i-line);
+  background: #faf8f3;
+}
+
+.instructions-admin-attachments > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.instructions-admin-attachments > header > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.instructions-admin-attachments > header strong {
+  font-size: .72rem;
+  text-transform: uppercase;
+}
+
+.instructions-admin-attachments > header div span {
+  display: grid;
+  min-width: 28px;
+  height: 24px;
+  place-items: center;
+  border-radius: 14px;
+  background: #e6ddd0;
+  color: var(--i-navy);
+  font-size: .61rem;
+}
+
+.instructions-admin-file-button {
+  display: block !important;
+  cursor: pointer;
+}
+
+.instructions-admin-file-button input {
+  position: absolute;
+  width: 1px !important;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.instructions-admin-file-button > span {
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  padding: 0 13px;
+  border: 1px solid var(--i-navy);
+  background: #fff;
+  color: var(--i-navy);
+  font-size: .61rem;
+  font-weight: 850;
+}
+
+.instructions-admin-file-button:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: .4;
+}
+
+.instructions-admin-attachments > p {
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--i-line);
+  color: #718286;
+  text-align: center;
+  font-size: .7rem;
+}
+
+.instructions-admin-attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.instructions-admin-attachment-grid > div {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--i-line);
+  background: #fff;
+}
+
+.instructions-admin-attachment-grid > div > a {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 72px;
+  padding-right: 38px;
+  color: var(--i-navy);
+  text-decoration: none;
+}
+
+.instructions-admin-attachment-grid img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+}
+
+.instructions-admin-attachment-grid > div.is-pdf > a > b {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  background: #49273a;
+  color: #fff;
+  font-size: .75rem;
+}
+
+.instructions-admin-attachment-grid a > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.instructions-admin-attachment-grid a strong {
+  overflow: hidden;
+  font-size: .66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.instructions-admin-attachment-grid a small {
+  color: #718286;
+  font-size: .58rem;
+}
+
+.instructions-admin-attachment-grid > div > button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 27px;
+  min-height: 27px;
+  padding: 0;
+  border-color: #d9b9b9;
+  color: #9b2525;
+  font-size: 1rem;
+}
+
+.instructions-admin-attachment-grid > div > button:hover {
+  background: #fff0f0;
+}
+
+@media (max-width: 900px) {
+  .instructions-admin-attachment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .instructions-admin-attachments {
+    margin-inline: 12px;
+    padding: 10px;
+  }
+
+  .instructions-admin-attachments > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .instructions-admin-file-button > span {
+    width: 100%;
+  }
+
+  .instructions-admin-attachment-grid {
+    grid-template-columns: 1fr;
+  }
+}

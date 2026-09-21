@@ -103,6 +103,7 @@ export async function syncDotykackaMenu() {
       for (const employee of employeeResult.rows) {
         await db.insert(waiterEmployees).values({
           dotykackaId: String(employee.id), name: employee.name,
+          barcode: String(employee.barcode ?? employee.barCode ?? employee.ean ?? "").trim() || null,
           enabled: employee.enabled !== false, deleted: employee.deleted === true,
           accessLevel: employee.accessLevel == null ? null : String(employee.accessLevel),
           requirePinAlways: employee.requirePinAlways === true,
@@ -111,6 +112,7 @@ export async function syncDotykackaMenu() {
           target: waiterEmployees.dotykackaId,
           set: {
             name: employee.name, enabled: employee.enabled !== false, deleted: employee.deleted === true,
+            barcode: String(employee.barcode ?? employee.barCode ?? employee.ean ?? "").trim() || null,
             accessLevel: employee.accessLevel == null ? null : String(employee.accessLevel),
             requirePinAlways: employee.requirePinAlways === true,
             sourceVersion: sourceDate(employee.versionDate), syncedAt: new Date(),

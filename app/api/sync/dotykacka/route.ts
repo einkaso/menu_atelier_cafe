@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { syncDotykackaMenu } from "../../../../lib/dotykacka/sync";
+import { syncReservationCalendar } from "../../../../lib/reservation-calendar-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,13 @@ function authorized(request: Request) {
 export async function POST(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
   try {
-    return Response.json({ status: "ok", ...(await syncDotykackaMenu()) });
+    const menu = await syncDotykackaMenu();
+    const reservationCalendar = await syncReservationCalendar().catch((error) => ({
+      status: "error" as const,
+      imported: 0,
+      error: error instanceof Error ? error.message : "Nie udało się odświeżyć kalendarza rezerwacji.",
+    }));
+    return Response.json({ status: "ok", ...menu, reservationCalendar });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Synchronization failed";
     return Response.json({ status: "error", error: message }, { status: 502 });

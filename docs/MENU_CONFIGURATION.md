@@ -94,6 +94,26 @@ Wyszukiwanie informacji dla Alko Baru używa nazwy produktu i fraz dotyczących 
 - Dla whisky, bourbonu, koniaku i brandy panel przechowuje rodzaj, styl, pochodzenie, wiek, beczkę, profil smaku, moc i objętość. Te same filtry są dostępne gościowi i kelnerowi.
 - Pełna butelka piwa, wina, whisky albo wódki sprzedawana między 21:58 a 06:02 wywołuje w strefie kelnera ostrzeżenie o zakazie sprzedaży alkoholu na wynos. Reguła nie dotyczy pozycji 0% ani porcji/kieliszków.
 
+### Shoty z butelki 0,7 l
+
+- `1800 Tequila` prowadzona magazynowo jest ukrytym produktem w litrach. Opakowanie zakupowe `Butelka 0,7 l` zwiększa jej stan o `0,7 l` za każdą przyjętą butelkę.
+- Widoczna pozycja `1800 Tequila` jest shotem `50 ml`. Nie odejmuje własnego stanu w sztukach; receptura każdej sprzedanej sztuki odejmuje dokładnie `0,05 l` z ukrytego produktu magazynowego.
+- `ABSOLUT Elyx` działa według tej samej reguły: ukryta butelka magazynowa `0,7 l` i widoczny shot `50 ml`, który odejmuje `0,05 l`.
+- `BACARDI RISERVA OCHO RUM` (EAN `7610113001516`) również korzysta z ukrytej butelki `0,7 l` i widocznego shota `50 ml` z odpisem `0,05 l`.
+- `BACARDI Spiced Rum` (EAN `7610113007518`) ma ten sam model butelki `0,7 l` i shota `50 ml`.
+- `Bombay Sapphire Sunset` (EAN `7640175743284`) ma ten sam model: ukryta butelka magazynowa `0,7 l` i widoczny shot `50 ml`. Przy pierwszej migracji istniejący stan w sztukach jest przeliczany na litry (`1 butelka = 0,7 l`).
+- Każda pozycja sprzedażowa skonfigurowana tym mechanizmem jako porcja `50 ml` otrzymuje automatycznie grupę `Shoty · 50 ml` oraz parametry `cocktailType=Shot`, `servingStyle=Shot` i `volume=50 ml`. Nazwa produktu nie musi zawierać słowa „shot” ani pojemności — grupa wynika z zapisanej porcji.
+- Konfigurację można sprawdzić skryptem `node scripts/configure-bottled-shot.mjs`. Wybór produktu określa `BOTTLED_SHOT_TARGET` (`1800-tequila`, `absolut-elyx`, `bacardi-reserva-ocho`, `bacardi-spiced` albo `bombay-sapphire-sunset`). Zapis wymaga równocześnie `BOTTLED_SHOT_APPLY=true` i `DOTYKACKA_BOTTLED_SHOT_WRITE_ENABLED=true`; przed zmianą powstaje prywatna kopia konfiguracji. Po udanym zapisie skrypt aktualizuje też odpowiadające pozycje w lokalnym katalogu aplikacji.
+
+## Instrukcje dla pracowników
+
+- Panel administratora `Instrukcje` służy do tworzenia szkiców, wysyłania aktywnych instrukcji, śledzenia potwierdzeń i archiwizacji materiałów nieobowiązujących.
+- Kliknięcie `Wyślij do pracowników` powoduje, że instrukcja staje się obowiązkowa dla wszystkich aktywnych pracowników. Każdy nowy pracownik automatycznie otrzymuje wszystkie instrukcje mające status `PUBLISHED`; nie trzeba przypisywać ich ręcznie.
+- Pracownik widzi licznik oraz obowiązkowy komunikat w strefie kelnera. Instrukcję może odłożyć tylko jeden raz i maksymalnie o dwie godziny. Po tym czasie komunikat wraca bez możliwości ponownego odłożenia.
+- Potwierdzenie jest możliwe dopiero po otwarciu instrukcji i przewinięciu jej do końca. Zapisywane są pracownik, wersja instrukcji i czas oświadczenia o zapoznaniu się z treścią.
+- Zapisanie i ponowne wysłanie aktywnej instrukcji zwiększa jej numer wersji i wymaga nowego potwierdzenia od wszystkich pracowników.
+- Status `ARCHIVED` pozostawia materiał w archiwum katalogu, ale nie wymusza jego przeczytania ani przez obecnych, ani przez nowych pracowników.
+
 ## Piwo z beczki
 
 - Surowiec `Bosman KEG 30l` jest prowadzony w litrach i nie jest produktem sprzedażowym. Ma magazynowe opakowanie `KEG 30 l`, dlatego przyjęcie jednej beczki zwiększa stan o 30 litrów.
@@ -112,7 +132,7 @@ Wyszukiwanie informacji dla Alko Baru używa nazwy produktu i fraz dotyczących 
 - Przy brakującym zdjęciu ziarna kawy alternatywnej pokazujemy neutralną ikonę niebieskiego kubka zamiast standardowej filiżanki. Nie publikujemy osobnej reklamy producenta kubka.
 - Dostępne syropy Leśne Życie są pobierane z ich kategorii i dodatniego stanu. Przy kawie, matchy i herbacie są płatnym dodatkiem zgodnie z ceną pozycji „Syrop smakowy”. Przy lemoniadzie można wybrać maksymalnie dwa smaki bez dopłaty, ponieważ ich koszt jest już zawarty w cenie lemoniady. Pełna butelka z tagiem `PÓŁKA` pozostaje osobnym produktem z własną ceną.
 - Wszystkie produkty z kategorii `Syropy Leśne Życie` są zawsze synchronizowane do panelu administratora, również przy stanie zerowym i bez tagu `MENU`. Dzięki temu można wcześniej dodać im zdjęcia i opisy. W menu gościa oraz na liście smaków nadal pokazujemy tylko pozycje z dodatnim stanem.
-- Każdy syrop musi otrzymać oddzielne `tło podglądu`: oficjalną fotografię głównego składnika bez butelki i napisów. Zdjęcie butelki nadal służy jako miniatura i pozostaje na pierwszym planie, a fotografia składnika wypełnia prawą połowę okna produktu. Brak tła przywraca granatowe pole; zapis lub usunięcie tła nigdy nie zmienia zdjęcia butelki.
+- Każdy syrop może otrzymać oddzielne `tło podglądu`: fotografię głównego składnika bez butelki i napisów. W edycji produktu można samodzielnie dodać plik lub link, bezpośrednio podmienić istniejące tło oraz je usunąć. Zdjęcie butelki nadal służy jako miniatura i pozostaje na pierwszym planie, a fotografia składnika wypełnia prawą połowę okna produktu. Brak tła przywraca granatowe pole; zapis, podmiana lub usunięcie tła nigdy nie zmienia zdjęcia butelki. Syropy wyszukuje się zwykłą wyszukiwarką albo filtrem kategorii — panel nie wyświetla osobnego stałego skrótu.
 - Wszystkie obecne i przyszłe produkty z kategorii `Syropy Leśne Życie` automatycznie korzystają z jednego układu. Butelka jest wyświetlana o kolejne 20% większa (łącznie około 44% względem układu pierwotnego), wyśrodkowana poziomo i przesunięta w dół o 8% własnej wysokości, aby jej dolna krawędź znajdowała się bliżej ceny. Nie należy ręcznie przygotowywać różnych rozmiarów butelek dla poszczególnych smaków.
 
 ## Zdjęcia, galerie i instrukcje pracownicze

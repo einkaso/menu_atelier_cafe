@@ -3,6 +3,7 @@ import { getDb } from "../../../../../../../db";
 import { waiterEmployees, waiterEmployeeThankYouMedia } from "../../../../../../../db/schema";
 import { isAdmin } from "../../../../../../../lib/admin-auth";
 import { importEmployeeThankYouMedia, removeEmployeeThankYouMedia } from "../../../../../../../lib/employee-thank-you-media";
+import { employeeThankYouMessage } from "../../../../../../../lib/employee-thank-you";
 
 export const dynamic = "force-dynamic";
 
@@ -59,4 +60,19 @@ export async function DELETE(_request: Request, context: { params: Promise<{ dot
   await getDb().delete(waiterEmployeeThankYouMedia).where(eq(waiterEmployeeThankYouMedia.id, stored.id));
   await removeEmployeeThankYouMedia(stored.mediaPath);
   return Response.json({ status: "ok" });
+}
+
+export async function PATCH(request: Request, context: { params: Promise<{ dotykackaId: string }> }) {
+  if (!(await isAdmin())) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const dotykackaId = (await context.params).dotykackaId;
+  const employee = await activeEmployee(dotykackaId);
+  if (!employee) return Response.json({ error: "Pracownik nie istnieje lub jest nieaktywny." }, { status: 404 });
+  const body = await request.json().catch(() => ({})) as { message?: unknown };
+  try {
+    const message = employeeThankYouMessage(body.message);
+    await getDb().update(waiterEmployees).set({ thankYouMessage: message }).where(eq(waiterEmployees.dotykackaId, dotykackaId));
+    return Response.json({ status: "ok", message });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Nie udało się zapisać podziękowania." }, { status: 400 });
+  }
 }

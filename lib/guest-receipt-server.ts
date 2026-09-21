@@ -5,6 +5,7 @@ import { guestSurveyQuestions, waiterEmployees, waiterEmployeeThankYouMedia, wai
 import { DotykackaClient } from "./dotykacka/client";
 import { getDotykackaConfig } from "./dotykacka/config";
 import { buildGuestReceipt, isClosedReceipt, type GuestReceipt } from "./guest-receipt";
+import { DEFAULT_EMPLOYEE_THANK_YOU } from "./employee-thank-you";
 
 export async function loadGuestReceipt(orderId: string, presentedBy?: string): Promise<GuestReceipt> {
   const config = await getDotykackaConfig();
@@ -14,6 +15,7 @@ export async function loadGuestReceipt(orderId: string, presentedBy?: string): P
     getDb().select({ id: guestSurveyQuestions.id, prompt: guestSurveyQuestions.prompt, kind: guestSurveyQuestions.kind, options: guestSurveyQuestions.options, required: guestSurveyQuestions.required }).from(guestSurveyQuestions).where(eq(guestSurveyQuestions.active, true)).orderBy(asc(guestSurveyQuestions.sortOrder), asc(guestSurveyQuestions.id)),
     presentedBy ? getDb().select({
       name: waiterEmployees.name,
+      thankYouMessage: waiterEmployees.thankYouMessage,
     }).from(waiterEmployees).where(eq(waiterEmployees.dotykackaId, presentedBy)).limit(1) : Promise.resolve([]),
     presentedBy ? getDb().select({
       mediaPath: waiterEmployeeThankYouMedia.mediaPath,
@@ -37,6 +39,7 @@ export async function loadGuestReceipt(orderId: string, presentedBy?: string): P
     reviewUrl,
     servedBy: presentingEmployee ? {
       name: presentingEmployee.name,
+      message: presentingEmployee.thankYouMessage || DEFAULT_EMPLOYEE_THANK_YOU,
       mediaUrl: selectedMedia?.mediaPath ?? null,
       mediaType: selectedMedia?.mediaType === "GIF" ? "GIF" : selectedMedia?.mediaType === "VIDEO" ? "VIDEO" : null,
     } : null,

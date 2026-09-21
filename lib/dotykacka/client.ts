@@ -97,6 +97,52 @@ export class DotykackaClient {
     return this.all<DotykackaEmployee>(`/clouds/${this.config.cloudId}/employees`);
   }
 
+  async assignEmployeeBarcode(employeeId: string, proposedBarcode: string) {
+    if (!/^\d+$/.test(employeeId) || !Number.isSafeInteger(Number(employeeId))) throw new Error("Invalid Dotykačka employee id");
+    if (!/^[A-Z0-9-]{8,180}$/.test(proposedBarcode)) throw new Error("Invalid employee barcode");
+    const accessToken = await this.token();
+    const path = `/clouds/${this.config.cloudId}/employees/${employeeId}`;
+    const headers = { Authorization: `Bearer ${accessToken}`, Accept: "application/json" };
+    const currentResponse = await fetch(`${this.config.apiUrl}${path}`, {
+      headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(this.config.timeoutMs),
+    });
+    if (!currentResponse.ok) {
+      const details = (await currentResponse.text()).replace(/\s+/g, " ").trim().slice(0, 600);
+      throw new Error(`Nie udało się pobrać pracownika z Dotykački (${currentResponse.status})${details ? `: ${details}` : ""}`);
+    }
+    const current = await currentResponse.json() as DotykackaEmployee;
+    const existingBarcode = String(current.barcode ?? current.barCode ?? current.ean ?? "").trim();
+    if (existingBarcode) return { employee: current, barcode: existingBarcode, created: false };
+    const etag = currentResponse.headers.get("etag");
+    if (!etag) throw new Error("Dotykačka nie zwróciła wersji rekordu pracownika. Kod nie został zmieniony.");
+
+    const updateResponse = await fetch(`${this.config.apiUrl}${path}`, {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json", "If-Match": etag },
+      body: JSON.stringify({ id: Number(employeeId), barcode: proposedBarcode }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(this.config.timeoutMs),
+    });
+    if (!updateResponse.ok) {
+      const details = (await updateResponse.text()).replace(/\s+/g, " ").trim().slice(0, 600);
+      if (updateResponse.status === 409 || updateResponse.status === 412) throw new Error("Dane pracownika zmieniły się w Dotykačce. Odśwież listę i spróbuj ponownie.");
+      throw new Error(`Nie udało się zapisać kodu w Dotykačce (${updateResponse.status})${details ? `: ${details}` : ""}`);
+    }
+
+    const verifiedResponse = await fetch(`${this.config.apiUrl}${path}`, {
+      headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(this.config.timeoutMs),
+    });
+    if (!verifiedResponse.ok) throw new Error("Kod został wysłany, ale nie udało się potwierdzić zapisu w Dotykačce.");
+    const employee = await verifiedResponse.json() as DotykackaEmployee;
+    const barcode = String(employee.barcode ?? employee.barCode ?? employee.ean ?? "").trim();
+    if (barcode !== proposedBarcode) throw new Error("Dotykačka nie potwierdziła zapisu wygenerowanego kodu pracownika.");
+    return { employee, barcode, created: true };
+  }
+
   tables() {
     return this.all<DotykackaTable>(`/clouds/${this.config.cloudId}/tables`);
   }

@@ -145,6 +145,9 @@ export type DotykackaWebhook = {
 export type DotykackaEmployee = {
   id: number;
   name: string;
+  barcode?: string | number | null;
+  barCode?: string | number | null;
+  ean?: string | number | null;
   enabled?: boolean;
   deleted?: boolean;
   accessLevel?: number | string | null;

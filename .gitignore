@@ -46,6 +46,7 @@ service-account*.json
 /outputs/
 /work/
 /tmp/
+/.artifacts/
 *.tsbuildinfo
 next-env.d.ts
 

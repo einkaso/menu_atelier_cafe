@@ -1,0 +1,523 @@
+.workforce-calendar-standalone {
+  margin-top: 18px;
+}
+
+.waiter-admin {
+  --employee-navy: #0b4252;
+  --employee-navy-soft: #dcebee;
+  --employee-field: #f4f9fa;
+}
+
+.waiter-admin-list {
+  gap: 24px;
+}
+
+.waiter-admin-row {
+  overflow: hidden;
+  padding: 0 20px 20px;
+  border: 2px solid #aec9cf;
+  border-left: 8px solid var(--employee-navy);
+  border-radius: 5px;
+  box-shadow: 0 12px 30px rgba(11, 66, 82, .11);
+}
+
+.waiter-admin-row .waiter-employee-heading {
+  margin: 0 -20px 18px;
+  padding: 16px 20px;
+  border: 0;
+  background: var(--employee-navy);
+  color: #fff;
+}
+
+.waiter-admin-row .waiter-employee-heading h3 {
+  color: #fff;
+  font-size: 1.35rem;
+}
+
+.waiter-admin-row .waiter-employee-heading small {
+  color: #c7dce0;
+}
+
+.waiter-schedule-badge {
+  display: inline-grid;
+  min-height: 30px;
+  place-items: center;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 18px;
+  color: #fff;
+  font-size: .62rem;
+  font-weight: 850;
+  letter-spacing: .08em;
+}
+
+.waiter-schedule-badge.is-on {
+  border-color: #8fd0bb;
+  background: #1d6e5a;
+}
+
+.waiter-schedule-badge.is-off {
+  border-color: #ffc0ab;
+  background: #954b38;
+}
+
+.waiter-admin .waiter-access-card {
+  border: 1px solid #bdd1d5;
+  background: #edf5f6;
+}
+
+.waiter-admin .waiter-access-card.is-admin {
+  border-color: #a9c4ca;
+  background: #e3f0f2;
+}
+
+.waiter-admin input,
+.waiter-admin textarea,
+.waiter-admin select {
+  border-color: #a9c5cb;
+  background: var(--employee-field);
+  color: var(--employee-navy);
+}
+
+.waiter-admin input:focus,
+.waiter-admin textarea:focus,
+.waiter-admin select:focus {
+  outline: 2px solid #5a98a6;
+  outline-offset: 1px;
+  border-color: var(--employee-navy);
+}
+
+.waiter-schedule-card {
+  border-top: 4px solid #357b6a !important;
+}
+
+.waiter-schedule-card.is-off {
+  border-color: #d5a18f !important;
+  border-top-color: #a95740 !important;
+  background: #fff4ef !important;
+}
+
+.waiter-schedule-card > p {
+  margin: 10px 0 0;
+  color: #587076;
+  font-size: .69rem;
+  line-height: 1.5;
+}
+
+.waiter-schedule-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.waiter-schedule-toggle button {
+  min-height: 42px;
+  border: 1px solid #9dbbc1;
+  background: #fff;
+  color: var(--employee-navy);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.waiter-schedule-toggle button.is-active {
+  border-color: #246a58;
+  background: #246a58;
+  color: #fff;
+}
+
+.waiter-schedule-toggle button.is-active.is-no {
+  border-color: #984832;
+  background: #984832;
+}
+
+.waiter-employee-private {
+  grid-column: 1 / -1;
+  border: 1px solid #a9c5cb;
+  background: #f5fafb;
+}
+
+.waiter-employee-private > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  color: var(--employee-navy);
+  cursor: pointer;
+  list-style: none;
+}
+
+.waiter-employee-private > summary::-webkit-details-marker {
+  display: none;
+}
+
+.waiter-employee-private > summary::before {
+  content: "+";
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--employee-navy);
+  color: #fff;
+  font-size: 1rem;
+}
+
+.waiter-employee-private[open] > summary::before {
+  content: "−";
+}
+
+.waiter-employee-private > summary span {
+  font: 400 1rem Georgia, serif;
+}
+
+.waiter-employee-private > summary small {
+  margin-left: auto;
+  color: #667d82;
+}
+
+.waiter-employee-private > form {
+  display: grid;
+  grid-template-columns: .8fr 1fr 1.2fr auto;
+  align-items: end;
+  gap: 10px;
+  padding: 16px;
+  border-top: 1px solid #c7dadd;
+  background: #e8f2f4;
+}
+
+.waiter-employee-private label {
+  display: grid;
+  gap: 5px;
+  color: #536d73;
+  font-size: .59rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.waiter-employee-private input {
+  min-width: 0;
+  padding: 11px;
+  font-size: .76rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.waiter-employee-private label > span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.waiter-employee-private label > span b {
+  display: grid;
+  align-self: stretch;
+  place-items: center;
+  padding: 0 10px;
+  background: var(--employee-navy);
+  color: #fff;
+  font-size: .62rem;
+}
+
+.waiter-employee-private form > button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.workforce-shift-list > div.is-excluded {
+  padding: 6px;
+  border: 1px solid #d79984;
+  background: #fff0e9;
+}
+
+.workforce-shift-list > div.is-excluded select {
+  border-color: #b85d43;
+  color: #8b3f2d;
+  font-weight: 750;
+}
+
+.workforce-hours-list strong small {
+  color: #a6543e;
+  font-size: .6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.waiter-qr-management {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 22px;
+  padding: 22px 24px;
+  border: 1px solid var(--admin-line);
+  border-top: 4px solid var(--admin-orange);
+  background: #fff;
+}
+
+.waiter-qr-management h2 {
+  margin: 5px 0 7px;
+  font: 400 1.65rem Georgia, serif;
+}
+
+.waiter-qr-management p {
+  max-width: 650px;
+  margin: 0;
+  color: #65777a;
+  font-size: .75rem;
+  line-height: 1.55;
+}
+
+.waiter-qr-management > div:last-child {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.waiter-qr-management a,
+.waiter-qr-management button,
+.waiter-qr-card-body .admin-secondary {
+  display: inline-grid;
+  min-height: 42px;
+  place-items: center;
+  padding: 0 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.waiter-qr-card {
+  background: #f1f7f5;
+  border-color: #cdded8;
+}
+
+.waiter-qr-card-body {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.waiter-qr-card-body > a:first-child {
+  display: grid;
+  padding: 7px;
+  border: 1px solid #d7e3df;
+  background: #fff;
+}
+
+.waiter-qr-card-body img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.waiter-qr-card-body > div {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.waiter-qr-card-body > div > strong {
+  font: 400 1.1rem Georgia, serif;
+}
+
+.waiter-qr-card-body > div > small {
+  overflow-wrap: anywhere;
+}
+
+.waiter-qr-card-body .admin-secondary {
+  margin-top: 5px;
+}
+
+.waiter-qr-missing {
+  margin: 0;
+  padding: 13px;
+  border: 1px dashed #d7b9ab;
+  background: #fff7f1;
+  color: #7e5140;
+  font-size: .72rem;
+  line-height: 1.55;
+}
+
+.waiter-qr-missing p {
+  margin: 0 0 11px;
+}
+
+.waiter-qr-missing .admin-primary {
+  min-height: 40px;
+}
+
+.waiter-thanks-message-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #dfd2da;
+}
+
+.waiter-thanks-message-form label {
+  display: grid;
+  gap: 5px;
+  color: #607478;
+  font-size: .59rem;
+  font-weight: 750;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.waiter-thanks-message-form textarea {
+  min-height: 82px;
+  padding: 11px;
+  resize: vertical;
+  border: 1px solid var(--admin-line);
+  background: #fff;
+  color: var(--admin-navy);
+  font: 400 .8rem/1.5 Arial, sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.waiter-thanks-message-form label small {
+  font-size: .58rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.waiter-thanks-message-form > div {
+  display: grid;
+  gap: 7px;
+}
+
+.waiter-thanks-message-form button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .waiter-qr-management {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .waiter-qr-management > div:last-child {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .waiter-thanks-message-form {
+    grid-template-columns: 1fr;
+  }
+
+  .waiter-thanks-message-form > div {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .waiter-employee-private > form {
+    grid-template-columns: 1fr;
+  }
+
+  .waiter-employee-private > summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .waiter-employee-private > summary small {
+    width: 100%;
+    margin-left: 38px;
+  }
+}
+
+@media (max-width: 430px) {
+  .waiter-qr-card-body {
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  .waiter-admin > .admin-topbar,
+  .waiter-admin > .admin-status,
+  .waiter-admin-content > :not(.waiter-admin-list),
+  .waiter-admin-row .waiter-access-card:not(.waiter-qr-card),
+  .waiter-qr-card-body .admin-secondary {
+    display: none !important;
+  }
+
+  .waiter-thanks-message-form {
+    display: none !important;
+  }
+
+  .waiter-admin,
+  .waiter-admin-content {
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  .waiter-admin-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7mm;
+  }
+
+  .waiter-admin-row {
+    display: block;
+    break-inside: avoid;
+    padding: 4mm;
+    border: 1px solid #aab9b5;
+  }
+
+  .waiter-employee-heading {
+    display: none;
+  }
+
+  .waiter-access-grid {
+    display: block;
+  }
+
+  .waiter-qr-card {
+    padding: 0;
+    border: 0;
+    background: #fff;
+  }
+
+  .waiter-qr-card > header {
+    display: none;
+  }
+
+  .waiter-qr-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3mm;
+    text-align: center;
+  }
+
+  .waiter-qr-card-body > a:first-child {
+    width: 48mm;
+    padding: 0;
+    border: 0;
+  }
+
+  .waiter-qr-card-body > div {
+    justify-items: center;
+  }
+
+  .waiter-qr-card-body > div > strong {
+    font-size: 14pt;
+  }
+
+  .waiter-qr-missing {
+    min-height: 48mm;
+  }
+}

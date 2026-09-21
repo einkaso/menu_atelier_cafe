@@ -405,8 +405,8 @@ const ruleSections = [
     lead: "Współdzielony tablet pozostaje menu gościa, a obsługa otrzymuje krótką i bezpieczną sesję roboczą.",
     rules: [
       ["Zawsze", "Trzy szybkie dotknięcia logotypu w lewym górnym rogu otwierają ekran PIN-u. Nie pokazujemy gościom osobnego przycisku ani podpowiedzi prowadzącej do strefy kelnera."],
-      ["Dotykačka", "Lista pracowników pochodzi wyłącznie z Dotykački. W panelu „Kelnerzy i PIN-y” pokazujemy tylko osoby aktywne i nieusunięte; wyłączenie pracownika w POS odbiera mu dostęp po synchronizacji."],
-      ["Nasz panel", "Administrator nadaje pracownikowi indywidualny PIN w ekranie „Kelnerzy i PIN-y”. Nasza baza nie przechowuje PIN-u — zapisuje wyłącznie jego nieodwracalny, losowo solony skrót scrypt."],
+      ["Dotykačka", "Lista pracowników pochodzi wyłącznie z Dotykački. W panelu „Pracownicy” pokazujemy tylko osoby aktywne i nieusunięte; wyłączenie pracownika w POS odbiera mu dostęp po synchronizacji."],
+      ["Nasz panel", "Administrator nadaje pracownikowi indywidualny PIN w ekranie „Pracownicy”. Nasza baza nie przechowuje PIN-u — zapisuje wyłącznie jego nieodwracalny, losowo solony skrót scrypt."],
       ["Automatycznie", "Po pięciu błędnych próbach logowania urządzenie jest czasowo blokowane. Sesja kelnera jest krótka, podpisana i dostępna tylko dla aktywnego pracownika."],
       ["Dotykačka", "Nazwy i identyfikatory stolików są synchronizowane z Dotykački. Kelner wybiera stolik i liczbę gości przed sprawdzeniem zamówienia."],
       ["Automatycznie", "Katalog kelnera stosuje te same reguły dostępności co menu gościa. Produkt z tagiem PÓŁKA można dodać tylko przy stanie większym od zera; pusty, zerowy lub ujemny stan ukrywa go w obu widokach."],
@@ -418,7 +418,7 @@ const ruleSections = [
       ["Dotykačka", "Tag TOGO udostępnia kelnerowi opcję „Zapakuj na wynos”. Domyślnie produkt pozostaje zamówieniem na miejscu, a w menu gościa nie pokazujemy ikony na wynos."],
       ["Automatycznie", "Filtry win, whisky i Alko Baru działają w strefie kelnera według tych samych cech co w menu gościa."],
       ["Automatycznie", "Przy pełnej butelce piwa, wina, whisky lub wódki zamawianej między 21:58 a 06:02 system pokazuje ostrzeżenie o zakazie sprzedaży na wynos. Reguła nie dotyczy produktów 0% ani porcji."],
-      ["Nasz panel", "Pytania ankiety definiujemy, porządkujemy, włączamy i wyłączamy w ekranie „Kelnerzy i PIN-y”. Dostępne są pytania Tak/Nie oraz wybór jednej z własnych odpowiedzi; pytanie może być obowiązkowe."],
+      ["Nasz panel", "Pytania ankiety definiujemy, porządkujemy, włączamy i wyłączamy w ekranie „Pracownicy”. Dostępne są pytania Tak/Nie oraz wybór jednej z własnych odpowiedzi; pytanie może być obowiązkowe."],
       ["Automatycznie", "Jeżeli ankieta ma aktywne pytania, pojawia się jako ostatni krok po podsumowaniu koszyka. Odpowiedzi są zapisywane ze szkicem zamówienia bez danych osobowych gościa."],
       ["Zawsze", "Wysłanie z tabletu ma utworzyć lub uzupełnić otwarte zamówienie w Dotykačce i wydrukować właściwe bony zgodnie z konfiguracją POS. Nie może wykonywać płatności, zamykać rachunku ani wystawiać paragonu fiskalnego."],
       ["Zawsze", "Paragon fiskalny powstaje dopiero podczas zatwierdzenia i zamknięcia zamówienia w głównym POS. Po poprawnym wysłaniu zamówienia sesja kelnera zostanie zakończona, a tablet wróci do menu gościa."],
@@ -746,8 +746,6 @@ export default function AdminPanel() {
   useEffect(() => { if (view === "visibilityHistory") void loadVisibilityEvents(); }, [view]);
 
   const categories = useMemo(() => ["Wszystkie", ...Array.from(new Set(products.map((product) => product.category ?? "Bez kategorii")))], [products]);
-  const forestLifeProducts = useMemo(() => products.filter((product) => isForestLifeSyrupCategory(product.category)), [products]);
-  const forestLifeCategory = forestLifeProducts[0]?.category ?? null;
   const productsMatchingMainFilters = useMemo(() => {
     const phrase = normalizedProductSearch(query);
     return products.filter((product) =>
@@ -1374,14 +1372,19 @@ export default function AdminPanel() {
     <main className="admin-dashboard">
       <header className="admin-topbar">
         <img src="/logo-cafe.png" alt="Marta Banaszek atelier-café" />
-        <div>
+        <div className="admin-top-title">
           <span className="admin-eyebrow">Cyfrowa karta kawiarni</span>
-          <h1>Zarządzanie menu</h1>
+          <h1>Menu główne</h1>
         </div>
-        <div className="admin-top-actions">
-          <a className="admin-secondary" href="/admin/waiters">Kelnerzy i PIN-y</a>
+        <nav className="admin-module-links" aria-label="Główne obszary panelu">
+          <a className="admin-secondary" href="/admin/instructions">Instrukcje</a>
+          <a className="admin-secondary" href="/admin/workforce">Grafik</a>
           <a className="admin-secondary" href="/admin/settlements">Rozliczenia</a>
           <a className="admin-secondary" href="/admin/inventory">Inwentaryzacja</a>
+          <a className="admin-secondary" href="/admin/waiters">Pracownicy</a>
+          <a className="admin-secondary" href="/admin/reservations">Rezerwacje</a>
+        </nav>
+        <div className="admin-top-actions">
           <button className="admin-primary" onClick={sync} disabled={syncing}>{syncing ? "Synchronizuję…" : "Synchronizuj z Dotykačką"}</button>
           <button className="admin-secondary" onClick={logout}>Wyloguj</button>
         </div>
@@ -1425,13 +1428,6 @@ export default function AdminPanel() {
             </button>
           </div>
           <input className="admin-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Szukaj produktu lub kategorii…" />
-          {forestLifeCategory && <button type="button" className={category === forestLifeCategory ? "admin-secondary is-active" : "admin-secondary"} onClick={() => {
-            setQuery("");
-            setVisibilityFilter("all");
-            setProductStatusFilter("all");
-            setCategory(forestLifeCategory);
-            setSelectedId(forestLifeProducts[0]?.id ?? null);
-          }}>Leśne Życie · zdjęcia i opisy ({forestLifeProducts.length})</button>}
           <select className="admin-select" aria-label="Widoczność produktów" value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value as VisibilityFilter)}>
             <option value="visible">Widoczne w menu</option>
             <option value="hidden">Ukryte</option>
@@ -1587,7 +1583,7 @@ export default function AdminPanel() {
       </section> : view === "visibilityHistory" ? <section className="admin-category-workspace admin-visibility-workspace">
         <div className="admin-category-heading">
           <div><span className="admin-eyebrow">Kontrola zmian pracowników</span><h2>Historia widoczności menu</h2></div>
-          <p>Rejestr pokazuje kto, kiedy i z jakiego powodu ukrył albo ponownie udostępnił produkt w karcie gościa. Uprawnienie nadajesz osobno każdemu pracownikowi w ekranie „Kelnerzy i PIN-y”.</p>
+          <p>Rejestr pokazuje kto, kiedy i z jakiego powodu ukrył albo ponownie udostępnił produkt w karcie gościa. Uprawnienie nadajesz osobno każdemu pracownikowi w ekranie „Pracownicy”.</p>
         </div>
         <div className={visibilityEvents.length ? "admin-audit-summary" : "admin-audit-summary is-clean"}>
           <strong>{visibilityEvents.length ? `${visibilityEvents.length} ostatnich zmian` : "Brak zmian wykonanych przez pracowników"}</strong>
@@ -1779,7 +1775,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
 }) {
   const [descriptionPl, setDescriptionPl] = useState(product.descriptionPl ?? "");
   const [imageSourceUrl, setImageSourceUrl] = useState(product.imageSourceUrl ?? "");
-  const [backdropSourceUrl, setBackdropSourceUrl] = useState(product.detailBackdropSourceUrl ?? "");
+  const [backdropSourceUrl, setBackdropSourceUrl] = useState("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [selectedImages, setSelectedImages] = useState<Record<number, string>>({});
   const [manualSourceUrl, setManualSourceUrl] = useState("");
@@ -2014,18 +2010,19 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
 
       {forestLifeSyrup && <fieldset className="admin-syrup-backdrop-fieldset">
         <legend>Tło podglądu syropu <small>oddzielne od zdjęcia butelki</small></legend>
-        <p className="admin-field-help">Miniatura i zdjęcie główne pozostają bez zmian. Wybierz szeroki lub pionowy kadr głównego składnika bez butelki i napisów. Zdjęcie wypełni prawą połowę podglądu, a system automatycznie pokaże powiększoną butelkę niżej, na pierwszym planie i bliżej ceny.</p>
-        {(product.detailBackdropPath || product.detailBackdropSourceUrl) ? <div className="admin-syrup-backdrop-preview">
+        <p className="admin-field-help">Miniatura i zdjęcie główne pozostają bez zmian. Dodaj, podmień albo usuń wyłącznie fotografię tła. Najlepiej sprawdzi się kadr głównego składnika bez butelki i napisów.</p>
+        {(product.detailBackdropPath || product.detailBackdropSourceUrl) && <div className="admin-syrup-backdrop-preview">
           <div>{product.detailBackdropPath && <img className="admin-syrup-backdrop-photo" src={product.detailBackdropPath} alt="Tło podglądu" />}{(product.imagePath || product.imageSourceUrl) && <img className="admin-syrup-backdrop-bottle" src={product.imagePath ?? product.imageSourceUrl ?? ""} alt={`Butelka ${product.name}`} />}<span>LEŚNE ŻYCIE</span></div>
           <button type="button" className="admin-image-remove" disabled={saving} onClick={() => void onRemoveBackdrop()}>Usuń tło</button>
-        </div> : <div className="admin-form-grid">
-          <div className="admin-wide admin-image-url-row">
-            <label>Link do zdjęcia składnika<input type="url" placeholder="https://…" value={backdropSourceUrl} onChange={(event) => setBackdropSourceUrl(event.target.value)} /></label>
-            <button type="button" className="admin-secondary" disabled={saving || !backdropSourceUrl.trim()} onClick={() => void onBackdropImport(backdropSourceUrl.trim())}>{saving ? "Pobieram…" : "Pobierz i ustaw jako tło"}</button>
-            <small>System zapisze własną, zoptymalizowaną kopię. Fotografia nie zastąpi zdjęcia butelki.</small>
-          </div>
-          <label className="admin-wide admin-file-field">Albo wybierz tło z urządzenia<input name="backdropFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>Zdjęcie zostanie proporcjonalnie zmniejszone do maksymalnie 1600 px bez wycinania tła.</small></label>
         </div>}
+        <div className="admin-form-grid">
+          <div className="admin-wide admin-image-url-row">
+            <label>Link do nowego zdjęcia tła<input type="url" placeholder="https://…" value={backdropSourceUrl} onChange={(event) => setBackdropSourceUrl(event.target.value)} /></label>
+            <button type="button" className="admin-secondary" disabled={saving || !backdropSourceUrl.trim()} onClick={() => void onBackdropImport(backdropSourceUrl.trim())}>{saving ? "Pobieram…" : product.detailBackdropPath || product.detailBackdropSourceUrl ? "Pobierz i podmień tło" : "Pobierz i ustaw jako tło"}</button>
+            <small>System zapisze własną, zoptymalizowaną kopię. Nowe tło zastąpi poprzednie, ale nie zmieni zdjęcia butelki.</small>
+          </div>
+          <label className="admin-wide admin-file-field">{product.detailBackdropPath || product.detailBackdropSourceUrl ? "Podmień tło plikiem z urządzenia" : "Dodaj tło z urządzenia"}<input name="backdropFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif" /><small>Zdjęcie zostanie proporcjonalnie zmniejszone do maksymalnie 1600 px bez wycinania tła.</small></label>
+        </div>
       </fieldset>}
 
       <fieldset>

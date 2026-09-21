@@ -1,0 +1,147 @@
+.admin-shell .admin-topbar,
+.admin-shell .instructions-admin-top,
+.admin-shell .workforce-admin-top,
+.admin-shell .reservations-admin > header {
+  box-sizing: border-box;
+  min-height: 98px;
+  background: #000;
+  color: #fff;
+}
+
+.admin-shell .admin-topbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px clamp(16px, 2.2vw, 38px);
+}
+
+.admin-shell .admin-topbar > img {
+  width: 172px;
+  max-height: 72px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.admin-shell .admin-top-title {
+  display: grid;
+  min-width: 145px;
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.admin-shell .admin-top-title h1 {
+  margin: 0;
+  color: #fff;
+  font: 400 1.35rem/1.08 Georgia, serif;
+}
+
+.admin-shell .admin-top-title .admin-eyebrow {
+  color: #f39268;
+}
+
+.admin-shell .admin-module-links,
+.admin-shell .admin-topbar-leading,
+.admin-shell .admin-top-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.admin-shell .admin-module-links {
+  flex: 1 1 auto;
+}
+
+.admin-shell .admin-top-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.admin-shell .admin-topbar .admin-secondary,
+.admin-shell .admin-topbar .admin-primary {
+  min-height: 43px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, .38);
+  background: #000 !important;
+  color: #fff !important;
+  font-size: .62rem;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.admin-shell .admin-topbar .admin-primary {
+  border-color: rgba(255, 255, 255, .52);
+  background: #000 !important;
+  color: #fff !important;
+}
+
+.admin-shell .admin-topbar-leading {
+  order: -1;
+  flex: 0 0 auto;
+}
+
+.admin-shell .admin-section-topbar .admin-top-actions {
+  margin-left: 0;
+}
+
+@media (max-width: 1280px) {
+  .admin-shell .admin-topbar {
+    flex-wrap: wrap;
+  }
+
+  .admin-shell .admin-dashboard > .admin-topbar .admin-module-links {
+    order: 3;
+    width: 100%;
+    flex-basis: 100%;
+    justify-content: center;
+  }
+
+  .admin-shell .admin-dashboard > .admin-topbar .admin-top-actions {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-shell .admin-topbar {
+    gap: 10px;
+    padding: 11px 12px;
+  }
+
+  .admin-shell .admin-topbar > img {
+    width: 126px;
+  }
+
+  .admin-shell .admin-top-title {
+    min-width: 0;
+    flex: 1 1 150px;
+  }
+
+  .admin-shell .admin-top-title h1 {
+    font-size: 1.08rem;
+  }
+
+  .admin-shell .admin-dashboard > .admin-topbar .admin-top-actions,
+  .admin-shell .admin-module-links {
+    width: 100%;
+    flex: 1 0 100%;
+    overflow-x: auto;
+    justify-content: flex-start;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  .admin-shell .admin-section-topbar .admin-topbar-leading {
+    width: auto;
+  }
+
+  .admin-shell .admin-section-topbar .admin-top-actions {
+    width: 100%;
+    flex-basis: 100%;
+    overflow-x: auto;
+  }
+}

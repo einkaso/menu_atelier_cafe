@@ -245,7 +245,7 @@ test("opens drinks with managed photos, descriptions and allergens", async () =>
   assert.match(source, /Wróć do napojów/);
   assert.match(source, /const previewDetails=activeKind==="cold"\|\|activeKind==="zero"\|\|activeKind==="cocktails"/);
   assert.match(source, /previewDetails=\{previewDetails\}/);
-  assert.match(source, /const kind=product\.visualKind\?\?activeKind/);
+  assert.match(source, /const kind=product\.visualKind\?\?contextKind/);
   assert.match(source, /p\.image\|\|cakeLayout\|\|previewDetails\?"product product-visual"/);
   assert.match(source, /previewDetails\?L\("… Czytaj dalej","… Read more"\)/);
   assert.match(source, /p\.wine&&!previewDetails/);
@@ -461,14 +461,20 @@ test("opens every Atelier selection with the same product detail routing as the 
     readFile(path.join(root, "app/menu-client.tsx"), "utf8"),
     readFile(path.join(root, "app/globals.css"), "utf8"),
   ]);
-  assert.match(source, /const openProductDetails=\(product:Product\)=>/);
+  assert.match(source, /const openProductDetails=\(product:Product,contextKind=activeKind\)=>/);
+  assert.match(source, /const openPromotedProduct=\(product:Product\)=>openProductDetails\(product,product\.visualKind/);
   assert.match(source, /<Featured key=\{product\.id\?\?product\.pl\} product=\{product\} lang=\{lang\} onOpen=\{openProductDetails\}/);
   assert.match(source, /<ProductCard product=\{p\}[\s\S]*onOpen=\{openProductDetails\}/);
   assert.match(source, /function Featured\(\{product,lang,onOpen\}/);
   assert.match(source, /role="button" tabIndex=\{0\} onClick=\{\(\)=>onOpen\(product\)\}/);
   assert.match(source, /if\(product\.whisky\|\|kind==="whisky"\)\{setSpiritProduct\(product\)/);
   assert.match(source, /<GenericProductDetailDialog product=\{genericProduct\}/);
+  assert.match(source, /<SeasonalOfferDialog[^]*onProduct=\{openPromotedProduct\}/);
+  assert.match(source, /products\.map\(product=><button type="button" className="seasonal-dialog-product is-openable"[^]*onClick=\{\(\)=>onProduct\(product\)\}/);
+  assert.match(source, /promos\.map\(product=><button className="recommend-item"[^]*onClick=\{\(\)=>onOpen\(product\)\}/);
+  assert.doesNotMatch(source, /<article className="seasonal-dialog-product"/);
   assert.match(css, /\.featured\.is-openable\{cursor:pointer/);
+  assert.match(css, /\.seasonal-dialog-product\.is-openable\{width:100%;cursor:pointer\}/);
 });
 
 test("uses a whisky tumbler and keeps 50 ml independent from bottle source data", async () => {

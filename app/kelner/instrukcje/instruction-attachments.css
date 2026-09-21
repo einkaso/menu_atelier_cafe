@@ -1,0 +1,97 @@
+.waiter-instruction-reader-content {
+  white-space: normal;
+}
+
+.waiter-instruction-reader-copy {
+  white-space: pre-wrap;
+}
+
+.waiter-instruction-attachments {
+  margin-top: 30px;
+  padding-top: 22px;
+  border-top: 1px solid var(--w-line);
+}
+
+.waiter-instruction-attachments h3 {
+  margin: 0 0 14px;
+  color: var(--w-pink);
+  font: 850 .66rem Arial, sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.waiter-instruction-attachments > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.waiter-instruction-attachments a {
+  overflow: hidden;
+  border: 1px solid var(--w-line);
+  background: #f8f5ee;
+  color: var(--w-navy);
+  text-decoration: none;
+}
+
+.waiter-instruction-attachments a.is-image {
+  display: grid;
+}
+
+.waiter-instruction-attachments a.is-image img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  background: #eae6dd;
+}
+
+.waiter-instruction-attachments a.is-image > span {
+  overflow: hidden;
+  padding: 9px 11px;
+  font: 700 .66rem Arial, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waiter-instruction-attachments a.is-pdf {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  align-items: center;
+  min-height: 78px;
+}
+
+.waiter-instruction-attachments a.is-pdf > b {
+  display: grid;
+  align-self: stretch;
+  place-items: center;
+  background: #49273a;
+  color: #fff;
+  font: 850 .72rem Arial, sans-serif;
+}
+
+.waiter-instruction-attachments a.is-pdf > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.waiter-instruction-attachments a.is-pdf strong {
+  overflow: hidden;
+  font: 700 .72rem Arial, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waiter-instruction-attachments a.is-pdf small {
+  color: #718286;
+  font: 600 .6rem Arial, sans-serif;
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .waiter-instruction-attachments > div {
+    grid-template-columns: 1fr;
+  }
+}

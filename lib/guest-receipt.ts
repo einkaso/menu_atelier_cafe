@@ -7,7 +7,7 @@ export type GuestReceipt = GuestReceiptListItem & {
   payments: Array<{ id: string; label: string; amount: string; currency: string; tip: string }>;
   surveyQuestions: GuestSurveyQuestion[];
   reviewUrl: string | null;
-  servedBy: { name: string; mediaUrl: string | null; mediaType: "GIF" | "VIDEO" | null } | null;
+  servedBy: { name: string; message: string; mediaUrl: string | null; mediaType: "GIF" | "VIDEO" | null } | null;
 };
 
 const decimal = (value: unknown, fallback = 0) => {

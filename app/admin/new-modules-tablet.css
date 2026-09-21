@@ -1,0 +1,49 @@
+@media (min-width: 761px) and (max-width: 1100px) {
+  .instructions-admin-top,
+  .reservations-admin > header,
+  .workforce-admin-top {
+    grid-template-columns: 100px minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .instructions-admin-top img,
+  .reservations-admin > header img,
+  .workforce-admin-top img {
+    width: 96px;
+  }
+
+  .instructions-admin-top h1,
+  .reservations-admin > header h1,
+  .workforce-admin-top h1 {
+    font-size: 1.45rem;
+  }
+
+  .instructions-admin-top nav,
+  .reservations-admin > header nav,
+  .workforce-admin-top nav {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .workforce-admin-grid,
+  .reservation-admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workforce-shift-list > div {
+    grid-template-columns: 1fr 130px 85px auto 85px 38px;
+  }
+
+  .workforce-shift-list > div input:nth-last-child(2) {
+    grid-column: 1 / -2;
+  }
+
+  .workforce-admin-top {
+    grid-template-columns: 180px minmax(0, 1fr);
+    padding-block: 10px;
+  }
+
+  .workforce-admin-top img {
+    width: 170px;
+  }
+}

@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
 import "./admin.css";
 import "./cash-day-admin.css";
+import "./instructions/instructions.css";
+import "./instructions/attachments.css";
+import "./workforce/workforce.css";
+import "./reservations/reservations.css";
+import "./new-modules-tablet.css";
+import "./waiters/employee-qr.css";
+import "./unified-header.css";
 
 export const metadata: Metadata = {
   title: "Panel menu — Banaszek Café",

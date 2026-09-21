@@ -1,6 +1,6 @@
 # Menu Atelier Café
 
-Publiczne, dwujęzyczne menu i zaplecze operacyjne Marta Banaszek Atelier-Café. Aplikacja synchronizuje katalog z Dotykačką, udostępnia panel administracyjny, strefę kelnera, obsługę zamówień, rozliczeń kasowych i etapowej inwentaryzacji.
+Publiczne, dwujęzyczne menu i zaplecze operacyjne Marta Banaszek Atelier-Café. Aplikacja synchronizuje katalog z Dotykačką, udostępnia panel administracyjny, strefę kelnera, obsługę zamówień, rozliczeń kasowych, etapowej inwentaryzacji, grafiku i czasu pracy oraz rezerwacji.
 
 ## Stos technologiczny
 
@@ -85,13 +85,23 @@ npm test
 
 W strefie kelnera przycisk „Rachunek dla gościa” pobiera z Dotykački zamknięte rachunki z ostatnich 12 godzin. Kelner może wybrać dowolny stolik na dowolnym tablecie. Widok gościa korzysta z końcowego zamówienia w POS, dlatego uwzględnia pozycje zmienione w Dotykačce po pierwotnym wysłaniu zamówienia. Przekazanie tabletu wylogowuje kelnera, a „Zakończ” usuwa krótką sesję rachunku i wraca do menu gościa.
 
-Każdemu pracownikowi można w panelu „Pracownicy i dostępy” przypisać do trzech lekkich animacji MP4, WebM lub GIF. Rachunek pokazuje imienne podziękowanie osoby przekazującej tablet i losuje jedną z jej animacji; wideo odtwarza się automatycznie, bez dźwięku i w pętli.
+Każdemu pracownikowi można w panelu „Pracownicy i dostępy” ustawić własną treść podziękowania oraz przypisać do trzech lekkich animacji MP4, WebM lub GIF. Domyślny tekst brzmi „Dziękuję i zapraszam ponownie!”. Rachunek pokazuje imienne podziękowanie osoby przekazującej tablet i losuje jedną z jej animacji; wideo odtwarza się automatycznie, bez dźwięku i w pętli.
 
 Ankieta przed zamówieniem pozostaje w `waiter_survey_questions`. Osobna ankieta po rachunku i jej odpowiedzi używają tabel `guest_survey_questions` oraz `guest_survey_responses`, tworzonych przez migrację `0028_guest_receipts.sql`.
 
 Kod QR wymaga ustawienia zmiennej `GOOGLE_REVIEW_URL` na dokładny, publiczny link „napisz opinię” z profilu Google firmy. Bez tej zmiennej rachunek i ankieta działają, ale kod QR jest ukryty.
 
-Szczegóły wdrożenia znajdują się w [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), bieżące reguły produktów, kodów, tagów, filtrów i zdjęć w [`docs/MENU_CONFIGURATION.md`](docs/MENU_CONFIGURATION.md), a zasady integracji magazynowej w [`docs/DOTYKACKA_INVENTORY_INTEGRATION.md`](docs/DOTYKACKA_INVENTORY_INTEGRATION.md). Operacyjną listę przygotowania POS zawiera [`DOTYKACKA_CHECKLIST.md`](DOTYKACKA_CHECKLIST.md).
+## Pracownicy, grafik i ewidencja czasu
+
+Panel „Pracownicy i dostępy” skupia ustawienia dostępu, karty QR, indywidualne podziękowania oraz zwijane dane pracownika: stawkę godzinową, telefon i adres e-mail. Każda osoba ma niezależny przełącznik „Grafik: TAK/NIE”. Stan „NIE” blokuje nowe dyspozycje i planowanie po stronie interfejsu oraz serwera, ale zachowuje historyczne zmiany, czas pracy, rozliczenia i napiwki.
+
+Jeżeli pracownik nie ma kodu kreskowego w Dotykačce, administrator może wygenerować go z panelu pracowników. Zapis wymaga osobnego potwierdzenia, używa aktualnej wersji rekordu ETag, nie nadpisuje kodu istniejącego w Dotykačce i po potwierdzeniu automatycznie udostępnia kartę QR czasu pracy.
+
+Administrator układa plan w sekcji „KROK 2 — Ułóż i opublikuj grafik”. Wyraźny przycisk „+ Dodaj zmianę” jest dostępny, gdy co najmniej jeden aktywny pracownik ma ustawienie „Grafik: TAK”. Szkic nie jest widoczny dla zespołu do chwili publikacji.
+
+Funkcje pracownicze wymagają migracji `0037`–`0042`. Najnowsza migracja `0042_employee_profile_and_scheduling.sql` dodaje ustawienie udziału w grafiku oraz prywatne pola profilu. Pełne zasady działania i lista kontroli po wdrożeniu znajdują się w [`docs/WORKFORCE_AND_RESERVATIONS.md`](docs/WORKFORCE_AND_RESERVATIONS.md).
+
+Szczegóły wdrożenia znajdują się w [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), zasady grafiku, ewidencji i rezerwacji w [`docs/WORKFORCE_AND_RESERVATIONS.md`](docs/WORKFORCE_AND_RESERVATIONS.md), bieżące reguły produktów, kodów, tagów, filtrów i zdjęć w [`docs/MENU_CONFIGURATION.md`](docs/MENU_CONFIGURATION.md), a zasady integracji magazynowej w [`docs/DOTYKACKA_INVENTORY_INTEGRATION.md`](docs/DOTYKACKA_INVENTORY_INTEGRATION.md). Operacyjną listę przygotowania POS zawiera [`DOTYKACKA_CHECKLIST.md`](DOTYKACKA_CHECKLIST.md).
 
 ## Licencja i publikacja
 

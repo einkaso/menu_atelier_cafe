@@ -36,5 +36,6 @@ test("groups Alko Bar products by guest-facing offer type", async () => {
   assert.equal(suggestProductGroup("DRINKI", "Mimoza b/a")?.pl, "Drinki 0%");
   assert.equal(suggestProductGroup("DRINKI", "Margarita")?.pl, "Koktajle");
   assert.equal(suggestProductGroup("ALKOHOLE", "WÓDKA Absolut 40% 50ml")?.pl, "Shoty · 50 ml");
+  assert.equal(suggestProductGroup("ALKOHOLE", "1800 Tequila", { cocktailType: "Shot", servingStyle: "Shot", volume: "50 ml" })?.pl, "Shoty · 50 ml");
   assert.equal(suggestProductGroup("ALKOHOLE", "WÓDKA Absolut 40% 0,7l")?.pl, "Wódka na butelki");
 });

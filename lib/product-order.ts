@@ -4,9 +4,13 @@ function normalized(...values: Array<string | null | undefined>) {
   return values.join(" ").toLocaleLowerCase("pl").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-export function suggestProductGroup(category: string | null, product: string): ProductGroupSuggestion | null {
+export function suggestProductGroup(
+  category: string | null,
+  product: string,
+  attributes?: Record<string, string> | null,
+): ProductGroupSuggestion | null {
   const categoryText = normalized(category);
-  const text = normalized(product);
+  const text = normalized(product, attributes?.cocktailType, attributes?.servingStyle, attributes?.volume);
 
   if (/win/.test(categoryText)) return null;
   if (/drink|koktaj|cocktail/.test(categoryText)) {

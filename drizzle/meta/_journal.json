@@ -260,6 +260,62 @@
       "when": 1789930800000,
       "tag": "0036_waiter_tip_adjustments",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1789938000000,
+      "tag": "0037_staff_instructions",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790006400000,
+      "tag": "0038_workforce_planning",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790010000000,
+      "tag": "0039_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790020800000,
+      "tag": "0040_staff_instruction_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790107200000,
+      "tag": "0041_employee_thank_you_message",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790110800000,
+      "tag": "0042_employee_profile_and_scheduling",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790121600000,
+      "tag": "0043_icloud_calendar_writeback",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790125200000,
+      "tag": "0044_reservation_unknown_fields",
+      "breakpoints": true
     }
   ]
 }

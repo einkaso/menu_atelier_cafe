@@ -399,7 +399,7 @@ export default function SettlementForm({
   return (
     <main className="waiter-app">
       <header className="waiter-header">
-        <button onClick={onBack}>← Zamówienia</button>
+        <button onClick={onBack}>← Menu</button>
         <div>
           <span>Kasa główna</span>
           <strong>{employee.name}</strong>
