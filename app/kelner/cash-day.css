@@ -28,6 +28,40 @@
   line-height: 1.55;
 }
 
+.cash-current-date {
+  display: grid;
+  width: 146px;
+  margin: 20px auto;
+  overflow: hidden;
+  border: 1px solid #cad4d1;
+  background: #fff;
+  color: var(--w-navy);
+  box-shadow: 0 8px 20px rgba(8, 47, 60, .1);
+  text-align: center;
+}
+
+.cash-current-date > span {
+  padding: 6px 10px;
+  background: var(--w-orange);
+  color: var(--w-navy);
+  font-size: .58rem;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.cash-current-date > strong {
+  padding-top: 5px;
+  font: 600 3.6rem/.95 Georgia, serif;
+}
+
+.cash-current-date > small {
+  padding: 4px 9px 10px;
+  font-size: .66rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
 .waiter-settlement-message {
   margin: 0 0 14px;
   padding: 12px 14px;

@@ -1,0 +1,147 @@
+.waiter-login {
+  padding: 28px;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(238, 118, 75, .12), transparent 28%),
+    var(--w-paper);
+}
+
+.waiter-login > .waiter-login-shell {
+  display: grid;
+  grid-template-columns: minmax(280px, .9fr) minmax(380px, 1.1fr);
+  width: min(960px, 100%);
+  min-height: 610px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--w-line);
+  background: #fffdf8;
+  box-shadow: 0 26px 70px rgba(8, 47, 60, .14);
+  text-align: left;
+}
+
+.waiter-login-brand {
+  --waiter-login-brand-bg: #08091f;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px 42px 40px;
+  overflow: hidden;
+  background: var(--waiter-login-brand-bg);
+  color: #fff;
+}
+
+.waiter-login-brand::after {
+  position: absolute;
+  right: -105px;
+  bottom: -105px;
+  width: 290px;
+  height: 290px;
+  border: 1px solid rgba(238, 118, 75, .42);
+  border-radius: 50%;
+  content: "";
+}
+
+.waiter-login .waiter-login-brand > img {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(280px, 100%);
+  height: auto;
+  margin: 0;
+}
+
+.waiter-login-brand > div {
+  position: relative;
+  z-index: 1;
+  max-width: 320px;
+}
+
+.waiter-login .waiter-login-brand span,
+.waiter-login .waiter-login-pin > span {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--w-orange);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.waiter-login-brand h2 {
+  margin: 0 0 14px;
+  color: #fff;
+  font: 500 2.15rem/1.05 Georgia, serif;
+}
+
+.waiter-login .waiter-login-brand p {
+  margin: 0;
+  color: rgba(255, 255, 255, .72);
+  font-size: .82rem;
+  line-height: 1.55;
+}
+
+.waiter-login-pin {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: 52px clamp(32px, 6vw, 72px);
+  text-align: center;
+}
+
+.waiter-login .waiter-login-pin h1 {
+  margin: 0 0 12px;
+  font-size: 2.75rem;
+}
+
+.waiter-login .waiter-login-pin > p {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.waiter-login .waiter-login-pin form {
+  width: 100%;
+}
+
+.waiter-login .waiter-login-pin > a {
+  align-self: center;
+  margin-top: 18px;
+}
+
+@media (max-width: 720px) {
+  .waiter-login {
+    place-items: start center;
+    padding: 12px;
+  }
+
+  .waiter-login > .waiter-login-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .waiter-login-brand {
+    min-height: 180px;
+    padding: 28px;
+  }
+
+  .waiter-login .waiter-login-brand > img {
+    width: 230px;
+  }
+
+  .waiter-login-brand > div p {
+    display: none;
+  }
+
+  .waiter-login-brand h2 {
+    margin-bottom: 0;
+    font-size: 1.6rem;
+  }
+
+  .waiter-login-pin {
+    padding: 34px 24px;
+  }
+
+  .waiter-login .waiter-login-pin h1 {
+    font-size: 2.25rem;
+  }
+}

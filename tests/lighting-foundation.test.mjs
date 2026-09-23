@@ -12,7 +12,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 test("lighting foundation keeps configuration, state and command history separate", async () => {
   const [schema, migration] = await Promise.all([
     read("db/schema.ts"),
-    read("drizzle/0046_lighting_control_foundation.sql"),
+    read("drizzle/0049_lighting_control_foundation.sql"),
   ]);
   for (const name of ["lighting_bridges", "lighting_devices", "lighting_outputs", "lighting_output_states", "lighting_commands", "lighting_command_items"]) {
     assert.match(schema, new RegExp(name));

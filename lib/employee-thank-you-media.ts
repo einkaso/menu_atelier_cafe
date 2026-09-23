@@ -15,7 +15,8 @@ function detectMedia(bytes: Buffer) {
 }
 
 export function employeeThankYouMediaDirectory() {
-  return path.join(process.cwd(), "public", "uploads", "employee-thanks");
+  const managedRoot = process.env.MENU_UPLOADS_DIRECTORY?.replace(/\/+$/, "");
+  return managedRoot ? `${managedRoot}/employee-thanks` : path.join(process.cwd(), "public", "uploads", "employee-thanks");
 }
 
 export function employeeThankYouMediaFilename(storedPath: string | null | undefined) {

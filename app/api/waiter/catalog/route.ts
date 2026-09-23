@@ -1,6 +1,6 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { menuAddons, menuCategories, menuProducts, productContent, waiterExtraProducts, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
+import { drinkVessels, menuAddons, menuCategories, menuProducts, productContent, waiterExtraProducts, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
 import { productImageUrl } from "../../../../lib/image-import";
 import { currentWaiter } from "../../../../lib/waiter-auth";
 import { isAlternativeCoffeeBeanGroup, isAlternativeCoffeeMethod, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
@@ -11,6 +11,7 @@ import { sectionFor, waiterCategoryName } from "../../../../lib/menu-categories"
 import { isZeroAlcoholValue } from "../../../../lib/wine-characteristics";
 import { inferredAlcoBarAttributes } from "../../../../lib/alco-characteristics";
 import { menuProductVisibleForGuest } from "../../../../lib/menu-visibility";
+import { staffManualMediaAuthorizedPath } from "../../../../lib/staff-manual-media";
 
 export const dynamic = "force-dynamic";
 const MENU_TAG = process.env.DOTYKACKA_MENU_TAG?.trim() || "MENU";
@@ -78,9 +79,16 @@ export async function GET(request: Request) {
       sourceDescription: menuProducts.sourceDescription,
       staffInstructions: productContent.staffInstructions,
       staffMedia: productContent.staffMedia,
+      drinkVesselId: productContent.drinkVesselId,
+      espressoShots: productContent.espressoShots,
+      drinkVesselName: drinkVessels.name,
+      drinkVesselCapacityMl: drinkVessels.capacityMl,
+      drinkVesselIconPath: drinkVessels.iconPath,
+      drinkVesselActive: drinkVessels.active,
     }).from(menuProducts)
       .innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
       .leftJoin(productContent, eq(menuProducts.id, productContent.productId))
+      .leftJoin(drinkVessels, eq(productContent.drinkVesselId, drinkVessels.id))
       .where(and(
         eq(menuProducts.menuTagged, true), eq(menuProducts.deleted, false),
         eq(menuCategories.display, true),
@@ -183,18 +191,25 @@ export async function GET(request: Request) {
         temperatures: productTemperatures(product.tags),
         takeaway: productTakeawayAvailable(product.tags),
         attributes,
+        espressoShots: product.espressoShots === 1 || product.espressoShots === 2 ? product.espressoShots : null,
+        drinkVessel: product.drinkVesselId && product.drinkVesselActive ? {
+          id: product.drinkVesselId,
+          name: product.drinkVesselName ?? "Naczynie",
+          capacityMl: product.drinkVesselCapacityMl ?? 0,
+          icon: product.drinkVesselIconPath,
+        } : null,
         outsideMenu: false,
         hiddenFromGuest: !menuProductVisibleForGuest(product.display, product.manualHidden, product.waiterVisibilityOverride),
         image: productImageUrl(product.imagePath),
         staffManual: product.staffInstructions?.trim() || product.staffMedia?.length ? {
           instructions: product.staffInstructions?.trim() ?? "",
-          media: product.staffMedia ?? [],
+          media: (product.staffMedia ?? []).map((media) => ({ ...media, path: staffManualMediaAuthorizedPath(media.path) })),
         } : null,
         addonGroups: addonGroupsFor(product),
       };
     }), ...extraProducts.filter((product) => regularProductStockIsAvailable(
       product.stockDeduct, product.stockOverdraft, product.stockQuantity,
-    )).map((product) => ({ ...product, kind: "other", serving: null, country: null, wineStyle: null, wineColor: null, sparklingType: null, sweetness: null, veganStatus: "UNKNOWN", vegan: false, alcoholFree: false, temperatures: [], takeaway: false, attributes: {}, outsideMenu: true, hiddenFromGuest: false, image: null, staffManual: null, addonGroups: [] }))],
+    )).map((product) => ({ ...product, kind: "other", serving: null, country: null, wineStyle: null, wineColor: null, sparklingType: null, sweetness: null, veganStatus: "UNKNOWN", vegan: false, alcoholFree: false, temperatures: [], takeaway: false, attributes: {}, espressoShots: null, drinkVessel: null, outsideMenu: true, hiddenFromGuest: false, image: null, staffManual: null, addonGroups: [] }))],
     surveyQuestions,
     posActionsEnabled: process.env.WAITER_POS_ACTIONS_ENABLED === "true",
   });

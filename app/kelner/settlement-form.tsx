@@ -64,6 +64,7 @@ type Workflow = {
 };
 
 const amountProps = { min: "0", step: "0.01", inputMode: "decimal" as const };
+const POLAND_TIME_ZONE = "Europe/Warsaw";
 const newKey = () => crypto.randomUUID();
 const cents = (value: string | number | null | undefined) =>
   Math.round((Number(String(value ?? "0").replace(",", ".")) || 0) * 100);
@@ -124,6 +125,57 @@ function SummaryAmount({
       <strong>{money(value)} zł</strong>
     </div>
   );
+}
+
+function CurrentDateCalendar() {
+  const [currentDate, setCurrentDate] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const refresh = () => setCurrentDate(new Date());
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (!currentDate) {
+    return <time className="cash-current-date" aria-label="Aktualna data"><span>Dzisiaj</span><strong>—</strong><small>ustalam datę</small></time>;
+  }
+
+  const parts = new Intl.DateTimeFormat("pl-PL", {
+    timeZone: POLAND_TIME_ZONE,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).formatToParts(currentDate);
+  const part = (type: "weekday" | "day" | "month" | "year") => parts.find((item) => item.type === type)?.value ?? "";
+  const machineDate = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: POLAND_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(currentDate);
+
+  return <time className="cash-current-date" dateTime={machineDate} aria-label={`Dzisiaj: ${part("weekday")}, ${part("day")} ${part("month")} ${part("year")}`}>
+    <span>{part("weekday")}</span>
+    <strong>{part("day")}</strong>
+    <small>{part("month")} {part("year")} rok</small>
+  </time>;
+}
+
+function SettlementHeader({ employeeName, onBack, onLogout }: { employeeName: string; onBack: () => void; onLogout: () => void }) {
+  return <header className="waiter-section-header waiter-settlement-header">
+    <img src="/logo-cafe.png" alt="Marta Banaszek atelier-café" />
+    <div className="waiter-section-title">
+      <span>Kasa główna</span>
+      <strong>Rozliczanie</strong>
+      <small>{employeeName}</small>
+    </div>
+    <nav className="waiter-section-controls" aria-label="Nawigacja rozliczeń">
+      <button type="button" onClick={onBack}>← Menu</button>
+      <button type="button" onClick={onLogout}>Wyloguj</button>
+    </nav>
+  </header>;
 }
 
 export default function SettlementForm({
@@ -368,13 +420,7 @@ export default function SettlementForm({
   if (submitted) {
     return (
       <main className="waiter-app">
-        <header className="waiter-header">
-          <img src="/logo-cafe.png" alt="Atelier Café" />
-          <div>
-            <span>{submitted.action === "HANDOVER" ? "Przekazanie zapisane" : "Dzień zamknięty"}</span>
-            <strong>{employee.name}</strong>
-          </div>
-        </header>
+        <SettlementHeader employeeName={employee.name} onBack={onBack} onLogout={onLogout} />
         <section className="cash-done">
           <span>PROTOKÓŁ #{submitted.id}</span>
           <h1>Gotowe</h1>
@@ -398,14 +444,7 @@ export default function SettlementForm({
 
   return (
     <main className="waiter-app">
-      <header className="waiter-header">
-        <button onClick={onBack}>← Menu</button>
-        <div>
-          <span>Kasa główna</span>
-          <strong>{employee.name}</strong>
-        </div>
-        <button onClick={onLogout}>Wyloguj</button>
-      </header>
+      <SettlementHeader employeeName={employee.name} onBack={onBack} onLogout={onLogout} />
 
       <section className="waiter-settlement cash-simple">
         <div className="cash-simple-title">
@@ -415,8 +454,9 @@ export default function SettlementForm({
               ? "Otwórz kasę"
               : workflow?.day?.status === "CLOSED"
                 ? "Kasa zamknięta"
-                : "Co robisz?"}
+                : "Codzienny system rozliczania utargu."}
           </h1>
+          <CurrentDateCalendar />
           <p>
             {openingMode
               ? "Przelicz pieniądze, które zostały w kasie po nocy."

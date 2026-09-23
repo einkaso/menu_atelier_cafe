@@ -116,7 +116,7 @@ Każdy adapter ma jawnie zadeklarowane możliwości: `onOff`, `dimming`, opcjona
 
 ## Model danych
 
-Następna migracja po obecnej `0045` powinna dodać następujące obszary. Ostateczny podział tabel można uprościć podczas implementacji, ale nie wolno łączyć konfiguracji, bieżącego stanu i historii w jeden mutowalny rekord.
+Fundament modułu oświetlenia dodaje migracja `0049`, następująca po produkcyjnej migracji `0048`. Obejmuje ona poniższe obszary, zachowując rozdział konfiguracji, bieżącego stanu i historii.
 
 ### Konfiguracja
 

@@ -1,0 +1,12 @@
+.workforce-employee > header.waiter-section-header > img {
+  width: 176px !important;
+  max-height: 76px;
+  object-fit: contain;
+}
+
+@media (max-width: 560px) {
+  .workforce-employee > header.waiter-section-header > img {
+    width: 128px !important;
+    max-height: 62px;
+  }
+}

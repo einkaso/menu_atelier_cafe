@@ -14,16 +14,16 @@ export function WaiterSectionHeader({ eyebrow, title, employeeName, className = 
   }
 
   return <header className={`waiter-section-header ${className}`.trim()}>
-    <nav className="waiter-section-controls" aria-label="Nawigacja pracownika">
-      <button type="button" onClick={logout}>Wyloguj</button>
-      <Link href="/kelner">← Menu</Link>
-    </nav>
     <img src="/logo-cafe.png" alt="Marta Banaszek atelier-café"/>
     <div className="waiter-section-title">
       <span>{eyebrow}</span>
       <strong>{title}</strong>
       {employeeName && <small>{employeeName}</small>}
     </div>
+    <nav className="waiter-section-controls" aria-label="Nawigacja pracownika">
+      <Link href="/kelner">← Menu</Link>
+      <button type="button" onClick={logout}>Wyloguj</button>
+    </nav>
   </header>;
 }
 
@@ -37,6 +37,6 @@ export function WaiterStaffNavigation({ className = "" }: { className?: string }
 
 export default function WaiterStaffDock() {
   const pathname = usePathname();
-  if (pathname === "/kelner" || ["/kelner/instrukcje", "/kelner/grafik", "/kelner/rezerwacje", "/kelner/inventory"].some((path) => pathname.startsWith(path))) return null;
+  if (pathname === "/kelner" || ["/kelner/instrukcje", "/kelner/grafik", "/kelner/rezerwacje", "/kelner/inventory", "/kelner/oswietlenie"].some((path) => pathname.startsWith(path))) return null;
   return <WaiterStaffNavigation className="waiter-staff-floating"/>;
 }

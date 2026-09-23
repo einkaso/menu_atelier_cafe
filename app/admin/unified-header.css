@@ -53,7 +53,13 @@
 }
 
 .admin-shell .admin-module-links {
+  position: static;
+  z-index: auto;
+  top: auto;
   flex: 1 1 auto;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
 }
 
 .admin-shell .admin-top-actions {
@@ -80,6 +86,18 @@
   color: #fff !important;
 }
 
+.admin-shell .admin-dashboard > .admin-topbar .admin-top-actions .admin-primary {
+  border-color: #519e46;
+  background: #519e46 !important;
+  color: #fff !important;
+}
+
+.admin-shell .admin-dashboard > .admin-topbar .admin-top-actions .admin-primary:hover,
+.admin-shell .admin-dashboard > .admin-topbar .admin-top-actions .admin-primary:focus-visible {
+  border-color: #3f7f37;
+  background: #3f7f37 !important;
+}
+
 .admin-shell .admin-topbar-leading {
   order: -1;
   flex: 0 0 auto;
@@ -87,6 +105,98 @@
 
 .admin-shell .admin-section-topbar .admin-top-actions {
   margin-left: 0;
+}
+
+.admin-shell .instructions-admin > .admin-section-topbar {
+  justify-content: flex-start;
+}
+
+.admin-shell .instructions-admin > .admin-section-topbar .admin-topbar-leading,
+.admin-shell .instructions-admin > .admin-section-topbar .admin-top-actions {
+  position: static;
+  z-index: auto;
+  top: auto;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+
+.admin-shell .instructions-admin > .admin-section-topbar .admin-topbar-leading {
+  order: 1;
+}
+
+.admin-shell .instructions-admin > .admin-section-topbar .admin-top-actions {
+  margin-left: auto;
+}
+
+.admin-shell .workforce-admin > .admin-section-topbar {
+  justify-content: flex-start;
+}
+
+.admin-shell .workforce-admin > .admin-section-topbar .admin-topbar-leading,
+.admin-shell .workforce-admin > .admin-section-topbar .admin-top-actions {
+  position: static;
+  z-index: auto;
+  top: auto;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+
+.admin-shell .workforce-admin > .admin-section-topbar .admin-topbar-leading {
+  order: 1;
+}
+
+.admin-shell .workforce-admin > .admin-section-topbar .admin-top-actions {
+  margin-left: auto;
+}
+
+.admin-shell .settlements-admin > .admin-section-topbar {
+  justify-content: flex-start;
+}
+
+.admin-shell .settlements-admin > .admin-section-topbar .admin-topbar-leading,
+.admin-shell .settlements-admin > .admin-section-topbar .admin-top-actions {
+  position: static;
+  z-index: auto;
+  top: auto;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+
+.admin-shell .settlements-admin > .admin-section-topbar .admin-topbar-leading {
+  order: 1;
+}
+
+.admin-shell .settlements-admin > .admin-section-topbar .admin-top-actions {
+  margin-left: auto;
+}
+
+.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar {
+  justify-content: flex-start;
+}
+
+.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar .admin-topbar-leading,
+.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar .admin-top-actions {
+  position: static;
+  z-index: auto;
+  top: auto;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+
+.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar .admin-topbar-leading {
+  order: 1;
+}
+
+.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar .admin-top-actions {
+  margin-left: auto;
+}
+
+.admin-shell .reservations-admin > .admin-section-topbar .admin-topbar-leading {
+  margin-left: auto;
 }
 
 @media (max-width: 1280px) {

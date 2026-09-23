@@ -40,7 +40,8 @@ async function storeProductImage(productId: number, bytes: Buffer, removeBackgro
 }
 
 export function productImageDirectory() {
-  return path.join(process.cwd(), "public", "uploads", "products");
+  const managedRoot = process.env.MENU_UPLOADS_DIRECTORY?.replace(/\/+$/, "");
+  return managedRoot ? `${managedRoot}/products` : path.join(process.cwd(), "public", "uploads", "products");
 }
 
 export function productImageFilename(storedPath: string | null | undefined) {
