@@ -320,8 +320,29 @@
     {
       "idx": 45,
       "version": "7",
-      "when": 1790128800000,
-      "tag": "0045_reservation_calendar_sync_state",
+      "when": 1790132400000,
+      "tag": "0045_stock_level_tags",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790136000000,
+      "tag": "0046_drink_vessel_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790139600000,
+      "tag": "0047_churchill_drink_vessels",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790143200000,
+      "tag": "0048_reservation_calendar_sync_state",
       "breakpoints": true
     }
   ]

@@ -6,6 +6,7 @@ import { manualProductSearchUrl, productSearchTitle } from "../../lib/manual-pro
 import { hasTag, isShelfProduct, shelfHasPositiveStock } from "../../lib/menu-tags";
 import { isForestLifeSyrupCategory } from "../../lib/flavor-syrups";
 import { menuProductVisibleForGuest } from "../../lib/menu-visibility";
+import { filterStockLevels, formatStockQuantity, stockQuantityValue, usedStockTags, type StockLevelProduct, type StockStateFilter } from "../../lib/stock-levels";
 
 type StaffManualMedia = { id: string; path: string; type: "IMAGE" | "VIDEO"; name: string };
 
@@ -68,9 +69,19 @@ type Product = {
   sweetness: string | null;
   veganStatus: "YES" | "NO" | "UNKNOWN";
   tastingNotes: string | null;
+  drinkVesselId: number | null;
+  espressoShots: 1 | 2 | null;
   attributes: Record<string, string> | null;
   staffInstructions: string | null;
   staffMedia: StaffManualMedia[] | null;
+};
+
+type DrinkVessel = {
+  id: number;
+  key: string;
+  name: string;
+  capacityMl: number;
+  iconPath: string | null;
 };
 
 type WineSource = {
@@ -187,6 +198,11 @@ type HistoricalImportResult = {
 
 const editable = ["nameEn", "descriptionPl", "descriptionEn", "country", "region", "grapes", "wineStyle", "wineColor", "sparklingType", "sweetness", "veganStatus", "tastingNotes", "staffInstructions"] as const;
 const attributeKeys = ["alcoholPercentage", "beerStyle", "origin", "teaType", "brewTemperature", "brewTime", "coffeeOrigin", "coffeeProfile", "coffeeModifiers", "producer", "dietaryInfo", "cocktailType", "cocktailBase", "servingStyle", "tasteProfile", "volume", "spiritType", "spiritStyle", "ageStatement", "caskType"] as const;
+const drinkVesselKinds = new Set(["coffee", "tea", "matcha", "cold"]);
+
+function supportsDrinkVessel(kind: string) {
+  return drinkVesselKinds.has(kind);
+}
 
 const MAX_LOCAL_IMAGE_BYTES = 50 * 1024 * 1024;
 const MAX_STORED_IMAGE_BYTES = 2_400_000;
@@ -606,8 +622,9 @@ function productListStatus(product: Product): { kind: ProductStatusKind; classNa
 }
 
 export default function AdminPanel() {
-  const [view, setView] = useState<"connection" | "products" | "categories" | "productOrder" | "offers" | "promotions" | "audit" | "visibilityHistory" | "rules">("products");
+  const [view, setView] = useState<"connection" | "products" | "stock" | "categories" | "productOrder" | "offers" | "promotions" | "audit" | "visibilityHistory" | "rules">("products");
   const [products, setProducts] = useState<Product[]>([]);
+  const [drinkVessels, setDrinkVessels] = useState<DrinkVessel[]>([]);
   const [wineSources, setWineSources] = useState<WineSource[]>([]);
   const [menuCategoryRows, setMenuCategoryRows] = useState<MenuCategory[]>([]);
   const [shelfGroupRows, setShelfGroupRows] = useState<ShelfGroupRow[]>([]);
@@ -648,6 +665,16 @@ export default function AdminPanel() {
     setProducts(rows);
     setSelectedId((current) => preferredId ?? current ?? rows[0]?.id ?? null);
     setLoading(false);
+  }
+
+  async function loadDrinkVessels() {
+    const response = await fetch("/api/admin/drink-vessels", { cache: "no-store" });
+    const body = await response.json().catch(() => ({})) as { vessels?: DrinkVessel[]; error?: string };
+    if (!response.ok) {
+      setError(body.error ?? "Nie udało się pobrać katalogu naczyń.");
+      return;
+    }
+    setDrinkVessels(body.vessels ?? []);
   }
 
   async function loadCategories() {
@@ -720,7 +747,7 @@ export default function AdminPanel() {
 
   // Initial data hydration; subsequent refreshes keep the current selection.
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadProducts(); }, []);
+  useEffect(() => { void Promise.all([loadProducts(), loadDrinkVessels()]); }, []);
 
   useEffect(() => {
     const result = new URLSearchParams(window.location.search).get("dotykacka");
@@ -880,12 +907,25 @@ export default function AdminPanel() {
     const backdropImage = form.get("backdropFile");
     const galleryFiles = form.getAll("galleryFiles").filter((item): item is File => item instanceof File && item.size > 0);
     const staffMediaFiles = form.getAll("staffMediaFiles").filter((item): item is File => item instanceof File && item.size > 0);
+    const oversizedStaffMedia = staffMediaFiles.find((file) => file.size > 95 * 1024 * 1024);
+    if (oversizedStaffMedia) {
+      setError(`Plik „${oversizedStaffMedia.name}” jest większy niż 95 MB. Skróć film i spróbuj ponownie.`);
+      setSaving(false);
+      return;
+    }
     const payload: Record<string, unknown> = {};
     for (const key of editable) payload[key] = String(form.get(key) ?? "").trim() || null;
     // Non-wine forms do not render this select. Sending null used to make the
     // API reject the entire product update, including an otherwise valid text.
     payload.veganStatus = String(form.get("veganStatus") ?? selected.veganStatus ?? "UNKNOWN").trim() || "UNKNOWN";
     payload.attributes = Object.fromEntries(attributeKeys.map((key) => [key, String(form.get(`attribute_${key}`) ?? "").trim()]).filter(([, value]) => value));
+    const productKind = selected.wineCode ? "wine" : sectionFor(selected.category);
+    if (supportsDrinkVessel(productKind)) {
+      const vesselId = String(form.get("drinkVesselId") ?? "").trim();
+      const espressoShots = String(form.get("espressoShots") ?? "").trim();
+      payload.drinkVesselId = vesselId ? Number(vesselId) : null;
+      payload.espressoShots = espressoShots ? Number(espressoShots) : null;
+    }
     for (const key of ["featured", "manualHidden", "autoTranslate"] as const) payload[key] = form.get(key) === "on";
     try {
       const response = await fetch(`/api/admin/products/${selected.id}`, {
@@ -1385,7 +1425,7 @@ export default function AdminPanel() {
           <a className="admin-secondary" href="/admin/reservations">Rezerwacje</a>
         </nav>
         <div className="admin-top-actions">
-          <button className="admin-primary" onClick={sync} disabled={syncing}>{syncing ? "Synchronizuję…" : "Synchronizuj z Dotykačką"}</button>
+          {view !== "stock" && <button className="admin-primary admin-dotykacka-action" onClick={sync} disabled={syncing}>{syncing ? "Synchronizuję…" : "Synchronizuj z Dotykačką"}</button>}
           <button className="admin-secondary" onClick={logout}>Wyloguj</button>
         </div>
       </header>
@@ -1395,6 +1435,7 @@ export default function AdminPanel() {
       <nav className="admin-view-tabs" aria-label="Sekcje panelu">
         <button className={view === "connection" ? "is-active" : ""} onClick={() => setView("connection")}>Połączenie</button>
         <button className={view === "products" ? "is-active" : ""} onClick={() => setView("products")}>Produkty</button>
+        <button className={view === "stock" ? "is-active" : ""} onClick={() => setView("stock")}>Stany magazynowe</button>
         <button className={view === "categories" ? "is-active" : ""} onClick={() => setView("categories")}>Zakładki i kody PLU</button>
         <button className={view === "productOrder" ? "is-active" : ""} onClick={() => setView("productOrder")}>Podgrupy i produkty</button>
         <button className={view === "offers" ? "is-active" : ""} onClick={() => setView("offers")}>Oferty czasowe</button>
@@ -1404,7 +1445,7 @@ export default function AdminPanel() {
         <button className={view === "rules" ? "is-active" : ""} onClick={() => setView("rules")}>Dokumentacja i reguły</button>
       </nav>
 
-      {view === "connection" ? <DotykackaConnectionView key={`${dotykackaStatus?.cloudId ?? "loading"}-${dotykackaStatus?.warehouseId ?? ""}-${dotykackaStatus?.branchId ?? ""}-${dotykackaStatus?.stockWebhookRegistered ?? false}`} status={dotykackaStatus} saving={saving} onSave={saveDotykackaSettings} onEnableStockWebhook={enableStockWebhook} onHistoryApplied={async () => { await loadProducts(selectedId ?? undefined); }} /> : view === "products" ? <section className="admin-workspace">
+      {view === "connection" ? <DotykackaConnectionView key={`${dotykackaStatus?.cloudId ?? "loading"}-${dotykackaStatus?.warehouseId ?? ""}-${dotykackaStatus?.branchId ?? ""}-${dotykackaStatus?.stockWebhookRegistered ?? false}`} status={dotykackaStatus} saving={saving} onSave={saveDotykackaSettings} onEnableStockWebhook={enableStockWebhook} onHistoryApplied={async () => { await loadProducts(selectedId ?? undefined); }} /> : view === "stock" ? <StockLevelsView syncing={syncing} /> : view === "products" ? <section className="admin-workspace">
         <aside className="admin-products">
           <div className="admin-list-head">
             <strong>Produkty</strong><span>{filtered.length} / {products.length}</span>
@@ -1451,7 +1492,7 @@ export default function AdminPanel() {
 
         <section className="admin-editor">
           {!selected && <div className="admin-empty"><h2>Wybierz produkt</h2><p>Po lewej pojawiają się produkty menu, towary objęte inwentaryzacją oraz wszystkie syropy Leśne Życie.</p></div>}
-          {selected && <ProductForm key={`${selected.id}-${selected.syncedAt}-${selected.contentUpdatedAt ?? "new"}`} product={selected} wineSources={wineSources} saving={saving} discovering={enriching} feedback={error || message} feedbackIsError={Boolean(error)} onSubmit={save} onImageImport={importImageFromUrl} onRemoveImage={removeProductImage} onBackdropImport={importBackdropFromUrl} onRemoveBackdrop={removeProductBackdrop} onRemoveGalleryImage={removeGalleryImage} onSetPrimaryGalleryImage={setPrimaryGalleryImage} onRemoveStaffMedia={removeStaffMedia} onDiscover={discoverProductInformation} onDecision={decideWineSource} />}
+          {selected && <ProductForm key={`${selected.id}-${selected.syncedAt}-${selected.contentUpdatedAt ?? "new"}`} product={selected} drinkVessels={drinkVessels} wineSources={wineSources} saving={saving} discovering={enriching} feedback={error || message} feedbackIsError={Boolean(error)} onSubmit={save} onImageImport={importImageFromUrl} onRemoveImage={removeProductImage} onBackdropImport={importBackdropFromUrl} onRemoveBackdrop={removeProductBackdrop} onRemoveGalleryImage={removeGalleryImage} onSetPrimaryGalleryImage={setPrimaryGalleryImage} onRemoveStaffMedia={removeStaffMedia} onDiscover={discoverProductInformation} onDecision={decideWineSource} />}
         </section>
       </section> : view === "categories" ? <section className="admin-category-workspace">
         <div className="admin-category-heading">
@@ -1610,6 +1651,132 @@ export default function AdminPanel() {
   );
 }
 
+type StockCategoryOption = { id: string; name: string; count: number };
+
+function StockLevelsView({ syncing }: { syncing: boolean }) {
+  const [products, setProducts] = useState<StockLevelProduct[]>([]);
+  const [categories, setCategories] = useState<StockCategoryOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [refreshMessage, setRefreshMessage] = useState("");
+  const [reload, setReload] = useState(0);
+  const [query, setQuery] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [stockState, setStockState] = useState<StockStateFilter>("all");
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setLoadError("");
+    fetch("/api/admin/stock-levels", { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({})) as { products?: StockLevelProduct[]; categories?: StockCategoryOption[]; error?: string };
+        if (!response.ok) throw new Error(body.error ?? "Nie udało się pobrać stanów magazynowych.");
+        if (!active) return;
+        setProducts(body.products ?? []);
+        setCategories(body.categories ?? []);
+      })
+      .catch((error: unknown) => { if (active) setLoadError(error instanceof Error ? error.message : "Nie udało się pobrać stanów magazynowych."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [reload]);
+
+  const selectedCategory = categories.find((category) => category.id === categoryId) ?? null;
+  const groupProducts = useMemo(() => categoryId ? products.filter((product) => product.categoryId === categoryId) : [], [products, categoryId]);
+  const tags = useMemo(() => usedStockTags(groupProducts), [groupProducts]);
+  const filtered = useMemo(() => filterStockLevels(groupProducts, { query, category: "", state: stockState, tags: selectedTags }), [groupProducts, query, stockState, selectedTags]);
+  const counts = useMemo(() => groupProducts.reduce((result, product) => {
+    const quantity = stockQuantityValue(product.stockQuantity);
+    if (quantity === null) result.unknown += 1;
+    else if (quantity === 0) result.zero += 1;
+    else if (quantity > 0) result.positive += 1;
+    else result.negative += 1;
+    return result;
+  }, { zero: 0, positive: 0, negative: 0, unknown: 0 }), [groupProducts]);
+  const selectedSyncedAt = groupProducts.reduce<string | null>((latest, product) => !latest || product.syncedAt > latest ? product.syncedAt : latest, null);
+
+  function toggleTag(key: string) {
+    setSelectedTags((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  async function refresh() {
+    if (!categoryId || refreshing || syncing) return;
+    setRefreshing(true);
+    setLoadError("");
+    setRefreshMessage("");
+    try {
+      const response = await fetch("/api/admin/stock-levels", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ categoryId }),
+      });
+      const body = await response.json().catch(() => ({})) as { updatedCount?: number; category?: { name?: string }; error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Nie udało się odświeżyć wybranej grupy.");
+      setRefreshMessage(`Zaktualizowano ${body.updatedCount ?? 0} pozycji w grupie „${body.category?.name ?? selectedCategory?.name ?? "wybranej"}”.`);
+      setReload((value) => value + 1);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Nie udało się odświeżyć wybranej grupy.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  return <section className="admin-stock-workspace">
+    <div className="admin-category-heading admin-stock-heading">
+      <div><span className="admin-eyebrow">Magazyn Dotykačka</span><h2>Stany magazynowe</h2></div>
+      <div className="admin-stock-heading-actions"><p>Wybierz jedną grupę. Tylko jej stany zostaną pobrane z Dotykački i pokazane poniżej — bez uruchamiania pełnej synchronizacji całej karty.</p></div>
+    </div>
+
+    <div className="admin-stock-sync-panel">
+      <label>Grupa do wyświetlenia i synchronizacji<select required value={categoryId} onChange={(event) => { setCategoryId(event.target.value);setQuery("");setStockState("all");setSelectedTags(new Set());setRefreshMessage(""); }}><option value="">Wybierz grupę…</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.name} · {category.count} pozycji</option>)}</select></label>
+      <button className="admin-primary admin-dotykacka-action" type="button" disabled={!categoryId || syncing || refreshing} onClick={() => void refresh()}>{syncing || refreshing ? "Aktualizuję grupę…" : "Odśwież wybraną grupę"}</button>
+    </div>
+
+    {loadError && <div className="admin-alert">{loadError}</div>}
+    {refreshMessage && <div className="admin-status">{refreshMessage}</div>}
+    {loading ? <p className="admin-muted">Pobieram grupy produktów…</p> : !categoryId ? <aside className="admin-stock-category-required"><strong>Najpierw wybierz grupę produktów</strong><p>Wybór jest wymagany zarówno do wyświetlenia wyników, jak i do pobrania aktualnych stanów z Dotykački.</p></aside> : <>
+    <div className="admin-stock-summary" aria-label="Podsumowanie stanów wybranej grupy">
+      <button type="button" className={stockState === "all" ? "is-active" : ""} onClick={() => setStockState("all")}><span>Wszystkie</span><strong>{groupProducts.length}</strong></button>
+      <button type="button" className={stockState === "zero" ? "is-active is-zero" : "is-zero"} onClick={() => setStockState("zero")}><span>Stan zero</span><strong>{counts.zero}</strong></button>
+      <button type="button" className={stockState === "positive" ? "is-active is-positive" : "is-positive"} onClick={() => setStockState("positive")}><span>Stan dodatni</span><strong>{counts.positive}</strong></button>
+      <button type="button" className={stockState === "negative" ? "is-active is-negative" : "is-negative"} onClick={() => setStockState("negative")}><span>Stan ujemny</span><strong>{counts.negative}</strong></button>
+      <button type="button" className={stockState === "unknown" ? "is-active" : ""} onClick={() => setStockState("unknown")}><span>Brak danych</span><strong>{counts.unknown}</strong></button>
+    </div>
+
+    <div className="admin-stock-filters">
+      <label>Szukaj<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nazwa lub tag…" /></label>
+      <label>Stan<select value={stockState} onChange={(event) => setStockState(event.target.value as StockStateFilter)}><option value="all">Wszystkie stany</option><option value="zero">Tylko zero</option><option value="positive">Tylko dodatnie</option><option value="negative">Tylko ujemne</option><option value="unknown">Brak danych</option></select></label>
+    </div>
+
+    <section className="admin-stock-tags" aria-label="Filtruj według tagów używanych przez produkty">
+      <header><div><span className="admin-eyebrow">Tagi używane</span><strong>{tags.length} tagów przypisanych do produktów</strong></div>{selectedTags.size > 0 && <button type="button" onClick={() => setSelectedTags(new Set())}>Wyczyść filtry</button>}</header>
+      <div>{tags.map((tag) => <button type="button" key={tag.key} className={selectedTags.has(tag.key) ? "is-active" : ""} aria-pressed={selectedTags.has(tag.key)} onClick={() => toggleTag(tag.key)}>{tag.label}<b>{tag.count}</b></button>)}</div>
+      {!tags.length && !loading && <p>Żaden aktywny produkt nie ma obecnie przypisanego tagu w Dotykačce.</p>}
+    </section>
+
+    <div className="admin-stock-result-head"><strong>{selectedCategory?.name} · {filtered.length} pozycji</strong><span>{selectedSyncedAt ? `Dane z ${new Date(selectedSyncedAt).toLocaleString("pl-PL")}` : "Brak daty ostatniej synchronizacji"}</span></div>
+    <div className="admin-stock-table" role="table" aria-label={`Stany magazynowe grupy ${selectedCategory?.name ?? "wybranej"}`}>
+      <div className="is-head" role="row"><span>Produkt</span><span>Kategoria</span><span>Tagi</span><span>Stan</span></div>
+      {filtered.map((product) => {
+        const quantity = stockQuantityValue(product.stockQuantity);
+        return <div role="row" key={product.id} className={quantity === 0 ? "is-zero" : quantity !== null && quantity < 0 ? "is-negative" : ""}>
+          <span data-label="Produkt"><strong>{product.name}</strong>{!product.display && <small>Niewidoczny w Dotykačce</small>}</span>
+          <span data-label="Kategoria">{product.category ?? "Bez kategorii"}</span>
+          <span data-label="Tagi" className="admin-stock-row-tags">{product.tags.length ? product.tags.map((tag) => <i key={tag}>{tag}</i>) : <small>bez tagów</small>}</span>
+          <span data-label="Stan" className="admin-stock-quantity"><strong>{formatStockQuantity(product.stockQuantity)}</strong><small>{product.unit?.trim() || "brak jednostki"}</small></span>
+        </div>;
+      })}
+      {!filtered.length && !loadError && <p className="admin-muted">Brak produktów spełniających wybrane filtry.</p>}
+    </div></>}
+  </section>;
+}
+
 function DotykackaConnectionView({ status, saving, onSave, onEnableStockWebhook, onHistoryApplied }: { status: DotykackaStatus | null; saving: boolean; onSave: (warehouseId: string, branchId: string) => void; onEnableStockWebhook: () => void; onHistoryApplied: () => Promise<void> }) {
   const [warehouseId, setWarehouseId] = useState(status?.warehouseId ?? "");
   const [branchId, setBranchId] = useState(status?.branchId ?? "");
@@ -1755,8 +1922,9 @@ function sourceHostname(value: string) {
   try { return new URL(value).hostname; } catch { return "źródło internetowe"; }
 }
 
-function ProductForm({ product, wineSources, saving, discovering, feedback, feedbackIsError, onSubmit, onImageImport, onRemoveImage, onBackdropImport, onRemoveBackdrop, onRemoveGalleryImage, onSetPrimaryGalleryImage, onRemoveStaffMedia, onDiscover, onDecision }: {
+function ProductForm({ product, drinkVessels, wineSources, saving, discovering, feedback, feedbackIsError, onSubmit, onImageImport, onRemoveImage, onBackdropImport, onRemoveBackdrop, onRemoveGalleryImage, onSetPrimaryGalleryImage, onRemoveStaffMedia, onDiscover, onDecision }: {
   product: Product;
+  drinkVessels: DrinkVessel[];
   wineSources: WineSource[];
   saving: boolean;
   discovering: boolean;
@@ -1776,6 +1944,8 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
   const [descriptionPl, setDescriptionPl] = useState(product.descriptionPl ?? "");
   const [imageSourceUrl, setImageSourceUrl] = useState(product.imageSourceUrl ?? "");
   const [backdropSourceUrl, setBackdropSourceUrl] = useState("");
+  const [drinkVesselId, setDrinkVesselId] = useState(product.drinkVesselId ? String(product.drinkVesselId) : "");
+  const [espressoShots, setEspressoShots] = useState(product.espressoShots ? String(product.espressoShots) : "");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [selectedImages, setSelectedImages] = useState<Record<number, string>>({});
   const [manualSourceUrl, setManualSourceUrl] = useState("");
@@ -1791,6 +1961,7 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
   const productKind = product.wineCode ? "wine" : sectionFor(product.category);
   const forestLifeSyrup = isForestLifeSyrupCategory(product.category);
   const galleryImages = Array.from(new Set([product.imagePath, ...(product.galleryPaths ?? [])].filter((imagePath): imagePath is string => Boolean(imagePath)))).slice(0, 5);
+  const selectedDrinkVessel = drinkVessels.find((vessel) => String(vessel.id) === drinkVesselId) ?? null;
   const attributes = product.attributes ?? {};
   const informationDiscoveryEnabled = true;
   const searchKind = productKind === "wine" ? "wino" : productKind === "whisky" ? "whisky koniak brandy" : productKind === "beer" ? "piwo" : productKind === "cocktails" ? "alkohol drink koktajl skład profil smakowy zdjęcie" : "produkt";
@@ -2050,13 +2221,42 @@ function ProductForm({ product, wineSources, saving, discovering, feedback, feed
         </div>
       </fieldset>}
 
+      {supportsDrinkVessel(productKind) && <fieldset className="admin-drink-vessel-config">
+        <legend>Naczynie i espresso <small>opcjonalne oznaczenie napoju</small></legend>
+        <p className="admin-field-help">Pojemność jest przypisana do ikony naczynia. Wybierasz ją tylko raz w katalogu — przy produkcie nie wpisujemy ponownie liczby ml.</p>
+        <div className="admin-form-grid">
+          <div className="admin-drink-vessel-picker" role="radiogroup" aria-label="Wybierz naczynie dla napoju">
+            <label className={!drinkVesselId ? "is-selected is-empty" : "is-empty"}>
+              <span><i>Bez<br/>ikony</i></span>
+              <strong>Bez ikony</strong>
+              <small>Nie pokazuj naczynia</small>
+              <input type="radio" name="drinkVesselId" value="" checked={!drinkVesselId} onChange={(event) => setDrinkVesselId(event.target.value)} />
+            </label>
+            {drinkVessels.map((vessel) => {
+              const selected = String(vessel.id) === drinkVesselId;
+              return <label className={selected ? "is-selected" : ""} key={vessel.id}>
+                <span>{vessel.iconPath ? <img src={vessel.iconPath} alt="" /> : <i>Ikona<br/>wkrótce</i>}</span>
+                <strong>{vessel.name}</strong>
+                <small>{vessel.capacityMl} ml</small>
+                <input type="radio" name="drinkVesselId" value={vessel.id} checked={selected} onChange={(event) => setDrinkVesselId(event.target.value)} />
+              </label>;
+            })}
+          </div>
+          <label>Liczba espresso<select name="espressoShots" value={espressoShots} onChange={(event) => setEspressoShots(event.target.value)}><option value="">Bez oznaczenia</option><option value="1">1 espresso</option><option value="2">2 espresso</option></select></label>
+          {selectedDrinkVessel && <div className="admin-drink-vessel-preview" aria-label={`Podgląd: ${selectedDrinkVessel.name}, ${selectedDrinkVessel.capacityMl} ml${espressoShots ? `, ${espressoShots} espresso` : ""}`}>
+            <span>{selectedDrinkVessel.iconPath ? <img src={selectedDrinkVessel.iconPath} alt="" /> : <i>ikona<br/>wkrótce</i>}{espressoShots && <b>{espressoShots}</b>}</span><strong>{selectedDrinkVessel.capacityMl} ml</strong><small>{selectedDrinkVessel.name}</small>
+          </div>}
+          {!drinkVessels.length && <aside className="admin-wide admin-drink-vessel-empty">Katalog naczyń jest gotowy, ale pusty. Ikony i pojemności dodamy po otrzymaniu zdjęć.</aside>}
+        </div>
+      </fieldset>}
+
       {productKind !== "wine" && <ProductFeatureFields kind={productKind} attributes={attributes} />}
 
       <section className="admin-staff-manual-zone">
         <header><span>TYLKO DLA PERSONELU</span><div><h3>Instrukcja przygotowania</h3><p>Ta treść nie pojawia się w menu gościa. Pracownik otworzy ją trzema szybkimi dotknięciami zdjęcia produktu w ekranie zamówień.</p></div></header>
         <label>Opis, manual i wskazówki<textarea name="staffInstructions" rows={8} defaultValue={product.staffInstructions ?? ""} maxLength={12000} placeholder={"Przykład:\n• szkło: highball\n• lód: 5 dużych kostek\n• kolejność składników i proporcje\n• dekoracja oraz sposób podania"}/></label>
         {(product.staffMedia?.length ?? 0) > 0 && <div className="admin-staff-media-gallery">{product.staffMedia?.map((media) => <figure key={media.id}>{media.type === "IMAGE" ? <img src={media.path} alt={media.name}/> : <video src={media.path} muted playsInline controls preload="metadata"/>}<figcaption>{media.name}</figcaption><button type="button" aria-label={`Usuń ${media.name}`} disabled={saving} onClick={() => void onRemoveStaffMedia(media.id)}>×</button></figure>)}</div>}
-        <label className="admin-staff-media-upload">Dodaj zdjęcia lub filmy<input name="staffMediaFiles" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,image/gif,video/mp4,video/webm,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif,.gif,.mp4,.webm" disabled={(product.staffMedia?.length ?? 0) >= 8}/><small>Do 8 plików na produkt. Zdjęcia zostaną zmniejszone; film MP4 lub WebM może mieć maksymalnie 25 MB.</small></label>
+        <label className="admin-staff-media-upload">Dodaj zdjęcia lub filmy<input name="staffMediaFiles" type="file" multiple accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,image/gif,video/quicktime,video/x-m4v,video/mp4,video/webm,.jpg,.jpeg,.png,.webp,.avif,.heic,.heif,.gif,.mov,.m4v,.mp4,.webm" disabled={(product.staffMedia?.length ?? 0) >= 8}/><small>Do 8 plików na produkt. Film MOV, MP4 lub WebM może mieć do 95 MB i zostanie automatycznie zmniejszony oraz przekonwertowany do zgodnego MP4.</small></label>
       </section>
 
       <div className="admin-savebar">

@@ -179,6 +179,7 @@ export async function syncDotykackaMenu() {
           : null,
         stockQuantity: stockByProduct.get(productId) == null ? null : String(stockByProduct.get(productId)),
         unit: stockDetailsByProduct.get(productId)?.unit ?? product.unit ?? null,
+        tags: product.tags ?? [],
         priceWithVat: product.priceWithVat == null ? null : String(product.priceWithVat),
         eanCodes: (product.ean ?? []).map(String).filter(Boolean),
         pluCodes: parsedCodes.pluCodes,

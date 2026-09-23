@@ -1,7 +1,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../../../../../db";
-import { menuProducts, productContent } from "../../../../../db/schema";
+import { drinkVessels, menuProducts, productContent } from "../../../../../db/schema";
 import { isAdmin } from "../../../../../lib/admin-auth";
 import { preserveProductAttributeTranslations, productAttributesNeedTranslation, productAttributesPl, translateMenuContent, translateProductAttributes, translationSourceHash } from "../../../../../lib/translation";
 
@@ -27,6 +27,8 @@ const contentSchema = z.object({
   sweetness: z.string().max(100).nullable().optional(),
   veganStatus: z.enum(["YES", "NO", "UNKNOWN"]).nullable().optional(),
   tastingNotes: z.string().max(2000).nullable().optional(),
+  drinkVesselId: z.number().int().positive().nullable().optional(),
+  espressoShots: z.union([z.literal(1), z.literal(2)]).nullable().optional(),
   staffInstructions: z.string().max(12000).nullable().optional(),
   attributes: z.record(z.string(), z.string().max(1000)).optional(),
 });
@@ -66,6 +68,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     .leftJoin(productContent, eq(menuProducts.id, productContent.productId))
     .where(eq(menuProducts.id, productId)).limit(1);
   if (!product) return Response.json({ error: "Produkt nie istnieje." }, { status: 404 });
+  if (parsed.data.drinkVesselId != null) {
+    const [vessel] = await db.select({ id: drinkVessels.id }).from(drinkVessels)
+      .where(and(eq(drinkVessels.id, parsed.data.drinkVesselId), eq(drinkVessels.active, true))).limit(1);
+    if (!vessel) return Response.json({ error: "Wybrane naczynie nie istnieje lub jest nieaktywne." }, { status: 400 });
+  }
   // Zapis opisu i parametrów nie może zmieniać zdjęcia. Import, zastąpienie i
   // usunięcie obrazu obsługuje wyłącznie dedykowany endpoint /image, dzięki
   // czemu zdjęcie pozostaje do czasu świadomego kliknięcia „Usuń zdjęcie”.

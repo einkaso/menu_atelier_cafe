@@ -27,7 +27,8 @@ function safeOriginalName(value: string, fallback: string) {
 }
 
 export function staffInstructionAttachmentDirectory() {
-  return path.join(process.cwd(), "public", "uploads", "staff-instructions");
+  const managedRoot = process.env.MENU_UPLOADS_DIRECTORY?.replace(/\/+$/, "");
+  return managedRoot ? `${managedRoot}/staff-instructions` : path.join(process.cwd(), "public", "uploads", "staff-instructions");
 }
 
 export function staffInstructionAttachmentFilename(storedPath: string | null | undefined) {

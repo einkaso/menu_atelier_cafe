@@ -1,7 +1,13 @@
 .inventory-worker-layout {
   grid-template-columns: minmax(0, 1fr);
-  width: min(1680px, 98vw);
-  padding-top: 14px;
+  width: 100%;
+  margin: 0;
+  padding: 14px clamp(14px, 2.2vw, 32px) 70px;
+}
+
+.inventory-worker > .waiter-section-header {
+  width: 100%;
+  margin: 0;
 }
 
 .inventory-worker-stages {
@@ -124,6 +130,7 @@
 @media (max-width: 580px) {
   .inventory-worker-layout {
     width: 100%;
+    padding: 10px 0 70px;
   }
 
   .inventory-worker-stages > h1 {

@@ -1,4 +1,5 @@
-import { boolean, date, index, integer, jsonb, numeric, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, date, index, integer, jsonb, numeric, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const menuCategories = pgTable("menu_categories", {
   id: serial("id").primaryKey(),
@@ -73,6 +74,22 @@ export const suppliers = pgTable("suppliers", {
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("suppliers_dotykacka_id_uq").on(table.dotykackaId)]);
 
+export const drinkVessels = pgTable("drink_vessels", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull(),
+  name: text("name").notNull(),
+  capacityMl: integer("capacity_ml").notNull(),
+  iconPath: text("icon_path"),
+  sourceUrl: text("source_url"),
+  active: boolean("active").notNull().default(true),
+  sortOrder: integer("sort_order"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("drink_vessels_key_uq").on(table.key),
+  check("drink_vessels_capacity_ml_check", sql`${table.capacityMl} > 0`),
+]);
+
 export const productContent = pgTable("product_content", {
   id: serial("id").primaryKey(),
   productId: integer("product_id").notNull().references(() => menuProducts.id, { onDelete: "cascade" }),
@@ -105,11 +122,16 @@ export const productContent = pgTable("product_content", {
   sweetness: text("sweetness"),
   veganStatus: text("vegan_status").notNull().default("UNKNOWN"),
   tastingNotes: text("tasting_notes"),
+  drinkVesselId: integer("drink_vessel_id").references(() => drinkVessels.id, { onDelete: "set null" }),
+  espressoShots: integer("espresso_shots"),
   attributes: jsonb("attributes").$type<Record<string, string>>().notNull().default({}),
   staffInstructions: text("staff_instructions"),
   staffMedia: jsonb("staff_media").$type<StaffManualMedia[]>().notNull().default([]),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [uniqueIndex("product_content_product_id_uq").on(table.productId)]);
+}, (table) => [
+  uniqueIndex("product_content_product_id_uq").on(table.productId),
+  check("product_content_espresso_shots_check", sql`${table.espressoShots} is null or ${table.espressoShots} in (1, 2)`),
+]);
 
 export type StaffManualMedia = {
   id: string;
@@ -787,6 +809,7 @@ export const inventoryCatalogProducts = pgTable("inventory_catalog_products", {
   servingsPerContainer: integer("servings_per_container"),
   stockQuantity: numeric("stock_quantity", { precision: 14, scale: 3 }),
   unit: text("unit"),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
   priceWithVat: numeric("price_with_vat", { precision: 12, scale: 2 }),
   eanCodes: jsonb("ean_codes").$type<string[]>().notNull().default([]),
   pluCodes: jsonb("plu_codes").$type<string[]>().notNull().default([]),

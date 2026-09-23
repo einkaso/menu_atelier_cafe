@@ -1,0 +1,49 @@
+.waiter-reservations {
+  --waiter-reservations-gutter: clamp(14px, 2.2vw, 32px);
+  padding: 0 0 76px !important;
+}
+
+.waiter-reservations > header.waiter-section-header {
+  width: 100%;
+  margin: 0 !important;
+  padding: 12px clamp(14px, 3vw, 42px);
+}
+
+.waiter-reservations > header.waiter-section-header > img {
+  width: 176px !important;
+  max-height: 76px;
+  object-fit: contain;
+}
+
+.waiter-reservation-status {
+  padding-inline: var(--waiter-reservations-gutter);
+}
+
+.waiter-reservation-hero {
+  margin: 17px var(--waiter-reservations-gutter) !important;
+}
+
+.waiter-reservation-form {
+  margin: 0 var(--waiter-reservations-gutter) 17px !important;
+}
+
+.waiter-reservation-today,
+.waiter-reservation-next {
+  margin-inline: var(--waiter-reservations-gutter) !important;
+}
+
+.waiter-reservation-next {
+  margin-top: 17px !important;
+}
+
+@media (max-width: 560px) {
+  .waiter-reservations {
+    --waiter-reservations-gutter: 10px;
+    padding-bottom: 72px !important;
+  }
+
+  .waiter-reservations > header.waiter-section-header > img {
+    width: 128px !important;
+    max-height: 62px;
+  }
+}

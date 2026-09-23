@@ -1,6 +1,6 @@
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { inventoryCatalogProducts, menuAddons, menuCategories, menuGroupOrders, menuOfferSettings, menuProducts, productContent, suppliers } from "../../../db/schema";
+import { drinkVessels, inventoryCatalogProducts, menuAddons, menuCategories, menuGroupOrders, menuOfferSettings, menuProducts, productContent, suppliers } from "../../../db/schema";
 import { categoryTranslations, sectionFor } from "../../../lib/menu-categories";
 import { suggestProductGroup, translateProductGroup } from "../../../lib/product-order";
 import { productImageUrl } from "../../../lib/image-import";
@@ -157,11 +157,18 @@ export async function GET() {
       sweetness: productContent.sweetness,
       veganStatus: productContent.veganStatus,
       tastingNotes: productContent.tastingNotes,
+      drinkVesselId: productContent.drinkVesselId,
+      espressoShots: productContent.espressoShots,
+      drinkVesselName: drinkVessels.name,
+      drinkVesselCapacityMl: drinkVessels.capacityMl,
+      drinkVesselIconPath: drinkVessels.iconPath,
+      drinkVesselActive: drinkVessels.active,
       attributes: productContent.attributes,
       supplierName: suppliers.name,
     }).from(menuProducts)
       .leftJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
       .leftJoin(productContent, eq(menuProducts.id, productContent.productId))
+      .leftJoin(drinkVessels, eq(productContent.drinkVesselId, drinkVessels.id))
       .leftJoin(suppliers, eq(menuProducts.dotykackaSupplierId, suppliers.dotykackaId))
       .orderBy(sql`coalesce(${menuCategories.menuSortOrder}, ${menuCategories.sortOrder}, 2147483647)`, asc(menuProducts.name));
     const offerSetting = (await db.select().from(menuOfferSettings).where(eq(menuOfferSettings.key, "main")).limit(1))[0];
@@ -323,6 +330,13 @@ export async function GET() {
       promoOrder: item.featuredSortOrder ?? 2147483647,
       tastingNotes: item.tastingNotes || undefined,
       tastingNotesEn: item.tastingNotesEn || item.tastingNotes || undefined,
+      espressoShots: item.espressoShots === 1 || item.espressoShots === 2 ? item.espressoShots : undefined,
+      drinkVessel: item.drinkVesselId && item.drinkVesselActive ? {
+        id: item.drinkVesselId,
+        name: item.drinkVesselName ?? "Naczynie",
+        capacityMl: item.drinkVesselCapacityMl ?? 0,
+        icon: item.drinkVesselIconPath || undefined,
+      } : undefined,
       attributes: publicAttributes,
       attributesEn: publicAttributesEn,
       temperatures: productTemperatures(item.tags),
@@ -377,6 +391,8 @@ export async function GET() {
         sweetness: primary.sweetness || secondary.sweetness,
         tastingNotes: primary.tastingNotes || secondary.tastingNotes,
         tastingNotesEn: primary.tastingNotesEn || secondary.tastingNotesEn,
+        drinkVessel: primary.drinkVessel || secondary.drinkVessel,
+        espressoShots: primary.espressoShots || secondary.espressoShots,
         attributes: { ...(secondary.attributes ?? {}), ...(primary.attributes ?? {}) },
         attributesEn: { ...(secondary.attributesEn ?? {}), ...(primary.attributesEn ?? {}) },
         temperatures: Array.from(new Set([...current.temperatures, ...product.temperatures])),

@@ -68,6 +68,8 @@ export async function GET() {
       sweetness: productContent.sweetness,
       veganStatus: productContent.veganStatus,
       tastingNotes: productContent.tastingNotes,
+      drinkVesselId: productContent.drinkVesselId,
+      espressoShots: productContent.espressoShots,
       attributes: productContent.attributes,
       staffInstructions: productContent.staffInstructions,
       staffMedia: productContent.staffMedia,

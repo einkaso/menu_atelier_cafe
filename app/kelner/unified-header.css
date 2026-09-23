@@ -11,7 +11,8 @@
   align-items: center;
   gap: 18px;
   padding: 12px clamp(14px, 3vw, 42px);
-  background: #000;
+  background-color: #000 !important;
+  background-image: linear-gradient(#000, #000) !important;
   color: #fff;
 }
 
@@ -28,6 +29,27 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 7px;
+  margin-left: auto;
+}
+
+/* Reset the broad public-menu nav styling inside staff section headers. */
+.waiter-section-header .waiter-section-controls {
+  position: static !important;
+  z-index: auto !important;
+  top: auto !important;
+  gap: 7px !important;
+  margin: 0 0 0 auto !important;
+  padding: 0 !important;
+  overflow: visible;
+  border: 0 !important;
+  background: #000 !important;
+  box-shadow: none !important;
+}
+
+.waiter-section-header .waiter-section-controls::before,
+.waiter-section-header .waiter-section-controls::after {
+  display: none !important;
+  content: none !important;
 }
 
 .waiter-section-controls button,
@@ -82,8 +104,12 @@
 
 .waiter-main-header {
   box-sizing: border-box;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: 14px;
-  background: #000;
+  background-color: #000 !important;
+  background-image: linear-gradient(#000, #000) !important;
 }
 
 .waiter-main-controls,
@@ -99,8 +125,41 @@
   flex: 0 0 auto;
 }
 
+.waiter-main-exit-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 7px;
+}
+
+/* The public menu defines broad styles for every nav element. Keep those
+   rules from creating light padding blocks inside the staff header. */
+.waiter-main-header .waiter-main-tools,
+.waiter-main-header .waiter-main-controls {
+  position: static !important;
+  z-index: auto !important;
+  top: auto !important;
+  gap: 7px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible;
+  border: 0 !important;
+  background: #000 !important;
+  box-shadow: none !important;
+}
+
+.waiter-main-header .waiter-main-tools::before,
+.waiter-main-header .waiter-main-tools::after,
+.waiter-main-header .waiter-main-controls::before,
+.waiter-main-header .waiter-main-controls::after {
+  display: none !important;
+  content: none !important;
+}
+
 .waiter-main-header .waiter-main-controls > button,
 .waiter-main-header .waiter-main-controls > a,
+.waiter-main-header .waiter-main-exit-controls > button,
+.waiter-main-header .waiter-main-exit-controls > a,
 .waiter-main-tools > a,
 .waiter-main-tools > button,
 .waiter-receipt-title {
@@ -119,14 +178,56 @@
   white-space: nowrap;
 }
 
-.waiter-main-brand {
-  flex: 0 0 auto;
+.waiter-main-tools > .waiter-lighting-entry {
+  display: grid;
+  min-width: 104px;
+  gap: 1px;
+  padding-block: 5px;
+  border-color: rgba(243, 146, 104, .72);
+  text-align: center;
 }
 
-.waiter-main-brand > img {
-  width: 150px;
-  max-height: 64px;
+.waiter-lighting-entry > span {
+  line-height: 1.05;
+}
+
+.waiter-lighting-entry > small {
+  color: #f39268;
+  font-size: .43rem;
+  font-weight: 850;
+  letter-spacing: .1em;
+}
+
+.waiter-main-header .waiter-main-controls > .waiter-guest-receipt-entry {
+  border-color: #d92d76 !important;
+  background: #d92d76 !important;
+  color: #fff !important;
+}
+
+.waiter-main-brand {
+  display: flex !important;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  visibility: visible !important;
+}
+
+.waiter-main-header .waiter-main-brand > .waiter-main-logo {
+  display: block !important;
+  width: 170px !important;
+  max-width: none;
+  max-height: 70px;
+  flex: 0 0 170px;
+  opacity: 1 !important;
   object-fit: contain;
+  visibility: visible !important;
+}
+
+.waiter-main-header .waiter-main-title {
+  display: grid !important;
+  margin: 0 !important;
+  text-align: left !important;
+  visibility: visible !important;
 }
 
 .waiter-main-header .waiter-receipt-title {
@@ -167,14 +268,24 @@
 
 @media (max-width: 1280px) {
   .waiter-main-header {
-    flex-wrap: wrap;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
-  .waiter-main-tools {
-    order: 5;
+  .waiter-main-header .waiter-main-tools {
+    grid-column: 1 / -1;
+    grid-row: 2;
     width: 100%;
-    flex-basis: 100%;
-    justify-content: center;
+    justify-content: flex-start;
+  }
+
+  .waiter-main-header .waiter-employee-summary {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .waiter-main-header .waiter-main-controls {
+    grid-column: 3;
+    grid-row: 1;
   }
 }
 
@@ -197,6 +308,7 @@
 
   .waiter-section-controls {
     width: 100%;
+    justify-content: flex-end;
   }
 
   .waiter-section-header > img {
@@ -213,6 +325,7 @@
 
   .waiter-main-header {
     position: relative;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     padding: 10px;
   }
@@ -223,18 +336,32 @@
     flex: 1 1 auto;
   }
 
-  .waiter-main-brand > img {
-    width: 108px;
+  .waiter-main-header .waiter-main-brand > .waiter-main-logo {
+    width: 128px !important;
+    flex-basis: 128px;
   }
 
   .waiter-main-header .waiter-receipt-title {
     font-size: .82rem;
   }
 
-  .waiter-main-tools {
+  .waiter-main-header .waiter-main-tools {
+    grid-column: 1 / -1;
+    grid-row: 3;
     justify-content: flex-start;
     overflow-x: auto;
     padding-bottom: 2px;
+  }
+
+  .waiter-main-header .waiter-main-controls {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-end;
+  }
+
+  .waiter-main-header .waiter-employee-summary {
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .waiter-main-tools > a,

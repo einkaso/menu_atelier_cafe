@@ -2,15 +2,17 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { isAdmin } from "../../../../lib/admin-auth";
 import { currentWaiter } from "../../../../lib/waiter-auth";
-import { staffManualMediaContentType, staffManualMediaDirectory, staffManualMediaFilename } from "../../../../lib/staff-manual-media";
+import { staffManualMediaContentType, staffManualMediaDirectory, staffManualMediaFilename, validStaffManualMediaAccess } from "../../../../lib/staff-manual-media";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: { params: Promise<{ filename: string }> }) {
-  if (!(await isAdmin()) && !(await currentWaiter(request))) return new Response("Not found", { status: 404 });
   const { filename: rawFilename } = await context.params;
   const filename = staffManualMediaFilename(rawFilename);
   if (!filename || filename !== rawFilename) return new Response("Not found", { status: 404 });
+  const query = new URL(request.url).searchParams;
+  const signedAccess = validStaffManualMediaAccess(filename, query.get("expires"), query.get("signature"));
+  if (!signedAccess && !(await isAdmin()) && !(await currentWaiter(request))) return new Response("Not found", { status: 404 });
   try {
     const bytes = await readFile(path.join(staffManualMediaDirectory(), filename));
     const headers = {

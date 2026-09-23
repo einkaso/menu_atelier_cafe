@@ -10,10 +10,21 @@ import { menuProductVisibleForGuest } from "../lib/menu-visibility.ts";
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
 test("opens the hidden waiter login only after three logo taps", async () => {
-  const source = await read("app/menu-client.tsx");
+  const [source, waiter, layout, loginStyles] = await Promise.all([
+    read("app/menu-client.tsx"),
+    read("app/kelner/waiter-client.tsx"),
+    read("app/kelner/layout.tsx"),
+    read("app/kelner/login-redesign.css"),
+  ]);
   assert.match(source, /logoTaps>=2/);
   assert.match(source, /window\.location\.assign\("\/kelner"\)/);
   assert.match(source, /onClick=\{tapLogo\}/);
+  assert.match(waiter, /waiter-login-shell[\s\S]*waiter-login-brand[\s\S]*logo-cafe\.png[\s\S]*STREFA PRACOWNIKA[\s\S]*Podaj swój PIN/);
+  assert.doesNotMatch(waiter, /STREFA KELNERA/);
+  assert.match(waiter, /matchLoginLogoBackground[\s\S]*--waiter-login-brand-bg/);
+  assert.match(layout, /login-redesign\.css/);
+  assert.match(layout, /Strefa pracownika — Atelier Café/);
+  assert.match(loginStyles, /\.waiter-login > \.waiter-login-shell \{[\s\S]*grid-template-columns:[\s\S]*min-height: 610px/);
 });
 
 test("merges cakes and desserts into one NA SŁODKO waiter category", async () => {
@@ -457,10 +468,11 @@ test("gives waiters the guest drink filters and operational serving information"
 });
 
 test("keeps a staff-only preparation manual behind three product-photo taps", async () => {
-  const [schema, migration, admin, catalog, client, css, uploadRoute, mediaRoute, mediaStorage, storageSetup] = await Promise.all([
+  const [schema, migration, admin, adminCss, catalog, client, css, uploadRoute, mediaRoute, mediaStorage, storageSetup] = await Promise.all([
     read("db/schema.ts"),
     read("drizzle/0032_overjoyed_newton_destine.sql"),
     read("app/admin/admin-panel.tsx"),
+    read("app/admin/admin.css"),
     read("app/api/waiter/catalog/route.ts"),
     read("app/kelner/waiter-client.tsx"),
     read("app/kelner/waiter.css"),
@@ -479,6 +491,7 @@ test("keeps a staff-only preparation manual behind three product-photo taps", as
   assert.match(admin, /product\.staffMedia\?\.length \?\? 0\) >= 8/);
   assert.match(catalog, /staffManual:/);
   assert.match(catalog, /instructions: product\.staffInstructions/);
+  assert.match(catalog, /staffManualMediaAuthorizedPath\(media\.path\)/);
   assert.match(client, /function StaffManualDialog/);
   assert.match(client, /className="waiter-manual-close-icon"/);
   assert.match(client, /manualTaps\.current/);
@@ -489,13 +502,23 @@ test("keeps a staff-only preparation manual behind three product-photo taps", as
   assert.match(css, /\.waiter-manual-backdrop/);
   assert.match(css, /\.waiter-manual-close-icon\{display:block;width:19px;height:19px/);
   assert.match(css, /\.waiter-manual-media img,\.waiter-manual-media video/);
+  assert.match(css, /\.waiter-manual-media img,\.waiter-manual-media video\{[^}]*height:100%;[^}]*object-fit:contain;object-position:center/);
+  assert.match(adminCss, /\.admin-staff-media-gallery img,\.admin-staff-media-gallery video\{[^}]*height:100%;[^}]*object-fit:contain;object-position:center/);
   assert.match(uploadRoute, /isAdmin\(\)/);
   assert.match(uploadRoute, /MAX_MEDIA_ITEMS = 8/);
   assert.match(mediaRoute, /isAdmin\(\)/);
   assert.match(mediaRoute, /currentWaiter\(request\)/);
+  assert.match(mediaRoute, /validStaffManualMediaAccess/);
   assert.match(mediaRoute, /Content-Range/);
+  assert.match(mediaStorage, /createHmac\("sha256", mediaAccessSecret\(\)\)/);
+  assert.match(mediaStorage, /MEDIA_ACCESS_SECONDS = 18 \* 60 \* 60/);
   assert.match(mediaStorage, /optimizeProductImage\(await prepareUploadedImage\(bytes\)\)/);
   assert.match(mediaStorage, /MAX_IMAGE_BYTES = 50 \* 1024 \* 1024/);
+  assert.match(mediaStorage, /MAX_VIDEO_SOURCE_BYTES = 95 \* 1024 \* 1024/);
+  assert.match(mediaStorage, /spawn\("ffmpeg"/);
+  assert.match(mediaStorage, /"-c:v", "libx264"/);
+  assert.match(admin, /video\/quicktime/);
+  assert.match(admin, /\.mov/);
   assert.match(storageSetup, /uploads\/staff-manuals/);
   assert.match(storageSetup, /-o menuapp -g menuapp/);
 });
@@ -765,4 +788,48 @@ test("calculates a mixed cash, card, correction, expense, envelope, and tip sett
     terminalDifference: 0,
     splitDifference: 0,
   });
+});
+
+test("keeps the waiter header on one continuous dark bar with ordered controls", async () => {
+  const [client, styles, settlement, cashStyles] = await Promise.all([
+    read("app/kelner/waiter-client.tsx"),
+    read("app/kelner/unified-header.css"),
+    read("app/kelner/settlement-form.tsx"),
+    read("app/kelner/cash-day.css"),
+  ]);
+  const brand = client.indexOf("waiter-main-brand");
+  const tools = client.indexOf("waiter-main-tools");
+  const employee = client.indexOf("waiter-employee-summary");
+  const controls = client.indexOf("waiter-main-controls", brand);
+  assert.ok(brand >= 0 && brand < tools && tools < employee && employee < controls);
+  assert.match(client.slice(brand, tools), /PANEL PRACOWNIKA KAWIARNI/);
+  assert.match(client.slice(brand, tools), /waiter-main-logo[\s\S]*logo-cafe\.png[\s\S]*waiter-main-title/);
+  assert.match(client.slice(tools, employee), /WaiterInstructionEntry[\s\S]*Grafik[\s\S]*Rezerwacje[\s\S]*Inwentaryzacja[\s\S]*Rozliczanie/);
+  assert.match(client.slice(controls, controls + 700), /waiter-guest-receipt-entry[\s\S]*Rachunek dla gościa[\s\S]*waiter-main-exit-controls[\s\S]*← Menu[\s\S]*Wyloguj/);
+  assert.doesNotMatch(client, /WaiterCurrentDate|waiter-main-calendar/);
+  assert.match(settlement, /const POLAND_TIME_ZONE = "Europe\/Warsaw";[\s\S]*function CurrentDateCalendar\(\)[\s\S]*window\.setInterval\(refresh, 60_000\)/);
+  assert.match(settlement, /Codzienny system rozliczania utargu\.[\s\S]*<\/h1>[\s\S]*<CurrentDateCalendar \/>/);
+  assert.match(settlement, /function SettlementHeader[\s\S]*logo-cafe\.png[\s\S]*Kasa główna[\s\S]*Rozliczanie[\s\S]*waiter-section-controls[\s\S]*← Menu[\s\S]*Wyloguj/);
+  assert.equal((settlement.match(/<SettlementHeader /g) ?? []).length, 2);
+  assert.match(cashStyles, /\.cash-current-date \{[\s\S]*width: 146px;[\s\S]*text-align: center;/);
+  assert.match(styles, /\.waiter-main-header \{[\s\S]*display: grid !important;[\s\S]*background-color: #000 !important;[\s\S]*background-image: linear-gradient\(#000, #000\) !important;/);
+  assert.match(styles, /grid-template-columns: auto minmax\(0, 1fr\) auto auto/);
+  assert.match(styles, /\.waiter-main-header \.waiter-main-brand > \.waiter-main-logo \{[\s\S]*display: block !important;[\s\S]*width: 170px !important;[\s\S]*visibility: visible !important;/);
+  assert.match(styles, /\.waiter-main-exit-controls \{[\s\S]*display: flex;[\s\S]*gap: 7px;/);
+  assert.match(styles, /\.waiter-main-header \.waiter-main-controls > \.waiter-guest-receipt-entry \{[\s\S]*background: #d92d76 !important;/);
+  assert.match(styles, /\.waiter-main-header \.waiter-main-tools,[\s\S]*\.waiter-main-header \.waiter-main-controls \{[\s\S]*position: static !important;[\s\S]*padding: 0 !important;[\s\S]*background: #000 !important;[\s\S]*box-shadow: none !important;/);
+  assert.match(styles, /\.waiter-main-header \.waiter-main-tools::before,[\s\S]*\.waiter-main-header \.waiter-main-controls::after \{[\s\S]*display: none !important;[\s\S]*content: none !important;/);
+});
+
+test("keeps staff section navigation on the same continuous dark bar", async () => {
+  const styles = await read("app/kelner/unified-header.css");
+  assert.match(styles, /\.waiter-section-header \.waiter-section-controls \{[\s\S]*position: static !important;[\s\S]*padding: 0 !important;[\s\S]*background: #000 !important;[\s\S]*box-shadow: none !important;/);
+  assert.match(styles, /\.waiter-section-header \.waiter-section-controls::before,[\s\S]*\.waiter-section-header \.waiter-section-controls::after \{[\s\S]*display: none !important;[\s\S]*content: none !important;/);
+});
+
+test("lets the waiter reservations header span the viewport", async () => {
+  const styles = await read("app/kelner/rezerwacje/reservations-full-width.css");
+  assert.match(styles, /\.waiter-reservations \{[\s\S]*padding: 0 0 76px !important/);
+  assert.match(styles, /> header\.waiter-section-header \{[\s\S]*width: 100%/);
+  assert.match(styles, /\.waiter-reservation-hero \{[\s\S]*margin: 17px var\(--waiter-reservations-gutter\) !important/);
 });

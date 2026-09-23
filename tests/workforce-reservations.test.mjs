@@ -120,15 +120,21 @@ test("keeps staff navigation visible and ordered in unified black top bars", asy
     read("app/kelner/unified-header.css"),
   ]);
   assert.match(navigation, /"\/kelner\/instrukcje", "\/kelner\/grafik", "\/kelner\/rezerwacje", "\/kelner\/inventory"/);
-  assert.match(navigation, /<button type="button" onClick=\{logout\}>Wyloguj<\/button>[^]*<Link href="\/kelner">← Menu<\/Link>[^]*logo-cafe\.png/);
-  assert.match(waiter, /waiter-main-controls[^]*Wyloguj[^]*← Menu[^]*waiter-main-brand[^]*Rachunek dla gościa[^]*waiter-main-tools[^]*Grafik[^]*Rezerwacje[^]*Inwentaryzacja[^]*Rozliczanie[^]*Zalogowany pracownik/);
+  assert.match(navigation, /logo-cafe\.png[^]*<Link href="\/kelner">← Menu<\/Link>[^]*<button type="button" onClick=\{logout\}>Wyloguj<\/button>/);
+  const mainBrand = waiter.indexOf("waiter-main-brand");
+  const mainTools = waiter.indexOf("waiter-main-tools", mainBrand);
+  const employeeSummary = waiter.indexOf("waiter-employee-summary", mainTools);
+  const mainControls = waiter.indexOf("waiter-main-controls", employeeSummary);
+  assert.ok(mainBrand >= 0 && mainBrand < mainTools && mainTools < employeeSummary && employeeSummary < mainControls);
+  assert.match(waiter.slice(mainTools, employeeSummary), /WaiterInstructionEntry[^]*Grafik[^]*Rezerwacje[^]*Inwentaryzacja[^]*Rozliczanie/);
+  assert.match(waiter.slice(mainControls, mainControls + 700), /Rachunek dla gościa[^]*waiter-main-exit-controls[^]*← Menu[^]*Wyloguj/);
   assert.match(reservations, /<WaiterSectionHeader eyebrow="Goście i stoliki" title="Rezerwacje"/);
   assert.match(instructions, /<WaiterSectionHeader className="waiter-instruction-header" eyebrow="Katalog wiedzy"/);
   assert.match(workforce, /<WaiterSectionHeader eyebrow="Mój czas pracy" title="Grafik i dyspozycje"/);
   assert.match(inventory, /<WaiterSectionHeader eyebrow="Kontrola magazynu" title="Inwentaryzacja"/);
   assert.doesNotMatch(`${reservations}\n${instructions}\n${workforce}\n${inventory}`, /Wróć do zamówień|← Zamówienia/);
   assert.match(layout, /<WaiterStaffDock\/>/);
-  assert.match(css, /\.waiter-section-header[^]*background: #000;/);
+  assert.match(css, /\.waiter-section-header[^]*background-color: #000 !important;/);
   assert.match(css, /\.waiter-section-header > img[^]*width: 158px/);
   assert.match(css, /\.workforce-employee > header\.waiter-section-header[^]*margin: -28px calc\(-1 \* clamp\(18px, 4vw, 58px\)\) 0/);
   assert.match(css, /@media \(max-width: 760px\)[^]*\.waiter-main-tools[^]*overflow-x: auto/);
@@ -191,7 +197,7 @@ test("discovers the existing iCloud calendar for server-side write-back", async 
   const [schema, migration, syncStateMigration, adminRoute, waiterRoute] = await Promise.all([
     read("db/schema.ts"),
     read("drizzle/0043_icloud_calendar_writeback.sql"),
-    read("drizzle/0045_reservation_calendar_sync_state.sql"),
+    read("drizzle/0048_reservation_calendar_sync_state.sql"),
     read("app/api/admin/reservations/route.ts"),
     read("app/api/waiter/reservations/route.ts"),
   ]);
