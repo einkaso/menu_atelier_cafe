@@ -215,6 +215,7 @@ export const waiterEmployees = pgTable("waiter_employees", {
   accessLevel: text("access_level"),
   requirePinAlways: boolean("require_pin_always").notNull().default(false),
   canManageMenuVisibility: boolean("can_manage_menu_visibility").notNull().default(false),
+  canControlLighting: boolean("can_control_lighting").notNull().default(false),
   pinHash: text("pin_hash"),
   thankYouMessage: text("thank_you_message").notNull().default("Dziękuję i zapraszam ponownie!"),
   includeInSchedule: boolean("include_in_schedule").notNull().default(true),
@@ -909,3 +910,143 @@ export const inventoryExports = pgTable("inventory_exports", {
   uniqueIndex("inventory_exports_external_id_uq").on(table.externalId),
   index("inventory_exports_status_idx").on(table.status),
 ]);
+
+export const lightingBridges = pgTable("lighting_bridges", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  tokenHint: text("token_hint").notNull(),
+  active: boolean("active").notNull().default(true),
+  agentVersion: text("agent_version"),
+  lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("lighting_bridges_token_hash_uq").on(table.tokenHash)]);
+
+export const lightingDevices = pgTable("lighting_devices", {
+  id: serial("id").primaryKey(),
+  bridgeId: integer("bridge_id").notNull().references(() => lightingBridges.id, { onDelete: "cascade" }),
+  stableId: text("stable_id").notNull(),
+  name: text("name").notNull(),
+  host: text("host").notNull(),
+  apiType: text("api_type").notNull(),
+  apiLevel: text("api_level"),
+  hardwareVersion: text("hardware_version"),
+  firmwareVersion: text("firmware_version"),
+  channels: jsonb("channels").$type<string[]>().notNull().default([]),
+  active: boolean("active").notNull().default(true),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("lighting_devices_bridge_stable_uq").on(table.bridgeId, table.stableId),
+  index("lighting_devices_bridge_idx").on(table.bridgeId),
+]);
+
+export const lightingRooms = pgTable("lighting_rooms", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  geometry: jsonb("geometry").$type<unknown>(),
+  active: boolean("active").notNull().default(true),
+}, (table) => [index("lighting_rooms_sort_idx").on(table.sortOrder)]);
+
+export const lightingOutputs = pgTable("lighting_outputs", {
+  id: serial("id").primaryKey(),
+  deviceId: integer("device_id").notNull().references(() => lightingDevices.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  label: text("label").notNull(),
+  roomId: integer("room_id").references(() => lightingRooms.id, { onDelete: "set null" }),
+  capabilities: jsonb("capabilities").$type<{ onOff: boolean; dimming: boolean; rgbw?: boolean }>().notNull().default({ onOff: true, dimming: false }),
+  mapX: numeric("map_x", { precision: 6, scale: 5 }),
+  mapY: numeric("map_y", { precision: 6, scale: 5 }),
+  minBrightness: integer("min_brightness").notNull().default(0),
+  maxBrightness: integer("max_brightness").notNull().default(100),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("lighting_outputs_device_channel_uq").on(table.deviceId, table.channel),
+  index("lighting_outputs_room_idx").on(table.roomId),
+]);
+
+export const lightingLayouts = pgTable("lighting_layouts", {
+  id: serial("id").primaryKey(),
+  imagePath: text("image_path").notNull(),
+  imageWidth: integer("image_width").notNull(),
+  imageHeight: integer("image_height").notNull(),
+  version: integer("version").notNull().default(1),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const lightingGroups = pgTable("lighting_groups", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+}, (table) => [index("lighting_groups_sort_idx").on(table.sortOrder)]);
+
+export const lightingGroupMembers = pgTable("lighting_group_members", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => lightingGroups.id, { onDelete: "cascade" }),
+  outputId: integer("output_id").notNull().references(() => lightingOutputs.id, { onDelete: "cascade" }),
+}, (table) => [uniqueIndex("lighting_group_members_group_output_uq").on(table.groupId, table.outputId)]);
+
+export const lightingScenes = pgTable("lighting_scenes", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+}, (table) => [index("lighting_scenes_sort_idx").on(table.sortOrder)]);
+
+export const lightingSceneActions = pgTable("lighting_scene_actions", {
+  id: serial("id").primaryKey(),
+  sceneId: integer("scene_id").notNull().references(() => lightingScenes.id, { onDelete: "cascade" }),
+  outputId: integer("output_id").notNull().references(() => lightingOutputs.id, { onDelete: "cascade" }),
+  command: text("command").notNull(),
+  brightness: integer("brightness"),
+}, (table) => [uniqueIndex("lighting_scene_actions_scene_output_uq").on(table.sceneId, table.outputId)]);
+
+export const lightingOutputStates = pgTable("lighting_output_states", {
+  id: serial("id").primaryKey(),
+  outputId: integer("output_id").notNull().references(() => lightingOutputs.id, { onDelete: "cascade" }),
+  isOn: boolean("is_on"),
+  brightness: integer("brightness"),
+  observedAt: timestamp("observed_at", { withTimezone: true }),
+  quality: text("quality").notNull().default("UNKNOWN"),
+  lastError: text("last_error"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("lighting_output_states_output_uq").on(table.outputId)]);
+
+export const lightingCommands = pgTable("lighting_commands", {
+  id: text("id").primaryKey(),
+  bridgeId: integer("bridge_id").references(() => lightingBridges.id, { onDelete: "set null" }),
+  actorDotykackaId: text("actor_dotykacka_id").notNull(),
+  actorName: text("actor_name").notNull(),
+  kind: text("kind").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  status: text("status").notNull().default("QUEUED"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("lighting_commands_idempotency_uq").on(table.actorDotykackaId, table.idempotencyKey),
+  index("lighting_commands_status_expiry_idx").on(table.status, table.expiresAt),
+]);
+
+export const lightingCommandItems = pgTable("lighting_command_items", {
+  id: serial("id").primaryKey(),
+  commandId: text("command_id").notNull().references(() => lightingCommands.id, { onDelete: "cascade" }),
+  outputId: integer("output_id").notNull().references(() => lightingOutputs.id, { onDelete: "cascade" }),
+  previousIsOn: boolean("previous_is_on"),
+  previousBrightness: integer("previous_brightness"),
+  requestedCommand: text("requested_command").notNull(),
+  requestedBrightness: integer("requested_brightness"),
+  result: text("result"),
+  error: text("error"),
+}, (table) => [uniqueIndex("lighting_command_items_command_output_uq").on(table.commandId, table.outputId)]);

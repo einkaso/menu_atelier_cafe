@@ -243,7 +243,7 @@ test("opens drinks with managed photos, descriptions and allergens", async () =>
   assert.match(source, /function DrinkDetailDialog/);
   assert.match(source, /Zobacz napój i pełny opis/);
   assert.match(source, /Wróć do napojów/);
-  assert.match(source, /const previewDetails=activeKind==="cold"\|\|activeKind==="zero"\|\|activeKind==="cocktails"/);
+  assert.match(source, /const previewDetails=activeKind==="coffee"\|\|activeKind==="cold"\|\|activeKind==="zero"\|\|activeKind==="cocktails"/);
   assert.match(source, /previewDetails=\{previewDetails\}/);
   assert.match(source, /const kind=product\.visualKind\?\?contextKind/);
   assert.match(source, /p\.image\|\|cakeLayout\|\|previewDetails\?"product product-visual"/);
@@ -498,6 +498,8 @@ test("guides alternative coffee through beans, brewing method and product detail
   assert.match(source, /if\(kind==="coffee"\)\{setCoffeeProduct\(product\)/);
   assert.match(source, /<CoffeeDetailDialog product=\{coffeeProduct\}/);
   assert.match(source, /function CoffeeDetailDialog/);
+  assert.match(css, /\.motif-coffee \.product\.is-description-preview\.product-visual\{height:188px;min-height:188px/);
+  assert.match(css, /\.motif-coffee \.product\.is-description-preview \.product-info>p\{[^}]*-webkit-line-clamp:3/);
   assert.match(source, /const alternativeCoffeeMethods=activeKind==="coffee"\?regularVisible\.filter\(isAlternativeCoffeeProduct\):\[\]/);
   assert.match(source, /const displayedProducts=activeKind==="coffee"\?\[\.\.\.regularVisible\.filter\(product=>!isAlternativeCoffeeProduct\(product\)\),\.\.\.alternativeCoffeeMethods\]:regularVisible/);
   assert.match(source, /coffeeOptions\.length>0&&<Options[^]*<AlternativeCoffeeBeans lang=\{lang\} beans=\{alternativeCoffeeBeans\} methods=\{alternativeCoffeeMethods\}/);

@@ -85,6 +85,10 @@ Jeżeli administrator nie wpisał jeszcze parametrów, system może wnioskować 
 
 Wyszukiwanie informacji dla Alko Baru używa nazwy produktu i fraz dotyczących alkoholu, drinka, składu, profilu smakowego oraz zdjęcia. Po wybraniu strony system próbuje odczytać opis, rodzaj, bazę, smak, podanie, moc, pochodzenie, pojemność i zdjęcia. Wynik jest propozycją: administrator decyduje, czy uzupełnić braki, czy zastąpić dane, a zdjęcie wybiera tylko wtedy, gdy produkt nie ma jeszcze własnego obrazu.
 
+### Katalog szkła
+
+Ikony i fotografie naczyń wraz z ich pojemnością użytkową są przechowywane w `lib/glassware-catalog.ts`. Każda pozycja ma trwały identyfikator, nazwę, rodzaj szkła, pojemność w mililitrach, adres obrazu oraz aliasy ułatwiające późniejsze dopasowanie do produktu. Pojemność przekazana przez administratora jest wartością obowiązującą w aplikacji, nawet jeżeli nazwa pliku źródłowego wskazuje inną pojemność katalogową producenta.
+
 ## Wina i mocne alkohole
 
 - Wariant kieliszkowy wina musi jednocześnie mieć odpowiednią nazwę, tag `KIELISZEK` i wspólny kod `WIN` z butelką.

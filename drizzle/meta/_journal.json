@@ -323,6 +323,20 @@
       "when": 1790128800000,
       "tag": "0045_reservation_calendar_sync_state",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790155800000,
+      "tag": "0046_lighting_control_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790155630242,
+      "tag": "0047_lighting_snapshot_baseline",
+      "breakpoints": true
     }
   ]
 }

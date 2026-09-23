@@ -18,6 +18,7 @@ export async function GET() {
       deleted: waiterEmployees.deleted,
       accessLevel: waiterEmployees.accessLevel,
       canManageMenuVisibility: waiterEmployees.canManageMenuVisibility,
+      canControlLighting: waiterEmployees.canControlLighting,
       thankYouMessage: waiterEmployees.thankYouMessage,
       includeInSchedule: waiterEmployees.includeInSchedule,
       hourlyRate: waiterEmployees.hourlyRate,
