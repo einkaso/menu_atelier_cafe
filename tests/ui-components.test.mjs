@@ -418,11 +418,14 @@ test("uses exact cake photos in image-led cards with a company-story intro", asy
   assert.match(source, /<CakePartnerDialog open=\{capuccinoOpen\}/);
   assert.match(source, /\/capuccino-wedding-cakes\.jpg/);
   assert.match(source, /\/capuccino-occasion-cakes\.jpg/);
-  assert.doesNotMatch(source, /className="capuccino-story-footer"/);
-  assert.doesNotMatch(source, /Rodzinna firma · od 2006 roku/);
-  assert.doesNotMatch(source, /W karcie Atelier logo Capuccino Cafe oznacza/);
-  assert.doesNotMatch(source, /Autorska pracownia tortów/);
-  assert.doesNotMatch(source, /<figcaption>/);
+  assert.match(source, /className="capuccino-story-gallery"/);
+  assert.match(source, /className="capuccino-story-timeline"/);
+  assert.match(source, /className="capuccino-story-note"/);
+  assert.match(source, /className="capuccino-story-footer"/);
+  assert.match(source, /Rodzinna cukiernia · od 2006 roku/);
+  assert.match(source, /Własna pracownia tortów i słodkości/);
+  assert.match(source, /<figcaption>/);
+  assert.match(source, /Wróć do ciast/);
   assert.doesNotMatch(source, /href="https:\/\/capuccinocafe\.pl/);
   assert.doesNotMatch(source, /<CakeShowcase/);
   assert.doesNotMatch(source, /cakeShowcase=/);
@@ -444,8 +447,11 @@ test("uses exact cake photos in image-led cards with a company-story intro", asy
   assert.match(css, /\.cake-detail-logo\{[^}]*width:135px[^}]*object-position:left center/);
   assert.match(css, /\.cake-partner-intro\{[^}]*grid-template-columns:[^}]*border-top:5px solid var\(--pink\)/);
   assert.doesNotMatch(css, /\.cake-partner-copy \.cake-partner-link/);
-  assert.match(css, /\.capuccino-story-banners\{[^}]*grid-template-columns:1fr 1fr;[^}]*gap:0/);
-  assert.match(css, /\.capuccino-story-banners img\{[^}]*width:100%;[^}]*height:auto;[^}]*object-fit:contain/);
+  assert.match(css, /\.capuccino-story-dialog\{[^}]*grid-template-columns:minmax\(360px,\.9fr\) minmax\(500px,1\.1fr\)/);
+  assert.match(css, /\.capuccino-story-gallery\{[^}]*grid-template-rows:1\.14fr \.86fr/);
+  assert.match(css, /\.capuccino-story-gallery img\{[^}]*width:100%;[^}]*height:100%;[^}]*object-fit:cover/);
+  assert.match(css, /\.capuccino-story-timeline\{[^}]*grid-template-columns:repeat\(3,1fr\)/);
+  assert.match(css, /\.capuccino-story-dialog \.capuccino-story-heading\{[^}]*height:auto;[^}]*padding:0;[^}]*background:transparent/);
 });
 
 test("places the featured marker over the left side of product photos", async () => {

@@ -40,7 +40,10 @@ test("includes up to two lemonade flavours without adding a syrup charge", async
   assert.match(waiterCatalog, /price: "0"/);
   assert.match(waiterOrders, /maxFlavorCount = isLemonadeProduct\(product\.name\) \? 2 : 1/);
   assert.match(waiterOrders, /addon\.fallback === "syrup" && !isLemonadeProduct\(product\.name\)/);
-  assert.match(css, /\.lemonade-flavor-action\{[^}]*margin-top:1\.35rem/);
+  assert.match(css, /\.lemonade-flavor-action\{[^}]*margin-top:3rem/);
+  assert.match(css, /@media\(max-width:1280px\) and \(min-width:901px\)\{\.motif-cold \.product\.has-flavor-choice\{grid-column:1\/-1\}/);
+  assert.match(css, /\.motif-cold \.product\.has-flavor-choice \.product-info\{height:auto;min-height:185px;overflow:visible/);
+  assert.match(css, /\.product\.has-flavor-choice \.lemonade-flavor-action\{margin-top:0\}/);
 });
 
 test("keeps the syrup chooser above its overlay and leaves forest syrups accessible through regular product filters", async () => {
