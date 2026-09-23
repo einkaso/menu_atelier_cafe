@@ -70,6 +70,7 @@ export async function GET() {
       tastingNotes: productContent.tastingNotes,
       drinkVesselId: productContent.drinkVesselId,
       espressoShots: productContent.espressoShots,
+      alcoholMarker: productContent.alcoholMarker,
       attributes: productContent.attributes,
       staffInstructions: productContent.staffInstructions,
       staffMedia: productContent.staffMedia,

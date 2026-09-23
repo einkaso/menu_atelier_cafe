@@ -124,6 +124,7 @@ export const productContent = pgTable("product_content", {
   tastingNotes: text("tasting_notes"),
   drinkVesselId: integer("drink_vessel_id").references(() => drinkVessels.id, { onDelete: "set null" }),
   espressoShots: integer("espresso_shots"),
+  alcoholMarker: boolean("alcohol_marker").notNull().default(false),
   attributes: jsonb("attributes").$type<Record<string, string>>().notNull().default({}),
   staffInstructions: text("staff_instructions"),
   staffMedia: jsonb("staff_media").$type<StaffManualMedia[]>().notNull().default([]),

@@ -81,6 +81,7 @@ export async function GET(request: Request) {
       staffMedia: productContent.staffMedia,
       drinkVesselId: productContent.drinkVesselId,
       espressoShots: productContent.espressoShots,
+      alcoholMarker: productContent.alcoholMarker,
       drinkVesselName: drinkVessels.name,
       drinkVesselCapacityMl: drinkVessels.capacityMl,
       drinkVesselIconPath: drinkVessels.iconPath,
@@ -192,6 +193,7 @@ export async function GET(request: Request) {
         takeaway: productTakeawayAvailable(product.tags),
         attributes,
         espressoShots: product.espressoShots === 0 || product.espressoShots === 1 || product.espressoShots === 2 ? product.espressoShots : null,
+        alcoholMarker: Boolean(product.alcoholMarker),
         drinkVessel: product.drinkVesselId && product.drinkVesselActive ? {
           id: product.drinkVesselId,
           name: product.drinkVesselName ?? "Naczynie",
@@ -209,7 +211,7 @@ export async function GET(request: Request) {
       };
     }), ...extraProducts.filter((product) => regularProductStockIsAvailable(
       product.stockDeduct, product.stockOverdraft, product.stockQuantity,
-    )).map((product) => ({ ...product, kind: "other", serving: null, country: null, wineStyle: null, wineColor: null, sparklingType: null, sweetness: null, veganStatus: "UNKNOWN", vegan: false, alcoholFree: false, temperatures: [], takeaway: false, attributes: {}, espressoShots: null, drinkVessel: null, outsideMenu: true, hiddenFromGuest: false, image: null, staffManual: null, addonGroups: [] }))],
+    )).map((product) => ({ ...product, kind: "other", serving: null, country: null, wineStyle: null, wineColor: null, sparklingType: null, sweetness: null, veganStatus: "UNKNOWN", vegan: false, alcoholFree: false, temperatures: [], takeaway: false, attributes: {}, espressoShots: null, alcoholMarker: false, drinkVessel: null, outsideMenu: true, hiddenFromGuest: false, image: null, staffManual: null, addonGroups: [] }))],
     surveyQuestions,
     posActionsEnabled: process.env.WAITER_POS_ACTIONS_ENABLED === "true",
   });

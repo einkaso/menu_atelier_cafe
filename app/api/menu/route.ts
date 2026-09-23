@@ -159,6 +159,7 @@ export async function GET() {
       tastingNotes: productContent.tastingNotes,
       drinkVesselId: productContent.drinkVesselId,
       espressoShots: productContent.espressoShots,
+      alcoholMarker: productContent.alcoholMarker,
       drinkVesselName: drinkVessels.name,
       drinkVesselCapacityMl: drinkVessels.capacityMl,
       drinkVesselIconPath: drinkVessels.iconPath,
@@ -331,6 +332,7 @@ export async function GET() {
       tastingNotes: item.tastingNotes || undefined,
       tastingNotesEn: item.tastingNotesEn || item.tastingNotes || undefined,
       espressoShots: item.espressoShots === 0 || item.espressoShots === 1 || item.espressoShots === 2 ? item.espressoShots : undefined,
+      alcoholMarker: item.alcoholMarker || undefined,
       drinkVessel: item.drinkVesselId && item.drinkVesselActive ? {
         id: item.drinkVesselId,
         name: item.drinkVesselName ?? "Naczynie",
@@ -393,6 +395,7 @@ export async function GET() {
         tastingNotesEn: primary.tastingNotesEn || secondary.tastingNotesEn,
         drinkVessel: primary.drinkVessel || secondary.drinkVessel,
         espressoShots: primary.espressoShots ?? secondary.espressoShots,
+        alcoholMarker: primary.alcoholMarker || secondary.alcoholMarker,
         attributes: { ...(secondary.attributes ?? {}), ...(primary.attributes ?? {}) },
         attributesEn: { ...(secondary.attributesEn ?? {}), ...(primary.attributesEn ?? {}) },
         temperatures: Array.from(new Set([...current.temperatures, ...product.temperatures])),

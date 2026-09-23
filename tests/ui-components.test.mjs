@@ -540,6 +540,7 @@ test("guides alternative coffee through beans, brewing method and product detail
   assert.match(css, /\.alternative-beans-picker\{display:grid/);
   assert.match(css, /\.alternative-method-step,\.alternative-bean-step\{grid-column:1\/-1/);
   assert.match(css, /\.options\{display:grid;grid-column:1\/-1/);
+  assert.match(css, /\.options\{[^}]*margin:46px 0 28px/);
   assert.match(css, /\.alternative-method-picker\{display:grid/);
   assert.match(css, /\.alternative-method-picker button\.has-image/);
   assert.match(css, /button\.has-image:after/);

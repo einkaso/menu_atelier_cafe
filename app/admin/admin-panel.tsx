@@ -71,6 +71,7 @@ type Product = {
   tastingNotes: string | null;
   drinkVesselId: number | null;
   espressoShots: 0 | 1 | 2 | null;
+  alcoholMarker: boolean | null;
   attributes: Record<string, string> | null;
   staffInstructions: string | null;
   staffMedia: StaffManualMedia[] | null;
@@ -925,6 +926,7 @@ export default function AdminPanel() {
       const espressoShots = String(form.get("espressoShots") ?? "").trim();
       payload.drinkVesselId = vesselId ? Number(vesselId) : null;
       payload.espressoShots = espressoShots ? Number(espressoShots) : null;
+      payload.alcoholMarker = form.get("alcoholMarker") === "on";
     }
     for (const key of ["featured", "manualHidden", "autoTranslate"] as const) payload[key] = form.get(key) === "on";
     try {
@@ -1946,6 +1948,7 @@ function ProductForm({ product, drinkVessels, wineSources, saving, discovering, 
   const [backdropSourceUrl, setBackdropSourceUrl] = useState("");
   const [drinkVesselId, setDrinkVesselId] = useState(product.drinkVesselId ? String(product.drinkVesselId) : "");
   const [espressoShots, setEspressoShots] = useState(product.espressoShots === null ? "" : String(product.espressoShots));
+  const [alcoholMarker, setAlcoholMarker] = useState(Boolean(product.alcoholMarker));
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [selectedImages, setSelectedImages] = useState<Record<number, string>>({});
   const [manualSourceUrl, setManualSourceUrl] = useState("");
@@ -2222,8 +2225,8 @@ function ProductForm({ product, drinkVessels, wineSources, saving, discovering, 
       </fieldset>}
 
       {supportsDrinkVessel(productKind) && <fieldset className="admin-drink-vessel-config">
-        <legend>Naczynie i espresso <small>opcjonalne oznaczenie napoju</small></legend>
-        <p className="admin-field-help">Pojemność jest przypisana do ikony naczynia. Wybierasz ją tylko raz w katalogu — przy produkcie nie wpisujemy ponownie liczby ml.</p>
+        <legend>Naczynie i oznaczenia <small>espresso oraz alkohol</small></legend>
+        <p className="admin-field-help">Pojemność jest przypisana do ikony naczynia. Cyfra oznacza liczbę espresso, a znak % informuje, że napój zawiera alkohol.</p>
         <div className="admin-form-grid">
           <div className="admin-drink-vessel-picker" role="radiogroup" aria-label="Wybierz naczynie dla napoju">
             <label className={!drinkVesselId ? "is-selected is-empty" : "is-empty"}>
@@ -2243,8 +2246,9 @@ function ProductForm({ product, drinkVessels, wineSources, saving, discovering, 
             })}
           </div>
           <label>Liczba espresso<select name="espressoShots" value={espressoShots} onChange={(event) => setEspressoShots(event.target.value)}><option value="">Bez oznaczenia</option><option value="0">0 espresso</option><option value="1">1 espresso</option><option value="2">2 espresso</option></select></label>
-          {selectedDrinkVessel && <div className="admin-drink-vessel-preview" aria-label={`Podgląd: ${selectedDrinkVessel.name}, ${selectedDrinkVessel.capacityMl} ml${espressoShots !== "" ? `, ${espressoShots} espresso` : ""}`}>
-            <span>{selectedDrinkVessel.iconPath ? <img src={selectedDrinkVessel.iconPath} alt="" /> : <i>ikona<br/>wkrótce</i>}{espressoShots !== "" && <b>{espressoShots}</b>}</span><strong>{selectedDrinkVessel.capacityMl} ml</strong><small>{selectedDrinkVessel.name}</small>
+          <label className="admin-alcohol-marker"><input type="checkbox" name="alcoholMarker" checked={alcoholMarker} onChange={(event) => setAlcoholMarker(event.target.checked)} /><span><b>%</b> Napój z alkoholem</span></label>
+          {selectedDrinkVessel && <div className="admin-drink-vessel-preview" aria-label={`Podgląd: ${selectedDrinkVessel.name}, ${selectedDrinkVessel.capacityMl} ml${espressoShots !== "" ? `, ${espressoShots} espresso` : ""}${alcoholMarker ? ", zawiera alkohol" : ""}`}>
+            <span>{selectedDrinkVessel.iconPath ? <img src={selectedDrinkVessel.iconPath} alt="" /> : <i>ikona<br/>wkrótce</i>}{espressoShots !== "" && <b>{espressoShots}</b>}{alcoholMarker && <em className="admin-drink-vessel-alcohol">%</em>}</span><strong>{selectedDrinkVessel.capacityMl} ml</strong><small>{selectedDrinkVessel.name}</small>
           </div>}
           {!drinkVessels.length && <aside className="admin-wide admin-drink-vessel-empty">Katalog naczyń jest gotowy, ale pusty. Ikony i pojemności dodamy po otrzymaniu zdjęć.</aside>}
         </div>

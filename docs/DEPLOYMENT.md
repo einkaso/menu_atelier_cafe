@@ -48,9 +48,10 @@ Należy wykonywać codzienny `pg_dump` bazy `menu` oraz kopię wolumenu `menu_up
 4. Zatrzymać `banaszek-menu.service`.
 5. Wykonać świeży `pg_dump --format=custom menu`, archiwum `/var/lib/banaszek-menu/uploads` i zweryfikować je przez `pg_restore -l` oraz `gzip -t`.
 6. Zachować pełną kopię `/opt/banaszek-menu` jako wersję rollback z datą UTC.
-7. Z katalogu staged, z env usługi, wykonać `npm run db:migrate`.
-8. Atomowo zamienić katalog staged z bieżącym, uruchomić usługę i sprawdzić `http://127.0.0.1:8080/api/health` oraz publiczną domenę.
-9. Dopiero po poprawnych healthcheckach ponownie uruchomić timer synchronizacji.
+7. Przed migracją uruchomić jako `root` skrypt `ops/install-bundled-product-images.sh /opt/banaszek-menu-next`. Kopiuje przygotowane wraz z wydaniem zdjęcia produktów do trwałego katalogu uploadów, nie usuwając pozostałych plików.
+8. Z katalogu staged, z env usługi, wykonać `npm run db:migrate`.
+9. Atomowo zamienić katalog staged z bieżącym, uruchomić usługę i sprawdzić `http://127.0.0.1:8080/api/health` oraz publiczną domenę.
+10. Dopiero po poprawnych healthcheckach ponownie uruchomić timer synchronizacji.
 
 Migracje dla prowadzenia kasy i kont administratorów są addytywne. Rollback kodu nie wymaga cofania bazy. Odtworzenie bazy usuwa późniejsze dane i wymaga osobnej decyzji.
 

@@ -49,6 +49,35 @@ test("keeps zero espresso distinct from the no-marker null state", async () => {
   assert.match(migration, /"espresso_shots" is null or "espresso_shots" in \(0, 1, 2\)/);
 });
 
+test("supports an independent alcohol percent marker next to the espresso badge", async () => {
+  const [schema, migration, admin, productApi, publicMenu, waiterCatalog, guestClient, waiterClient, adminCss, guestCss, waiterCss] = await Promise.all([
+    read("db/schema.ts"),
+    read("drizzle/0056_alcohol_drink_marker.sql"),
+    read("app/admin/admin-panel.tsx"),
+    read("app/api/admin/products/[id]/route.ts"),
+    read("app/api/menu/route.ts"),
+    read("app/api/waiter/catalog/route.ts"),
+    read("app/menu-client.tsx"),
+    read("app/kelner/waiter-client.tsx"),
+    read("app/admin/admin.css"),
+    read("app/globals.css"),
+    read("app/kelner/waiter.css"),
+  ]);
+
+  assert.match(schema, /alcoholMarker: boolean\("alcohol_marker"\)\.notNull\(\)\.default\(false\)/);
+  assert.match(migration, /ADD COLUMN "alcohol_marker" boolean DEFAULT false NOT NULL/);
+  assert.match(productApi, /alcoholMarker: z\.boolean\(\)\.optional\(\)/);
+  assert.match(admin, /name="alcoholMarker"/);
+  assert.match(admin, /alcoholMarker && <em className="admin-drink-vessel-alcohol">%<\/em>/);
+  assert.match(publicMenu, /alcoholMarker: item\.alcoholMarker \|\| undefined/);
+  assert.match(waiterCatalog, /alcoholMarker: Boolean\(product\.alcoholMarker\)/);
+  assert.match(guestClient, /product\.alcoholMarker&&<em className="drink-vessel-alcohol">%<\/em>/);
+  assert.match(waiterClient, /product\.alcoholMarker && <em className="waiter-drink-vessel-alcohol">%<\/em>/);
+  assert.match(adminCss, /admin-drink-vessel-alcohol/);
+  assert.match(guestCss, /drink-vessel-alcohol/);
+  assert.match(waiterCss, /waiter-drink-vessel-alcohol/);
+});
+
 test("ships the Churchill vessel catalog with optimized local icons", async () => {
   const migration = await read("drizzle/0047_churchill_drink_vessels.sql");
   const expectedFiles = [

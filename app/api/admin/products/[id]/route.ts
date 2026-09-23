@@ -29,6 +29,7 @@ const contentSchema = z.object({
   tastingNotes: z.string().max(2000).nullable().optional(),
   drinkVesselId: z.number().int().positive().nullable().optional(),
   espressoShots: z.union([z.literal(0), z.literal(1), z.literal(2)]).nullable().optional(),
+  alcoholMarker: z.boolean().optional(),
   staffInstructions: z.string().max(12000).nullable().optional(),
   attributes: z.record(z.string(), z.string().max(1000)).optional(),
 });
