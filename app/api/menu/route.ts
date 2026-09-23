@@ -330,7 +330,7 @@ export async function GET() {
       promoOrder: item.featuredSortOrder ?? 2147483647,
       tastingNotes: item.tastingNotes || undefined,
       tastingNotesEn: item.tastingNotesEn || item.tastingNotes || undefined,
-      espressoShots: item.espressoShots === 1 || item.espressoShots === 2 ? item.espressoShots : undefined,
+      espressoShots: item.espressoShots === 0 || item.espressoShots === 1 || item.espressoShots === 2 ? item.espressoShots : undefined,
       drinkVessel: item.drinkVesselId && item.drinkVesselActive ? {
         id: item.drinkVesselId,
         name: item.drinkVesselName ?? "Naczynie",
@@ -392,7 +392,7 @@ export async function GET() {
         tastingNotes: primary.tastingNotes || secondary.tastingNotes,
         tastingNotesEn: primary.tastingNotesEn || secondary.tastingNotesEn,
         drinkVessel: primary.drinkVessel || secondary.drinkVessel,
-        espressoShots: primary.espressoShots || secondary.espressoShots,
+        espressoShots: primary.espressoShots ?? secondary.espressoShots,
         attributes: { ...(secondary.attributes ?? {}), ...(primary.attributes ?? {}) },
         attributesEn: { ...(secondary.attributesEn ?? {}), ...(primary.attributesEn ?? {}) },
         temperatures: Array.from(new Set([...current.temperatures, ...product.temperatures])),

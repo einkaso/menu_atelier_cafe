@@ -386,6 +386,13 @@
       "when": 1790170200000,
       "tag": "0054_elysia_vessel_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1790173800000,
+      "tag": "0055_allow_zero_espresso_marker",
+      "breakpoints": true
     }
   ]
 }

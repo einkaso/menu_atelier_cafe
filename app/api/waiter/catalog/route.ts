@@ -191,7 +191,7 @@ export async function GET(request: Request) {
         temperatures: productTemperatures(product.tags),
         takeaway: productTakeawayAvailable(product.tags),
         attributes,
-        espressoShots: product.espressoShots === 1 || product.espressoShots === 2 ? product.espressoShots : null,
+        espressoShots: product.espressoShots === 0 || product.espressoShots === 1 || product.espressoShots === 2 ? product.espressoShots : null,
         drinkVessel: product.drinkVesselId && product.drinkVesselActive ? {
           id: product.drinkVesselId,
           name: product.drinkVesselName ?? "Naczynie",

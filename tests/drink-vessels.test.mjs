@@ -19,8 +19,8 @@ test("keeps vessel capacity in the icon catalog and only the relation on a drink
   assert.match(schema, /drinkVessels = pgTable\("drink_vessels"[\s\S]*capacityMl: integer\("capacity_ml"\)\.notNull\(\)/);
   assert.match(schema, /drinkVesselId: integer\("drink_vessel_id"\)\.references\(\(\) => drinkVessels\.id/);
   assert.match(schema, /espressoShots: integer\("espresso_shots"\)/);
-  assert.match(schema, /product_content_espresso_shots_check[\s\S]*in \(1, 2\)/);
-  assert.match(productApi, /espressoShots: z\.union\(\[z\.literal\(1\), z\.literal\(2\)\]\)\.nullable\(\)\.optional\(\)/);
+  assert.match(schema, /product_content_espresso_shots_check[\s\S]*in \(0, 1, 2\)/);
+  assert.match(productApi, /espressoShots: z\.union\(\[z\.literal\(0\), z\.literal\(1\), z\.literal\(2\)\]\)\.nullable\(\)\.optional\(\)/);
   assert.match(catalogApi, /capacityMl: drinkVessels\.capacityMl/);
   assert.match(admin, /Pojemność jest przypisana do ikony naczynia/);
   assert.match(admin, /name="drinkVesselId"/);
@@ -28,10 +28,25 @@ test("keeps vessel capacity in the icon catalog and only the relation on a drink
   assert.match(admin, /type="radio" name="drinkVesselId"/);
   assert.doesNotMatch(admin, /<select name="drinkVesselId"/);
   assert.match(admin, /name="espressoShots"/);
+  assert.match(admin, /<option value="">Bez oznaczenia<\/option><option value="0">0 espresso<\/option>/);
+  assert.match(admin, /espressoShots !== "" && <b>\{espressoShots\}<\/b>/);
   assert.match(publicMenu, /drinkVessel: item\.drinkVesselId/);
+  assert.match(publicMenu, /item\.espressoShots === 0 \|\| item\.espressoShots === 1 \|\| item\.espressoShots === 2/);
   assert.match(waiterCatalog, /drinkVessel: product\.drinkVesselId/);
+  assert.match(waiterCatalog, /product\.espressoShots === 0 \|\| product\.espressoShots === 1 \|\| product\.espressoShots === 2/);
   assert.match(guestClient, /function DrinkVesselMark/);
+  assert.match(guestClient, /espressoShots\?:0\|1\|2/);
+  assert.match(guestClient, /hasEspressoMark=product\.espressoShots!==undefined/);
   assert.match(waiterClient, /function WaiterDrinkVesselMark/);
+  assert.match(waiterClient, /espressoShots: 0 \| 1 \| 2 \| null/);
+  assert.match(waiterClient, /product\.espressoShots !== null && <b>\{product\.espressoShots\}<\/b>/);
+});
+
+test("keeps zero espresso distinct from the no-marker null state", async () => {
+  const migration = await read("drizzle/0055_allow_zero_espresso_marker.sql");
+
+  assert.match(migration, /DROP CONSTRAINT IF EXISTS "product_content_espresso_shots_check"/);
+  assert.match(migration, /"espresso_shots" is null or "espresso_shots" in \(0, 1, 2\)/);
 });
 
 test("ships the Churchill vessel catalog with optimized local icons", async () => {

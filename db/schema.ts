@@ -130,7 +130,7 @@ export const productContent = pgTable("product_content", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("product_content_product_id_uq").on(table.productId),
-  check("product_content_espresso_shots_check", sql`${table.espressoShots} is null or ${table.espressoShots} in (1, 2)`),
+  check("product_content_espresso_shots_check", sql`${table.espressoShots} is null or ${table.espressoShots} in (0, 1, 2)`),
 ]);
 
 export type StaffManualMedia = {

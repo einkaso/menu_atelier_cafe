@@ -19,7 +19,7 @@ type AddonGroup = { name: string; required: boolean; multiple: boolean; maxSelec
 type StaffManual = { instructions: string; media: Array<{ id: string; path: string; type: "IMAGE" | "VIDEO"; name: string }> };
 type ServingTemperature = "warm" | "cold";
 type FulfillmentChoice = "dine-in" | "takeaway";
-type Product = { id: number; dotykackaId: string; name: string; category: string; price: string | null; currency: string; image: string | null; staffManual: StaffManual | null; addonGroups: AddonGroup[]; temperatures: ServingTemperature[]; takeaway: boolean; outsideMenu: boolean; hiddenFromGuest: boolean; kind: string; serving: "glass" | "bottle" | "draught" | "serving" | null; wineColor: string | null; wineStyle: string | null; sweetness: string | null; sparklingType: "SPARKLING" | "NATURALLY_SPARKLING" | null; country: string | null; vegan: boolean; alcoholFree: boolean; espressoShots: 1 | 2 | null; drinkVessel: { id: number; name: string; capacityMl: number; icon: string | null } | null; attributes: Record<string, string> };
+type Product = { id: number; dotykackaId: string; name: string; category: string; price: string | null; currency: string; image: string | null; staffManual: StaffManual | null; addonGroups: AddonGroup[]; temperatures: ServingTemperature[]; takeaway: boolean; outsideMenu: boolean; hiddenFromGuest: boolean; kind: string; serving: "glass" | "bottle" | "draught" | "serving" | null; wineColor: string | null; wineStyle: string | null; sweetness: string | null; sparklingType: "SPARKLING" | "NATURALLY_SPARKLING" | null; country: string | null; vegan: boolean; alcoholFree: boolean; espressoShots: 0 | 1 | 2 | null; drinkVessel: { id: number; name: string; capacityMl: number; icon: string | null } | null; attributes: Record<string, string> };
 type CartItem = { product: Product; quantity: number; note: string; customizations: Addon[]; temperature: ServingTemperature | null; takeaway: boolean };
 type SurveyQuestion = { id: number; prompt: string; kind: "YES_NO" | "SINGLE_CHOICE"; options: string[]; required: boolean };
 type DrinkFilters = { color: string; taste: string; sparkling: string; serving: string; country: string; vegan: boolean; zero: boolean; beerStyle: string; alcohol: string; spiritType: string; spiritStyle: string; spiritTaste: string; spiritOrigin: string; spiritAge: string; alcoType: string; alcoBase: string; alcoTaste: string; alcoServing: string };
@@ -125,8 +125,8 @@ function servingLabel(product: Product) {
 
 function WaiterDrinkVesselMark({ product }: { product: Product }) {
   if (!product.drinkVessel?.icon) return null;
-  return <span className="waiter-drink-vessel-mark" aria-label={`${product.drinkVessel.name}, ${product.drinkVessel.capacityMl} ml${product.espressoShots ? `, ${product.espressoShots} espresso` : ""}`}>
-    <i><img src={product.drinkVessel.icon} alt="" />{product.espressoShots && <b>{product.espressoShots}</b>}</i><small>{product.drinkVessel.capacityMl} ml</small>
+  return <span className="waiter-drink-vessel-mark" aria-label={`${product.drinkVessel.name}, ${product.drinkVessel.capacityMl} ml${product.espressoShots !== null ? `, ${product.espressoShots} espresso` : ""}`}>
+    <i><img src={product.drinkVessel.icon} alt="" />{product.espressoShots !== null && <b>{product.espressoShots}</b>}</i><small>{product.drinkVessel.capacityMl} ml</small>
   </span>;
 }
 

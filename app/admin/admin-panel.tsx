@@ -70,7 +70,7 @@ type Product = {
   veganStatus: "YES" | "NO" | "UNKNOWN";
   tastingNotes: string | null;
   drinkVesselId: number | null;
-  espressoShots: 1 | 2 | null;
+  espressoShots: 0 | 1 | 2 | null;
   attributes: Record<string, string> | null;
   staffInstructions: string | null;
   staffMedia: StaffManualMedia[] | null;
@@ -1945,7 +1945,7 @@ function ProductForm({ product, drinkVessels, wineSources, saving, discovering, 
   const [imageSourceUrl, setImageSourceUrl] = useState(product.imageSourceUrl ?? "");
   const [backdropSourceUrl, setBackdropSourceUrl] = useState("");
   const [drinkVesselId, setDrinkVesselId] = useState(product.drinkVesselId ? String(product.drinkVesselId) : "");
-  const [espressoShots, setEspressoShots] = useState(product.espressoShots ? String(product.espressoShots) : "");
+  const [espressoShots, setEspressoShots] = useState(product.espressoShots === null ? "" : String(product.espressoShots));
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [selectedImages, setSelectedImages] = useState<Record<number, string>>({});
   const [manualSourceUrl, setManualSourceUrl] = useState("");
@@ -2242,9 +2242,9 @@ function ProductForm({ product, drinkVessels, wineSources, saving, discovering, 
               </label>;
             })}
           </div>
-          <label>Liczba espresso<select name="espressoShots" value={espressoShots} onChange={(event) => setEspressoShots(event.target.value)}><option value="">Bez oznaczenia</option><option value="1">1 espresso</option><option value="2">2 espresso</option></select></label>
-          {selectedDrinkVessel && <div className="admin-drink-vessel-preview" aria-label={`Podgląd: ${selectedDrinkVessel.name}, ${selectedDrinkVessel.capacityMl} ml${espressoShots ? `, ${espressoShots} espresso` : ""}`}>
-            <span>{selectedDrinkVessel.iconPath ? <img src={selectedDrinkVessel.iconPath} alt="" /> : <i>ikona<br/>wkrótce</i>}{espressoShots && <b>{espressoShots}</b>}</span><strong>{selectedDrinkVessel.capacityMl} ml</strong><small>{selectedDrinkVessel.name}</small>
+          <label>Liczba espresso<select name="espressoShots" value={espressoShots} onChange={(event) => setEspressoShots(event.target.value)}><option value="">Bez oznaczenia</option><option value="0">0 espresso</option><option value="1">1 espresso</option><option value="2">2 espresso</option></select></label>
+          {selectedDrinkVessel && <div className="admin-drink-vessel-preview" aria-label={`Podgląd: ${selectedDrinkVessel.name}, ${selectedDrinkVessel.capacityMl} ml${espressoShots !== "" ? `, ${espressoShots} espresso` : ""}`}>
+            <span>{selectedDrinkVessel.iconPath ? <img src={selectedDrinkVessel.iconPath} alt="" /> : <i>ikona<br/>wkrótce</i>}{espressoShots !== "" && <b>{espressoShots}</b>}</span><strong>{selectedDrinkVessel.capacityMl} ml</strong><small>{selectedDrinkVessel.name}</small>
           </div>}
           {!drinkVessels.length && <aside className="admin-wide admin-drink-vessel-empty">Katalog naczyń jest gotowy, ale pusty. Ikony i pojemności dodamy po otrzymaniu zdjęć.</aside>}
         </div>
