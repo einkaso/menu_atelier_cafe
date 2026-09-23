@@ -414,6 +414,13 @@
       "when": 1790184600000,
       "tag": "0058_limoncello_shot_image",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1790188200000,
+      "tag": "0059_guinness_zero_product_image",
+      "breakpoints": true
     }
   ]
 }
