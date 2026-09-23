@@ -1074,3 +1074,19 @@ export const lightingCommandItems = pgTable("lighting_command_items", {
   result: text("result"),
   error: text("error"),
 }, (table) => [uniqueIndex("lighting_command_items_command_output_uq").on(table.commandId, table.outputId)]);
+
+export const coldStorageSensorStates = pgTable("cold_storage_sensor_states", {
+  id: serial("id").primaryKey(),
+  bridgeId: integer("bridge_id").notNull().references(() => lightingBridges.id, { onDelete: "cascade" }),
+  sensorKey: text("sensor_key").notNull(),
+  name: text("name").notNull(),
+  temperatureC: numeric("temperature_c", { precision: 6, scale: 2 }).notNull(),
+  alarmThresholdC: numeric("alarm_threshold_c", { precision: 6, scale: 2 }).notNull().default("-8.00"),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+  reportedAt: timestamp("reported_at", { withTimezone: true }).notNull().defaultNow(),
+  active: boolean("active").notNull().default(true),
+}, (table) => [
+  uniqueIndex("cold_storage_sensor_states_key_uq").on(table.sensorKey),
+  index("cold_storage_sensor_states_observed_idx").on(table.observedAt),
+  check("cold_storage_sensor_states_temperature_range", sql`${table.temperatureC} >= -100 AND ${table.temperatureC} <= 100`),
+]);

@@ -109,6 +109,14 @@ test("extracts only upcoming events from the Atelier calendar", async () => {
       <div class="text-gray-200 text-xl lg:text-2xl">Julia &#8211; na żywo</div>
       <a href="https://martabanaszek.pl/sklep/julia-na-zywo/">kup bilet</a>
     </div>
+    <div class="self-stretch p-4 md:p-2 event-card">
+      <div class="text-gray-200 text-3xl lg:text-6xl">25</div>
+      <div class="text-xs lg:text-xl">WRZ</div>
+      <div class="text-xs lg:text-xl">18:00</div>
+      <div class="text-orange-300">muzyka na żywo</div>
+      <div class="text-gray-200 text-xl lg:text-2xl">Czytanie sztuki</div>
+      <a href="https://martabanaszek.pl/sklep/czytanie-sztuki/">wstęp wolny</a>
+    </div>
     <div>Minione</div>
     <div class="self-stretch p-4 md:p-2 event-card">
       <div class="text-gray-200 text-3xl lg:text-6xl">01</div>
@@ -126,6 +134,15 @@ test("extracts only upcoming events from the Atelier calendar", async () => {
       month: "PAŹ",
       time: "19:00",
       sourceUrl: "https://martabanaszek.pl/sklep/julia-na-zywo/",
+    },
+    {
+      id: "czytanie-sztuki",
+      title: "Czytanie sztuki",
+      kind: "muzyka na żywo",
+      day: "25",
+      month: "WRZ",
+      time: "18:00",
+      sourceUrl: "https://martabanaszek.pl/sklep/czytanie-sztuki/",
     },
   ]);
 });
@@ -266,9 +283,12 @@ test("merges drinks and spirits into a visual Alko Bar", async () => {
   assert.ok(source.includes('{id:"alco-bar",pl:"ALKO BAR",en:"ALKO BAR",visualKind:"cocktails"}'));
   assert.ok(source.includes('activeKind==="cocktails"?"ALKO BAR":cat?.[lang]'));
   assert.match(api, /inferredAlcoBarAttributes/);
+  assert.match(api, /inferredAlcoBarAttributesEn/);
   assert.match(source, /if\(kind==="cold"\|\|kind==="cocktails"\)\{setDrinkProduct\(product\)/);
   assert.match(source, /isAlcoBar\?L\("Wróć do Alko Baru","Back to the Alco Bar"\)/);
   assert.match(source, /function AlcoBarFinder/);
+  assert.match(source, /attributeFilterLabels/);
+  assert.match(source, /lang==="pl"\?value:labels\.get\(value\)/);
   assert.match(source, /matchesAlcoAttribute\(p,"cocktailType",alcoType\)/);
   assert.match(source, /matchesAlcoAttribute\(p,"cocktailBase",alcoBase\)/);
   assert.match(source, /matchesAlcoAttribute\(p,"tasteProfile",alcoTaste\)/);
@@ -294,6 +314,8 @@ test("separates wine colour, bubbles, serving and independent features", async (
   assert.match(source, /L\("Podanie","Serving"\)/);
   assert.match(source, /L\("Cechy","Features"\)/);
   assert.match(source, /!zeroOnly\|\|p\.alcoholFree/);
+  assert.match(source, /p\.countryEn&&p\.countryEn!==p\.country\?p\.countryEn:wineValue/);
+  assert.match(source, /p\.tasteEn&&p\.tasteEn!==p\.taste\?p\.tasteEn:wineValue/);
   assert.doesNotMatch(admin, /<option>Musujące<\/option>/);
   assert.match(admin, /name="sparklingType"/);
   assert.match(source, /const bottleOnly=offers\.some\(offer=>offer\.kind==="bottle"\)&&!offers\.some\(offer=>offer\.kind==="glass"\)&&!glassEligible/);
@@ -327,6 +349,10 @@ test("keeps beer descriptions short in the menu and opens a full product preview
   assert.match(source, /<BeerDetailDialog product=\{beerProduct\}/);
   assert.match(source, /compactDetails=\{activeKind==="shelf"\|\|activeKind==="beer"\|\|showChef\|\|previewDetails\}/);
   assert.match(css, /\.motif-beer \.product\.is-compact-detail \.product-info>p\{[^}]*flex:0 0 auto;[^}]*max-height:2\.65em;[^}]*-webkit-line-clamp:2/);
+  assert.match(source, /emphasizeFranziskaner=Boolean\(product&&\/franziskaner\/i\.test\(product\.pl\)\)/);
+  assert.match(source, /wine-detail-visual\$\{emphasizeFranziskaner\?" is-franziskaner":""\}/);
+  assert.match(css, /\.beer-detail-dialog \.wine-detail-visual\.is-franziskaner>img\{height:min\(528px,78%\)\}/);
+  assert.match(css, /\.beer-detail-dialog \.wine-detail-visual\.is-franziskaner>img\{height:min\(140px,20dvh\)\}/);
 });
 
 test("offers useful beer filters even when some Dotykacka attributes are incomplete", async () => {

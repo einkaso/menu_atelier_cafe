@@ -1,9 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;1,500&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../vendor/shadcn-tailwind-4.13.0.css";
+@source "../components";
 
-:root{--navy:#082f3c;--navy-deep:#05252f;--paper:#f7f3ea;--paper-light:#fdfbf6;--ink:#12343d;--muted:#677b7e;--line:rgba(8,47,60,.16);--orange:#ee764b;--pink:#d92d76;--blue:#087eaa}
+:root{--navy:#082f3c;--navy-deep:#05252f;--paper:#f7f3ea;--paper-light:#fdfbf6;--ink:#12343d;--muted:#677b7e;--line:rgba(8,47,60,.16);--orange:#ee764b;--pink:#d92d76;--blue:#087eaa;--app-viewport-left:0px;--app-viewport-top:0px;--app-viewport-width:100vw;--app-viewport-height:100dvh;--app-viewport-center-x:50vw;--app-viewport-center-y:50dvh}
 *{box-sizing:border-box}
 html{background:var(--navy-deep);scroll-behavior:smooth}
-body{margin:0;background:var(--paper);color:var(--ink);font-family:"DM Sans",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"DM Sans",Arial,sans-serif;-webkit-font-smoothing:antialiased}html,body{overscroll-behavior-x:none}html[data-protected-page-check="pending"] body{visibility:hidden}
 .app-landscape-required{display:none}
 @media (orientation:portrait) and (pointer:coarse) and (min-width:600px){html:not([data-app-orientation="portrait"]) .app-landscape-required{position:fixed;z-index:2147483647;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:34px;background:#05252f;color:#fff;text-align:center}html:not([data-app-orientation="portrait"]) .app-landscape-required:before{content:"↻";display:grid;width:84px;height:84px;margin-bottom:12px;place-items:center;border:2px solid #ee764b;border-radius:22px;color:#ff9a6c;font-size:3rem}html:not([data-app-orientation="portrait"]) .app-landscape-required b{font:500 2rem Georgia,serif}html:not([data-app-orientation="portrait"]) .app-landscape-required span{max-width:360px;color:#bfd0d2;font-size:.8rem;line-height:1.5}}
 button,select{font:inherit}button{color:inherit}.app{min-height:100vh;background:var(--paper)}
@@ -264,6 +268,63 @@ footer button{padding:13px 16px;border:1px solid var(--navy);background:transpar
    to that exact Dotykačka product. Missing photographs stay neutral. */
 @media(max-width:900px){.cake-showcase{grid-template-columns:1fr;min-height:0}.cake-showcase-photo{min-height:310px}.cake-showcase-copy{padding:34px 30px 38px}.cake-showcase-copy h2{font-size:clamp(2.3rem,6.6vw,3.55rem)}}
 @media(max-width:900px) and (min-width:601px){.motif-cakes .product.is-cake-card{height:235px;min-height:235px;grid-template-columns:172px minmax(0,1fr) auto}.motif-cakes .product.is-cake-card .product-image{height:203px}}
+
+/* Keep every modal inside the actually visible Safari viewport. iPadOS can pan
+   its visual viewport after form focus, while 100vw/100vh still describe the
+   larger layout viewport. */
+[data-slot="dialog-overlay"],
+[data-slot="alert-dialog-overlay"],
+.allergen-overlay,
+.admin-search-dialog-backdrop,
+.waiter-configurator-backdrop,
+.waiter-prohibition-backdrop,
+.waiter-visibility-backdrop,
+.waiter-manual-backdrop,
+.waiter-instruction-reminder-backdrop,
+.waiter-instruction-reader-backdrop,
+.waiter-workforce-alert-backdrop,
+.reservation-reminder-backdrop {
+  inset: auto !important;
+  left: var(--app-viewport-left) !important;
+  top: var(--app-viewport-top) !important;
+  width: var(--app-viewport-width) !important;
+  height: var(--app-viewport-height) !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: auto;
+}
+
+[data-slot="dialog-content"],
+[data-slot="alert-dialog-content"] {
+  left: var(--app-viewport-center-x) !important;
+  top: var(--app-viewport-center-y) !important;
+  max-width: calc(var(--app-viewport-width) - 20px) !important;
+  max-height: calc(var(--app-viewport-height) - 20px) !important;
+  /* Tailwind 4 centers these elements with the individual `translate`
+     property. Several legacy dialog skins also set a transform-based
+     translation, which would move the modal twice on tablet Safari. */
+  transform: none !important;
+}
+
+.allergen-overlay > *,
+.admin-search-dialog-backdrop > *,
+.waiter-configurator-backdrop > *,
+.waiter-prohibition-backdrop > *,
+.waiter-visibility-backdrop > *,
+.waiter-manual-backdrop > *,
+.waiter-instruction-reminder-backdrop > *,
+.waiter-instruction-reader-backdrop > *,
+.waiter-workforce-alert-backdrop > *,
+.reservation-reminder-backdrop > * {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (pointer: coarse) {
+    input, select, textarea { font-size: 16px !important; }
+  }
+}
 @media(max-width:760px){.cake-detail-dialog .wine-detail-copy{padding-bottom:20px}.cake-detail-logo{width:108px;max-height:36px;margin-bottom:15px}.cake-detail-dialog .wine-detail-visual{position:relative;min-height:230px;flex-basis:230px;padding:0}.cake-detail-dialog .wine-detail-visual>img{width:100%;height:100%;object-fit:cover}.cake-detail-dialog .wine-detail-prices{right:14px;bottom:14px;margin:0;padding:8px 11px}}
 @media(max-width:600px){.cake-showcase{margin-bottom:16px}.cake-showcase-photo{min-height:235px}.cake-showcase-photo span{left:12px;bottom:12px;font-size:.5rem}.cake-showcase-copy{padding:27px 22px 31px}.cake-showcase-copy>img{width:110px;max-height:42px;margin-bottom:18px}.cake-showcase-copy h2{margin-block:8px 15px;font-size:2.35rem}.cake-showcase-copy p{font-size:.72rem;-webkit-line-clamp:2}.cake-showcase-copy em{margin-top:15px}.cake-daily-note{display:grid;gap:5px;padding:12px 14px}.cake-daily-note span{text-align:left}.motif-cakes .product.is-cake-card{height:260px;min-height:260px;grid-template-columns:112px minmax(0,1fr) auto;gap:13px;padding:14px}.motif-cakes .product.is-cake-card .product-image{height:232px}.motif-cakes .product.is-cake-card .product-heading{min-height:3.05rem}.motif-cakes .product.is-cake-card .product-info>p{min-height:2.7em;max-height:2.7em;-webkit-line-clamp:2}.cake-card-footer{min-height:39px;padding-top:7px}.cake-card-logo{width:69px;max-height:19px}.cake-read-more{margin-top:4px;font-size:.54rem}}
 .alternative-bean-placeholder{font-size:0;background:#fff url(/coffee-methods/churchill-sapphire-mug.webp) center/contain no-repeat}
@@ -271,3 +332,8 @@ footer button{padding:13px 16px;border:1px solid var(--navy);background:transpar
 @media(max-width:900px) and (min-width:601px){.motif-coffee .product.is-description-preview .product-actions{grid-column:3;flex-direction:column;align-items:flex-end}}
 @media(max-width:600px){.motif-coffee .product.is-description-preview.product-visual{height:auto;min-height:172px;grid-template-columns:88px minmax(0,1fr);gap:13px}.motif-coffee .product.is-description-preview .product-image{height:142px}.motif-coffee .product.is-description-preview.product-visual .product-info{height:142px}.motif-coffee .product.is-description-preview .product-info>p{max-height:2.9em;-webkit-line-clamp:2}.motif-coffee .product.is-description-preview .product-actions{grid-column:2;flex-direction:row;align-items:flex-end;min-width:0}}
 @media(max-width:1280px) and (min-width:901px){.motif-cold .product.has-flavor-choice{grid-column:1/-1}.motif-cold .product.has-flavor-choice .product-info{overflow:visible}}
+
+/* Franziskaner is a tall, narrow bottle. Its source cutout already reaches the
+   canvas edges, so the preview gives it more height instead of cropping it. */
+@media(min-width:761px){.beer-detail-dialog .wine-detail-visual.is-franziskaner>img{height:min(528px,78%)}}
+@media(max-width:760px){.beer-detail-dialog .wine-detail-visual.is-franziskaner>img{height:min(140px,20dvh)}}

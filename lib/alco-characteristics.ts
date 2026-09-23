@@ -39,3 +39,41 @@ export function inferredAlcoBarAttributes(name: string, description?: string | n
 
   return attributes;
 }
+
+const alcoAttributeTranslations: Record<string, Record<string, string>> = {
+  cocktailType: {
+    "alkohol na butelke": "Bottled spirit",
+    "koktajl klasyczny": "Classic cocktail",
+  },
+  cocktailBase: {
+    "wodka": "Vodka",
+    "wermut": "Vermouth",
+    "likier": "Liqueur",
+  },
+  tasteProfile: {
+    "wytrawny": "Dry",
+    "slodki": "Sweet",
+    "gorzki": "Bitter",
+    "cytrusowy i kwasny": "Citrus & tart",
+    "owocowy": "Fruity",
+    "kremowy": "Creamy",
+    "korzenny": "Spiced",
+  },
+  servingStyle: {
+    "butelka": "Bottle",
+    "kieliszek do wina": "Wine glass",
+    "szklo koktajlowe": "Cocktail glass",
+  },
+};
+
+export function translatedAlcoAttributeValue(key: string, value: string) {
+  return value.split(/\s*([·,;])\s*/).map((part) => {
+    if (/^[·,;]$/.test(part)) return ` ${part} `;
+    return alcoAttributeTranslations[key]?.[normalized(part).trim()] ?? part.trim();
+  }).join("").trim();
+}
+
+export function inferredAlcoBarAttributesEn(name: string, description?: string | null, group?: string | null) {
+  return Object.fromEntries(Object.entries(inferredAlcoBarAttributes(name, description, group))
+    .map(([key, value]) => [key, translatedAlcoAttributeValue(key, value)]));
+}

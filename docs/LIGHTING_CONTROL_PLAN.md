@@ -2,6 +2,14 @@
 
 Stan dokumentu: 21 września 2026 r.
 
+## Wynik inwentaryzacji na miejscu — 23 września 2026 r.
+
+Odczyt tylko do wglądu w lokalnej sieci Atelier wykrył 26 urządzeń BleBox: 21 sterowników przekaźnikowych, 2 ściemniacze oraz 3 urządzenia bez wyjść oświetleniowych (sterownik ekranu, czujniki i przyciski scen). Sterowniki udostępniają łącznie 34 technicznie sterowalne wyjścia, lecz część z nich zasila głośniki, zapach, urządzenie gastronomiczne albo jest opisana jako wolna. Nie wolno automatycznie uznać każdego wykrytego wyjścia za lampę.
+
+Przyjmujemy model: automatyczne wykrycie urządzenia i kanałów, a następnie jednorazowe zatwierdzenie przez administratora wyłącznie rzeczywistych punktów światła. Zmiana adresu DHCP nie wymaga ponownego dodawania urządzenia, ponieważ tożsamością jest stabilny identyfikator BleBox. Adres pozostaje bieżącą trasą do urządzenia; docelowo warto również utworzyć rezerwacje DHCP.
+
+Narzędzie odczytowe znajduje się w `bridge/lighting/discover.mjs`. Nie wykonuje żadnych operacji sterujących. Inwentaryzacja potwierdziła także potrzebę adaptera `dimmerBox_v2`, który nie był wymieniony w pierwotnym zestawie pierwszej wersji.
+
 ## Decyzja architektoniczna
 
 Panel powstaje w istniejącej strefie pracownika pod adresem `/kelner/oswietlenie`, ale przeglądarka i serwer `menu.martabanaszek.pl` nie łączą się bezpośrednio ze sterownikami BleBox.

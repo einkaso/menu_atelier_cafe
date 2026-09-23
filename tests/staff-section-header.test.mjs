@@ -14,6 +14,8 @@ test("orders every staff section header as logo, title and right-edge controls",
   assert.ok(header.indexOf("waiter-section-title") < header.indexOf("waiter-section-controls"));
   assert.match(header, /waiter-section-controls[\s\S]*← Menu[\s\S]*Wyloguj/);
   assert.match(styles, /\.waiter-section-header \.waiter-section-controls \{[\s\S]*margin: 0 0 0 auto !important;/);
+  assert.match(component, /window\.location\.replace\("\/"\)/);
+  assert.doesNotMatch(component, /window\.location\.replace\("\/kelner\?session=expired"\)/);
 });
 
 test("uses the larger café logo on the workforce page", async () => {

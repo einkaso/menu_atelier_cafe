@@ -99,20 +99,22 @@
 }
 
 .admin-shell .admin-topbar-leading {
-  order: -1;
+  order: initial;
   flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .admin-shell .admin-section-topbar .admin-top-actions {
   margin-left: 0;
+  gap: 12px;
 }
 
-.admin-shell .instructions-admin > .admin-section-topbar {
+.admin-shell .admin-section-topbar {
   justify-content: flex-start;
 }
 
-.admin-shell .instructions-admin > .admin-section-topbar .admin-topbar-leading,
-.admin-shell .instructions-admin > .admin-section-topbar .admin-top-actions {
+.admin-shell .admin-section-topbar .admin-topbar-leading,
+.admin-shell .admin-section-topbar .admin-top-actions {
   position: static;
   z-index: auto;
   top: auto;
@@ -121,82 +123,15 @@
   box-shadow: none;
 }
 
-.admin-shell .instructions-admin > .admin-section-topbar .admin-topbar-leading {
-  order: 1;
-}
-
-.admin-shell .instructions-admin > .admin-section-topbar .admin-top-actions {
+.admin-shell .admin-section-topbar .admin-topbar-leading {
+  order: initial;
   margin-left: auto;
 }
 
-.admin-shell .workforce-admin > .admin-section-topbar {
-  justify-content: flex-start;
-}
-
-.admin-shell .workforce-admin > .admin-section-topbar .admin-topbar-leading,
-.admin-shell .workforce-admin > .admin-section-topbar .admin-top-actions {
-  position: static;
-  z-index: auto;
-  top: auto;
-  overflow: visible;
-  background: transparent;
-  box-shadow: none;
-}
-
-.admin-shell .workforce-admin > .admin-section-topbar .admin-topbar-leading {
-  order: 1;
-}
-
-.admin-shell .workforce-admin > .admin-section-topbar .admin-top-actions {
-  margin-left: auto;
-}
-
-.admin-shell .settlements-admin > .admin-section-topbar {
-  justify-content: flex-start;
-}
-
-.admin-shell .settlements-admin > .admin-section-topbar .admin-topbar-leading,
-.admin-shell .settlements-admin > .admin-section-topbar .admin-top-actions {
-  position: static;
-  z-index: auto;
-  top: auto;
-  overflow: visible;
-  background: transparent;
-  box-shadow: none;
-}
-
-.admin-shell .settlements-admin > .admin-section-topbar .admin-topbar-leading {
-  order: 1;
-}
-
-.admin-shell .settlements-admin > .admin-section-topbar .admin-top-actions {
-  margin-left: auto;
-}
-
-.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar {
-  justify-content: flex-start;
-}
-
-.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar .admin-topbar-leading,
-.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar .admin-top-actions {
-  position: static;
-  z-index: auto;
-  top: auto;
-  overflow: visible;
-  background: transparent;
-  box-shadow: none;
-}
-
-.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar .admin-topbar-leading {
-  order: 1;
-}
-
-.admin-shell :is(.inventory-admin, .waiter-admin, .reservations-admin) > .admin-section-topbar .admin-top-actions {
-  margin-left: auto;
-}
-
-.admin-shell .reservations-admin > .admin-section-topbar .admin-topbar-leading {
-  margin-left: auto;
+.admin-shell .admin-section-topbar .admin-top-actions {
+  order: initial;
+  margin-left: 0;
+  border: 0;
 }
 
 @media (max-width: 1280px) {
@@ -213,6 +148,10 @@
 
   .admin-shell .admin-dashboard > .admin-topbar .admin-top-actions {
     margin-left: auto;
+  }
+
+  .admin-shell .admin-dashboard > .admin-section-topbar .admin-top-actions {
+    margin-left: 0;
   }
 }
 
@@ -246,12 +185,16 @@
   }
 
   .admin-shell .admin-section-topbar .admin-topbar-leading {
+    order: 4;
     width: auto;
+    margin-left: auto;
   }
 
   .admin-shell .admin-section-topbar .admin-top-actions {
-    width: 100%;
-    flex-basis: 100%;
+    order: 3;
+    width: auto;
+    flex: 1 1 auto;
     overflow-x: auto;
+    gap: 10px;
   }
 }

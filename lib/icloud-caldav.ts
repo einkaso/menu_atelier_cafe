@@ -78,6 +78,18 @@ export async function readIcloudReservationEvents(from: Date, to: Date) {
   return parseCalendarEvents(chunks.join("\n"), from, to, 2_000);
 }
 
+export async function icloudAppReservationEventExists(id: number) {
+  const connection = await storedConnection();
+  if (!connection) return null;
+  const response = await caldavRequest(eventUrl(connection.calendarUrl, id), connection.credentials, {
+    method: "GET",
+    headers: { accept: "text/calendar" },
+  });
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error(`iCloud nie potwierdził rezerwacji (błąd ${response.status}).`);
+  return true;
+}
+
 export async function syncAppReservationsToIcloud() {
   const connection = await storedConnection();
   if (!connection) return { connected: false, exported: 0, failed: 0 };

@@ -5,12 +5,17 @@ import { usePathname } from "next/navigation";
 import WaiterInstructionEntry from "./instruction-reminder";
 import WaiterWorkforceEntry from "./workforce-entry";
 import ReservationReminder from "./reservation-reminder";
-import { clearWaiterSessionToken } from "./waiter-session-client";
+import { clearWaiterSessionToken, waiterSessionHeaders } from "./waiter-session-client";
 
 export function WaiterSectionHeader({ eyebrow, title, employeeName, className = "" }: { eyebrow: string; title: string; employeeName?: string; className?: string }) {
-  function logout() {
+  async function logout() {
+    const response = await fetch("/api/waiter/session", { method: "DELETE", credentials: "same-origin", headers: waiterSessionHeaders() }).catch(() => null);
+    if (!response?.ok) {
+      window.alert("Nie udało się bezpiecznie zakończyć sesji. Nie przekazuj jeszcze tabletu innej osobie.");
+      return;
+    }
     clearWaiterSessionToken();
-    window.location.replace("/kelner");
+    window.location.replace("/");
   }
 
   return <header className={`waiter-section-header ${className}`.trim()}>
@@ -22,7 +27,7 @@ export function WaiterSectionHeader({ eyebrow, title, employeeName, className = 
     </div>
     <nav className="waiter-section-controls" aria-label="Nawigacja pracownika">
       <Link href="/kelner">← Menu</Link>
-      <button type="button" onClick={logout}>Wyloguj</button>
+      <button type="button" onClick={() => void logout()}>Wyloguj</button>
     </nav>
   </header>;
 }

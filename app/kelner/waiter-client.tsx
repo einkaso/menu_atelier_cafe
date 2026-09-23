@@ -23,6 +23,7 @@ type Product = { id: number; dotykackaId: string; name: string; category: string
 type CartItem = { product: Product; quantity: number; note: string; customizations: Addon[]; temperature: ServingTemperature | null; takeaway: boolean };
 type SurveyQuestion = { id: number; prompt: string; kind: "YES_NO" | "SINGLE_CHOICE"; options: string[]; required: boolean };
 type DrinkFilters = { color: string; taste: string; sparkling: string; serving: string; country: string; vegan: boolean; zero: boolean; beerStyle: string; alcohol: string; spiritType: string; spiritStyle: string; spiritTaste: string; spiritOrigin: string; spiritAge: string; alcoType: string; alcoBase: string; alcoTaste: string; alcoServing: string };
+type ColdStorageSensor = { key: string; name: string; temperatureC: number | null; thresholdC: number; observedAt: string | null; status: "OK" | "ALERT" | "STALE" | "MISSING" };
 
 const moneyFormatter = new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const money = (value: number) => moneyFormatter.format(value);
@@ -156,6 +157,18 @@ function AlcoholSaleWarning({ product, onClose }: { product: Product; onClose: (
   </div>;
 }
 
+function ColdStorageAlert({ sensors }: { sensors: ColdStorageSensor[] }) {
+  const problems = sensors.filter((sensor) => sensor.status !== "OK");
+  if (!problems.length) return null;
+  const temperatureAlerts = problems.filter((sensor) => sensor.status === "ALERT");
+  const unavailable = problems.filter((sensor) => sensor.status === "STALE" || sensor.status === "MISSING");
+  return <aside className={`waiter-cold-storage-alert${temperatureAlerts.length ? " is-critical" : " is-unavailable"}`} role="alert" aria-live="assertive">
+    <div className="waiter-cold-storage-icon" aria-hidden="true">!</div>
+    <div><span>{temperatureAlerts.length ? "ALARM TEMPERATURY" : "BRAK AKTUALNEGO ODCZYTU"}</span><h2>{temperatureAlerts.length ? "Temperatura zamrażarki jest za wysoka" : "Sprawdź zamrażarki i czujnik BleBox"}</h2><p>{problems.map((sensor) => `${sensor.name}: ${sensor.temperatureC === null ? "brak danych" : `${sensor.temperatureC.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}°C`}`).join(" · ")}</p>{unavailable.length > 0 && <small>Brak świeżych danych również wymaga sprawdzenia urządzeń na miejscu.</small>}</div>
+    <strong>Próg alarmu<br/>−8,00°C</strong>
+  </aside>;
+}
+
 function WaiterSearch({ onQueryChange }: { onQueryChange: (query: string) => void }) {
   const input = useRef<HTMLInputElement | null>(null);
   const timer = useRef<number | null>(null);
@@ -203,7 +216,7 @@ function WaiterSearch({ onQueryChange }: { onQueryChange: (query: string) => voi
     onQueryChange("");
     input.current.focus();
   }
-  return <label className="waiter-search">Szukaj<span><input ref={input} type="text" defaultValue="" placeholder="Kawa, ciasto, piwo…" autoComplete="off" autoCorrect="off" spellCheck={false}/><button type="button" onPointerDown={(event) => event.preventDefault()} onClick={clearSearch}>Wyczyść</button></span></label>;
+  return <label className="waiter-search">Szukaj<span><i className="waiter-search-icon" aria-hidden="true"/><input ref={input} type="text" defaultValue="" placeholder="Kawa, ciasto, piwo…" autoComplete="off" autoCorrect="off" spellCheck={false}/><button type="button" onPointerDown={(event) => event.preventDefault()} onClick={clearSearch}>Wyczyść</button></span></label>;
 }
 
 function StaffManualDialog({ product, onClose }: { product: Product; onClose: () => void }) {
@@ -270,6 +283,7 @@ export default function WaiterClient() {
   const [guestReceipt, setGuestReceipt] = useState<GuestReceipt | null>(null);
   const [approvedTips, setApprovedTips] = useState({ count: 0, total: "0.00" });
   const [inventoryTaskCount, setInventoryTaskCount] = useState(0);
+  const [coldStorageSensors, setColdStorageSensors] = useState<ColdStorageSensor[]>([]);
   const [manualProduct, setManualProduct] = useState<Product | null>(null);
   const [alcoholSaleWarning, setAlcoholSaleWarning] = useState<Product | null>(null);
   const [visibilityChange, setVisibilityChange] = useState<{ product: Product; visible: boolean } | null>(null);
@@ -325,6 +339,12 @@ export default function WaiterClient() {
     const body = await response.json().catch(() => ({})) as { stages?: Array<{ status: string }> };
     setInventoryTaskCount((body.stages ?? []).filter((stage) => ["ASSIGNED", "IN_PROGRESS", "CHANGES_REQUESTED"].includes(stage.status)).length);
   }, []);
+  const loadColdStorageAlerts = useCallback(async () => {
+    const response = await fetch("/api/waiter/environment-alerts", { cache: "no-store", credentials: "same-origin", headers: waiterSessionHeaders() }).catch(() => null);
+    if (!response?.ok) return;
+    const body = await response.json().catch(() => ({})) as { sensors?: ColdStorageSensor[] };
+    setColdStorageSensors(body.sensors ?? []);
+  }, []);
   useEffect(() => {
     if (!employee) return;
     const refresh = () => { void Promise.all([loadApprovedTips(), loadInventoryTaskCount()]); };
@@ -338,6 +358,20 @@ export default function WaiterClient() {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [employee, loadApprovedTips, loadInventoryTaskCount]);
+  useEffect(() => {
+    if (!employee) return;
+    const refresh = () => { if (document.visibilityState === "visible") void loadColdStorageAlerts(); };
+    const initialTimer = window.setTimeout(refresh, 0);
+    const timer = window.setInterval(refresh, 30 * 1000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [employee, loadColdStorageAlerts]);
   useEffect(() => {
     if (!employee) return;
     const refresh = async () => {
@@ -370,11 +404,13 @@ export default function WaiterClient() {
     } finally {
       clearWaiterSessionToken();
     }
-    setEmployee(null); setCart({}); setReviewing(false); setSurveying(false); setSurveyAnswers({}); setOrderNote(""); setPin(""); setError(""); setArea("orders"); setApprovedTips({ count: 0, total: "0.00" }); setInventoryTaskCount(0);
+    setEmployee(null); setCart({}); setReviewing(false); setSurveying(false); setSurveyAnswers({}); setOrderNote(""); setPin(""); setError(""); setArea("orders"); setApprovedTips({ count: 0, total: "0.00" }); setInventoryTaskCount(0); setColdStorageSensors([]);
     window.location.replace("/");
   }
 
-  function handoffToGuest(receipt: GuestReceipt) {
+  async function handoffToGuest(receipt: GuestReceipt) {
+    const response = await fetch("/api/waiter/session", { method: "DELETE", credentials: "same-origin", headers: waiterSessionHeaders() });
+    if (!response.ok) throw new Error("Nie udało się zakończyć sesji pracownika.");
     clearWaiterSessionToken();
     setEmployee(null);
     setGuestReceipt(receipt);
@@ -509,7 +545,7 @@ export default function WaiterClient() {
 
   if (guestReceipt) return <GuestReceiptView receipt={guestReceipt}/>;
   if (loading) return <main className="waiter-login"><img src="/logo-cafe.png" alt="Marta Banaszek atelier-café"/><p>Przygotowuję strefę pracownika…</p></main>;
-  if (!employee) return <main className="waiter-login"><section className="waiter-login-shell"><aside className="waiter-login-brand"><img src="/logo-cafe.png" alt="Marta Banaszek atelier-café" onLoad={(event) => matchLoginLogoBackground(event.currentTarget)}/><div><span>PANEL ZESPOŁU</span><h2>Witaj w Atelier Café</h2><p>Zaloguj się do codziennych narzędzi zespołu.</p></div></aside><section className="waiter-login-pin"><span>STREFA PRACOWNIKA</span><h1>Podaj swój PIN</h1><p>Po wysłaniu zamówienia lub rozliczenia tablet automatycznie wróci do menu dla gości.</p><form onSubmit={login}><input value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 8))} type="password" inputMode="numeric" pattern="[0-9]{4,8}" autoComplete="off" enterKeyHint="go" aria-label="PIN pracownika"/><div className="waiter-keypad">{[1,2,3,4,5,6,7,8,9].map((digit) => <button type="button" key={digit} onClick={() => setPin((value) => `${value}${digit}`.slice(0, 8))}>{digit}</button>)}<button type="button" onClick={() => setPin("")}>C</button><button type="button" onClick={() => setPin((value) => `${value}0`.slice(0, 8))}>0</button><button type="button" aria-label="Usuń ostatnią cyfrę" onClick={() => setPin((value) => value.slice(0, -1))}>⌫</button></div>{error && <p className="waiter-error" role="alert">{error}</p>}<button className="waiter-login-button" disabled={!/^\d{4,8}$/.test(pin)}>Wejdź do panelu</button></form><Link href="/">← Wróć do menu gościa</Link></section></section></main>;
+  if (!employee) return <main className="waiter-login"><section className="waiter-login-shell" role="dialog" aria-modal="true" aria-labelledby="waiter-login-title"><Link className="waiter-login-close" href="/" aria-label="Zamknij logowanie">×</Link><aside className="waiter-login-brand"><img src="/logo-cafe.png" alt="Marta Banaszek atelier-café" onLoad={(event) => matchLoginLogoBackground(event.currentTarget)}/><div><span>PANEL ZESPOŁU</span><h2>Witaj w Atelier Café</h2><p>Zaloguj się do codziennych narzędzi zespołu.</p></div></aside><section className="waiter-login-pin"><span>STREFA PRACOWNIKA</span><h1 id="waiter-login-title">Podaj swój PIN</h1><p>Po wysłaniu zamówienia lub rozliczenia tablet automatycznie wróci do menu dla gości.</p><form onSubmit={login}><input value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 8))} type="password" inputMode="numeric" pattern="[0-9]{4,8}" autoComplete="off" enterKeyHint="go" aria-label="PIN pracownika"/><div className="waiter-keypad">{[1,2,3,4,5,6,7,8,9].map((digit) => <button type="button" key={digit} onClick={() => setPin((value) => `${value}${digit}`.slice(0, 8))}>{digit}</button>)}<button type="button" onClick={() => setPin("")}>C</button><button type="button" onClick={() => setPin((value) => `${value}0`.slice(0, 8))}>0</button><button type="button" aria-label="Usuń ostatnią cyfrę" onClick={() => setPin((value) => value.slice(0, -1))}>⌫</button></div>{error && <p className="waiter-error" role="alert">{error}</p>}<button className="waiter-login-button" disabled={!/^\d{4,8}$/.test(pin)}>Wejdź do panelu</button></form><Link href="/">← Wróć do menu gościa</Link></section></section></main>;
 
   if (area === "settlement") return <SettlementForm employee={employee} onBack={() => setArea("orders")} onLogout={() => void logout()}/>;
   if (area === "guest-receipts") return <GuestReceiptPicker employeeName={employee.name} onBack={() => setArea("orders")} onHandoff={handoffToGuest} onLogout={() => void logout()}/>;
@@ -521,12 +557,15 @@ export default function WaiterClient() {
 
   if (reviewing) return <main className="waiter-app"><header className="waiter-header"><button onClick={() => setReviewing(false)}>← Wróć</button><div><span>Zamówienie</span><strong>{employee.name}</strong></div><button onClick={logout}>Wyloguj</button></header><section className="waiter-review"><div className="waiter-review-title"><span>SPRAWDŹ PRZED WYSŁANIEM</span><h1>Stolik {tables.find((table) => table.dotykackaId === tableId)?.name ?? "—"}</h1><p>{guestCount} {guestCount === 1 ? "gość" : "gości"} · {itemCount} pozycji</p></div>{items.map((item) => <article className="waiter-review-item" key={item.lineKey}><div><h2>{item.product.name}</h2>{(item.product.takeaway||item.temperature||item.customizations.length>0)&&<p className="waiter-item-options">{[item.product.takeaway?(item.takeaway?"Na wynos":"Na miejscu"):"",item.temperature?temperatureLabel(item.temperature):"",...item.customizations.map((addon)=>addon.name)].filter(Boolean).join(" · ")}</p>}<strong>{money(itemUnitPrice(item) * item.quantity)} zł</strong></div><div className="waiter-quantity"><button onClick={() => changeLine(item.lineKey, -1)}>−</button><b>{item.quantity}</b><button onClick={() => changeLine(item.lineKey, 1)}>+</button></div><label>Uwagi do pozycji<input value={item.note} maxLength={500} onChange={(event) => itemNote(item.lineKey, event.target.value)} placeholder="np. bez lodu, osobno…"/></label></article>)}<label className="waiter-order-note">Uwagi do całego zamówienia<textarea value={orderNote} maxLength={1000} onChange={(event) => setOrderNote(event.target.value)} placeholder="Informacja dla baru lub kuchni"/></label>{error && <p className="waiter-error" role="alert">{error}</p>}<footer><div><span>Razem</span><strong>{money(total)} zł</strong></div><button disabled={!items.length || (!surveyQuestions.length && !posEnabled)} onClick={() => surveyQuestions.length ? setSurveying(true) : void sendOrder()}>{surveyQuestions.length ? "Dalej: krótka ankieta →" : posEnabled ? "Wyślij do Dotykački" : "Wysyłka jeszcze zablokowana"}</button>{!posEnabled && !surveyQuestions.length && <small>Najpierw sprawdzimy połączenie na środowisku testowym. Ten ekran nie może teraz utworzyć zamówienia ani paragonu.</small>}</footer></section>{alcoholSaleWarning&&<AlcoholSaleWarning product={alcoholSaleWarning} onClose={()=>setAlcoholSaleWarning(null)}/>}</main>;
 
-  return <main className="waiter-app"><header className="waiter-header waiter-main-header">
-    <section className="waiter-main-brand"><img className="waiter-main-logo" src="/logo-cafe.png" alt="Marta Banaszek atelier-café"/><div className="waiter-section-title waiter-main-title"><span>STREFA ZESPOŁU</span><strong>PANEL PRACOWNIKA KAWIARNI</strong></div></section>
-    <nav className="waiter-main-tools" aria-label="Narzędzia pracownika"><WaiterInstructionEntry/><Link href="/kelner/grafik">Grafik</Link><Link href="/kelner/rezerwacje">Rezerwacje</Link><Link className="waiter-inventory-entry" href="/kelner/inventory">Inwentaryzacja{inventoryTaskCount > 0 && <b>{inventoryTaskCount}</b>}</Link><button className="waiter-settlement-entry" onClick={() => setArea("settlement")}>Rozliczanie</button><Link className="waiter-lighting-entry" href="/kelner/oswietlenie"><span>Oświetlenie</span><small>W przygotowaniu</small></Link></nav>
+  const activeTable = tables.find((table) => table.dotykackaId === tableId);
+  const activeTableNumber = activeTable?.name.match(/\d+/)?.[0] ?? activeTable?.name ?? "—";
+
+  return <main className="waiter-app waiter-ordering-app"><label className={`waiter-table-focus${activeTable ? " has-table" : ""}`}><span>STOLIK</span><strong>{activeTableNumber}</strong><small>{activeTable ? activeTable.name : "Dotknij i wybierz"}</small><select value={tableId} onChange={(event) => setTableId(event.target.value)} aria-label="Wybierz stolik"><option value="">Wybierz stolik</option>{tables.map((table) => <option key={table.dotykackaId} value={table.dotykackaId}>{table.name}</option>)}</select></label><header className="waiter-header waiter-main-header">
+    <section className="waiter-main-brand"><img className="waiter-main-logo" src="/logo-cafe.png" alt="Marta Banaszek atelier-café"/><div className="waiter-section-title waiter-main-title"><span>STREFA ZESPOŁU</span><strong>PANEL PRACOWNIKA</strong></div></section>
+    <nav className="waiter-main-tools" aria-label="Narzędzia pracownika"><WaiterInstructionEntry/><Link href="/kelner/grafik">Grafik</Link><Link href="/kelner/rezerwacje">Rezerwacje</Link><Link className="waiter-inventory-entry" href="/kelner/inventory">Inwentaryzacja{inventoryTaskCount > 0 && <b>{inventoryTaskCount}</b>}</Link><button className="waiter-settlement-entry" onClick={() => setArea("settlement")}>Rozliczanie</button><Link className="waiter-lighting-entry" href="/kelner/oswietlenie"><span>Oświetlenie</span><small>Sterowanie</small></Link></nav>
     <div className="waiter-employee-summary"><span>Zalogowany pracownik</span><strong>{employee.name}</strong><small>Zatwierdzone napiwki do wypłaty: <b>{money(Number(approvedTips.total))} zł</b>{approvedTips.count > 0 && <> · {approvedTips.count} {approvedTips.count === 1 ? "pozycja" : "pozycje"}</>}</small></div>
-    <nav className="waiter-main-controls" aria-label="Rachunek i wyjście ze strefy pracownika"><button className="waiter-guest-receipt-entry" onClick={() => setArea("guest-receipts")}>Rachunek dla gościa</button><span className="waiter-main-exit-controls"><Link href="/">← Menu</Link><button onClick={logout}>Wyloguj</button></span></nav>
-  </header>{inventoryTaskCount > 0 && <Link className="waiter-inventory-alert" href="/kelner/inventory"><span>Masz {inventoryTaskCount} {inventoryTaskCount === 1 ? "zadanie inwentaryzacyjne" : "zadania inwentaryzacyjne"} do wykonania</span><b>Otwórz zadania →</b></Link>}<section className="waiter-context"><label>Stolik<select value={tableId} onChange={(event) => setTableId(event.target.value)}><option value="">Wybierz stolik</option>{tables.map((table) => <option key={table.dotykackaId} value={table.dotykackaId}>{table.name}</option>)}</select></label><label>Liczba gości<div className="waiter-quantity"><button onClick={() => setGuestCount((value) => Math.max(1, value - 1))}>−</button><b>{guestCount}</b><button onClick={() => setGuestCount((value) => Math.min(30, value + 1))}>+</button></div></label><WaiterSearch onQueryChange={setQuery}/></section><nav className="waiter-categories">{categories.map((item) => <button key={item} className={`${category === item ? "is-active" : ""}${item === OUTSIDE_MENU ? " is-outside-menu" : ""}`} onClick={() => chooseCategory(item)}>{item}</button>)}</nav>{category !== "Wszystkie" && category !== OUTSIDE_MENU && hiddenMenuItemCount > 0 && <aside className={`waiter-hidden-menu-toolbar${showHiddenMenuItems?" is-showing-hidden":""}`}><div><b>{showHiddenMenuItems?"Pozycje ukryte dla gościa":"Aktualna karta gościa"}</b><span>{showHiddenMenuItems?"Te produkty mają tag MENU, ale nie są teraz widoczne w cyfrowej karcie.":`${hiddenMenuItemCount} ${hiddenMenuItemCount===1?"pozycja ukryta":"pozycji ukrytych"} w tej kategorii.`}</span></div><button type="button" onClick={()=>{setShowHiddenMenuItems(value=>!value);setVisibleLimit(RESULT_PAGE_SIZE)}}>{showHiddenMenuItems?"Pokaż aktualne menu":`Pokaż ukryte (${hiddenMenuItemCount})`}</button></aside>}{category === OUTSIDE_MENU && <aside className="waiter-outside-menu-note"><b>Pozycje spoza karty gościa</b><span>Aktywne produkty oznaczone jako wyświetlane w Dotykačce, bez tagów MENU i PÓŁKA. W tej sekcji nie pokazujemy produktów wyłączonych w POS.</span></aside>}{activeDrinkKind && <WaiterDrinkFilters kind={activeDrinkKind} products={categoryProducts} filters={drinkFilters} onChange={setDrinkFilters}/>}<section className="waiter-products">{visible.map((product) => {
+    <nav className="waiter-main-controls" aria-label="Rachunek i wyjście ze strefy pracownika"><button className="waiter-guest-receipt-entry" onClick={() => setArea("guest-receipts")}>Rachunek dla gościa</button><span className="waiter-main-exit-controls"><button onClick={() => void logout()}>← Menu gościa</button><button onClick={logout}>Wyloguj</button></span></nav>
+  </header><ColdStorageAlert sensors={coldStorageSensors}/>{inventoryTaskCount > 0 && <Link className="waiter-inventory-alert" href="/kelner/inventory"><span>Masz {inventoryTaskCount} {inventoryTaskCount === 1 ? "zadanie inwentaryzacyjne" : "zadania inwentaryzacyjne"} do wykonania</span><b>Otwórz zadania →</b></Link>}<section className="waiter-context"><label className="waiter-guest-count">Liczba gości<div className="waiter-quantity"><button onClick={() => setGuestCount((value) => Math.max(1, value - 1))}>−</button><b>{guestCount}</b><button onClick={() => setGuestCount((value) => Math.min(30, value + 1))}>+</button></div></label><WaiterSearch onQueryChange={setQuery}/></section><nav className="waiter-categories">{categories.map((item) => <button key={item} className={`${category === item ? "is-active" : ""}${item === OUTSIDE_MENU ? " is-outside-menu" : ""}`} onClick={() => chooseCategory(item)}>{item}</button>)}</nav>{category !== "Wszystkie" && category !== OUTSIDE_MENU && hiddenMenuItemCount > 0 && <aside className={`waiter-hidden-menu-toolbar${showHiddenMenuItems?" is-showing-hidden":""}`}><div><b>{showHiddenMenuItems?"Pozycje ukryte dla gościa":"Aktualna karta gościa"}</b><span>{showHiddenMenuItems?"Te produkty mają tag MENU, ale nie są teraz widoczne w cyfrowej karcie.":`${hiddenMenuItemCount} ${hiddenMenuItemCount===1?"pozycja ukryta":"pozycji ukrytych"} w tej kategorii.`}</span></div><button type="button" onClick={()=>{setShowHiddenMenuItems(value=>!value);setVisibleLimit(RESULT_PAGE_SIZE)}}>{showHiddenMenuItems?"Pokaż aktualne menu":`Pokaż ukryte (${hiddenMenuItemCount})`}</button></aside>}{category === OUTSIDE_MENU && <aside className="waiter-outside-menu-note"><b>Pozycje spoza karty gościa</b><span>Aktywne produkty oznaczone jako wyświetlane w Dotykačce, bez tagów MENU i PÓŁKA. W tej sekcji nie pokazujemy produktów wyłączonych w POS.</span></aside>}{activeDrinkKind && <WaiterDrinkFilters kind={activeDrinkKind} products={categoryProducts} filters={drinkFilters} onChange={setDrinkFilters}/>}<section className="waiter-products">{visible.map((product) => {
     if (!isAlternativeCoffeeMethod(product.name)) return productCard(product);
     if (product.dotykackaId !== firstAlternativeMethodId) return null;
     return <section className="waiter-alternative-coffee" key="alternative-coffee"><header><span>KAWY ALTERNATYWNE</span><h2>Wybierz metodę parzenia</h2><p>Metody są razem. Po wyborze wskaż ziarno, a następnie dowolne dodatki do kawy.</p></header><div>{visibleAlternativeMethods.map((method) => productCard(method, true))}</div></section>;

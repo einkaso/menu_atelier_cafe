@@ -42,3 +42,23 @@ export function waiterSessionHeaders(initial?: HeadersInit) {
   if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
   return headers;
 }
+
+export function createClientRequestId() {
+  const webCrypto = typeof globalThis.crypto !== "undefined" ? globalThis.crypto : null;
+  if (webCrypto && typeof webCrypto.randomUUID === "function") {
+    try {
+      return webCrypto.randomUUID();
+    } catch {
+      // Older WebKit can expose randomUUID but reject it outside a secure context.
+    }
+  }
+  if (webCrypto && typeof webCrypto.getRandomValues === "function") {
+    try {
+      const bytes = webCrypto.getRandomValues(new Uint8Array(16));
+      return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    } catch {
+      // This value only deduplicates a command, so a basic fallback is sufficient.
+    }
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}

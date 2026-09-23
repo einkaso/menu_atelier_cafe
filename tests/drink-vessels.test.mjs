@@ -30,6 +30,11 @@ test("keeps vessel capacity in the icon catalog and only the relation on a drink
   assert.match(admin, /name="espressoShots"/);
   assert.match(admin, /<option value="">Bez oznaczenia<\/option><option value="0">0 espresso<\/option>/);
   assert.match(admin, /espressoShots !== "" && <b>\{espressoShots\}<\/b>/);
+  assert.match(admin, /function supportsDrinkVessel\(kind: string, category\?: string \| null\)/);
+  assert.match(admin, /namedDrinkCategory = \/wkladka\\s\+jesien\|napoj\/\.test\(normalizedCategory\)/);
+  assert.match(admin, /drinkVesselKinds\.has\(kind\) \|\| namedDrinkCategory/);
+  assert.match(admin, /supportsDrinkVessel\(productKind, selected\.category\)/);
+  assert.match(admin, /supportsDrinkVessel\(productKind, product\.category\)/);
   assert.match(publicMenu, /drinkVessel: item\.drinkVesselId/);
   assert.match(publicMenu, /item\.espressoShots === 0 \|\| item\.espressoShots === 1 \|\| item\.espressoShots === 2/);
   assert.match(waiterCatalog, /drinkVessel: product\.drinkVesselId/);

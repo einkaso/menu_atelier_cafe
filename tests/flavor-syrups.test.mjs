@@ -56,7 +56,8 @@ test("keeps the syrup chooser above its overlay and leaves forest syrups accessi
   assert.match(css, /\.flavor-syrup-dialog\{position:fixed;z-index:52;left:50%;top:50%/);
   assert.match(admin, /product\.category \?\? ""/);
   assert.match(admin, /normalizedProductSearch/);
-  assert.match(admin, /Szukaj produktu lub kategorii/);
+  assert.match(admin, /Nazwa produktu — min\. 2 znaki/);
+  assert.match(admin, /Wybierz kategorię/);
   assert.doesNotMatch(admin, /Leśne Życie · zdjęcia i opisy/);
   assert.match(sync, /isForestLifeSyrupCategory\(categoryName\)/);
 });

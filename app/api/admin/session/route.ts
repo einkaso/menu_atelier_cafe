@@ -1,10 +1,19 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { adminUsers, waiterEmployees } from "../../../../db/schema";
-import { adminCookie, constantTimeMatch, createAdminToken } from "../../../../lib/admin-auth";
+import { adminCookie, constantTimeMatch, createAdminToken, currentAdmin } from "../../../../lib/admin-auth";
 import { normalizeAdminUsername, verifyAdminPassword } from "../../../../lib/admin-password";
 
 export const dynamic = "force-dynamic";
+
+const privateHeaders = { "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate" };
+
+export async function GET() {
+  const administrator = await currentAdmin();
+  return administrator
+    ? Response.json({ administrator: { username: administrator.username } }, { headers: privateHeaders })
+    : Response.json({ error: "Sesja administratora wygasła." }, { status: 401, headers: privateHeaders });
+}
 
 export async function POST(request: Request) {
   const configuredPassword = process.env.ADMIN_PASSWORD;

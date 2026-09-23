@@ -75,8 +75,9 @@ export function parseUpcomingEvents(html: string): UpcomingEvent[] {
     const start = cardStarts[index].index ?? 0;
     const end = cardStarts[index + 1]?.index ?? section.length;
     const card = section.slice(start, end);
-    const link = card.match(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?kup bilet[\s\S]*?<\/a>/i);
-    const url = link ? safeTicketUrl(link[1]) : null;
+    const url = [...card.matchAll(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>/gi)]
+      .map((link) => safeTicketUrl(link[1]))
+      .find((candidate): candidate is string => Boolean(candidate)) ?? null;
     if (!url || seen.has(url)) continue;
 
     const dateParts = textListByClass(card, "text-xs lg:text-xl");

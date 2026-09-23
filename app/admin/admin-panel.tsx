@@ -178,7 +178,7 @@ type DotykackaStatus = {
     lastEventStatus: string | null;
   };
 };
-type VisibilityFilter = "visible" | "hidden" | "all";
+type VisibilityFilter = "" | "visible" | "hidden" | "all";
 type ProductStatusKind = "approved" | "needs-review" | "dotykacka-hidden" | "menu-hidden";
 type ProductStatusFilter = "all" | ProductStatusKind;
 
@@ -201,8 +201,13 @@ const editable = ["nameEn", "descriptionPl", "descriptionEn", "country", "region
 const attributeKeys = ["alcoholPercentage", "beerStyle", "origin", "teaType", "brewTemperature", "brewTime", "coffeeOrigin", "coffeeProfile", "coffeeModifiers", "producer", "dietaryInfo", "cocktailType", "cocktailBase", "servingStyle", "tasteProfile", "volume", "spiritType", "spiritStyle", "ageStatement", "caskType"] as const;
 const drinkVesselKinds = new Set(["coffee", "tea", "matcha", "cold"]);
 
-function supportsDrinkVessel(kind: string) {
-  return drinkVesselKinds.has(kind);
+function supportsDrinkVessel(kind: string, category?: string | null) {
+  const normalizedCategory = (category ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pl");
+  const namedDrinkCategory = /wkladka\s+jesien|napoj/.test(normalizedCategory);
+  return drinkVesselKinds.has(kind) || namedDrinkCategory;
 }
 
 const MAX_LOCAL_IMAGE_BYTES = 50 * 1024 * 1024;
@@ -614,6 +619,31 @@ function formatVisibilityDate(value: string) {
   return new Intl.DateTimeFormat("pl-PL", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+const ADMIN_TIME_ZONE = "Europe/Warsaw";
+
+function AdminWelcomeDateTime() {
+  const [now, setNow] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const refresh = () => setNow(new Date());
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (!now) return <div className="admin-welcome-datetime" aria-label="Aktualna data i godzina"><time className="admin-welcome-calendar"><span>Dzisiaj</span><strong>—</strong><small>ustalam datę</small></time><time className="admin-welcome-clock"><span>Aktualna godzina</span><strong>--:--</strong><small>Warszawa</small></time></div>;
+
+  const dateParts = new Intl.DateTimeFormat("pl-PL", { timeZone: ADMIN_TIME_ZONE, weekday: "long", day: "numeric", month: "long", year: "numeric" }).formatToParts(now);
+  const datePart = (type: "weekday" | "day" | "month" | "year") => dateParts.find((item) => item.type === type)?.value ?? "";
+  const machineDate = new Intl.DateTimeFormat("sv-SE", { timeZone: ADMIN_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const currentTime = new Intl.DateTimeFormat("pl-PL", { timeZone: ADMIN_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }).format(now);
+
+  return <div className="admin-welcome-datetime" aria-label="Aktualna data i godzina">
+    <time className="admin-welcome-calendar" dateTime={machineDate}><span>{datePart("weekday")}</span><strong>{datePart("day")}</strong><small>{datePart("month")} {datePart("year")}</small></time>
+    <time className="admin-welcome-clock" dateTime={now.toISOString()}><span>Aktualna godzina</span><strong>{currentTime}</strong><small>Warszawa</small></time>
+  </div>;
+}
+
 function productListStatus(product: Product): { kind: ProductStatusKind; className: string; label: string } {
   if (product.manualHidden) return { kind: "menu-hidden", className: "admin-dot is-menu-hidden", label: "Ukryty ręcznie tylko w naszym cyfrowym menu" };
   if (product.waiterVisibilityOverride === false) return { kind: "menu-hidden", className: "admin-dot is-menu-hidden", label: "Ukryty przez uprawnionego pracownika — szczegóły w Historii widoczności" };
@@ -622,8 +652,9 @@ function productListStatus(product: Product): { kind: ProductStatusKind; classNa
   return { kind: "approved", className: "admin-dot is-visible", label: `${visibilityLabel(product)} — zatwierdzony` };
 }
 
-export default function AdminPanel() {
-  const [view, setView] = useState<"connection" | "products" | "stock" | "categories" | "productOrder" | "offers" | "promotions" | "audit" | "visibilityHistory" | "rules">("products");
+export default function AdminPanel({ administratorName }: { administratorName: string }) {
+  const greetingName = administratorName.trim().split(/\s+/)[0] || "Administratorze";
+  const [view, setView] = useState<"home" | "connection" | "products" | "stock" | "categories" | "productOrder" | "offers" | "promotions" | "audit" | "visibilityHistory" | "rules">("home");
   const [products, setProducts] = useState<Product[]>([]);
   const [drinkVessels, setDrinkVessels] = useState<DrinkVessel[]>([]);
   const [wineSources, setWineSources] = useState<WineSource[]>([]);
@@ -641,8 +672,8 @@ export default function AdminPanel() {
   const [draggedProductId, setDraggedProductId] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("Wszystkie");
-  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>("all");
+  const [category, setCategory] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>("");
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>("all");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -664,7 +695,7 @@ export default function AdminPanel() {
     }
     const rows = body.products ?? [];
     setProducts(rows);
-    setSelectedId((current) => preferredId ?? current ?? rows[0]?.id ?? null);
+    setSelectedId((current) => preferredId ?? current ?? null);
     setLoading(false);
   }
 
@@ -777,20 +808,21 @@ export default function AdminPanel() {
   const productsMatchingMainFilters = useMemo(() => {
     const phrase = normalizedProductSearch(query);
     return products.filter((product) =>
-      (category === "Wszystkie" || (product.category ?? "Bez kategorii") === category)
-      && (visibilityFilter === "all" || (visibilityFilter === "visible" ? visible(product) : !visible(product)))
+      (!category || category === "Wszystkie" || (product.category ?? "Bez kategorii") === category)
+      && (!visibilityFilter || visibilityFilter === "all" || (visibilityFilter === "visible" ? visible(product) : !visible(product)))
       && (!phrase || normalizedProductSearch(`${product.name} ${product.nameEn ?? ""} ${product.category ?? ""} ${product.tags.join(" ")}`).includes(phrase))
     );
   }, [products, query, category, visibilityFilter]);
+  const productSearchReady = normalizedProductSearch(query).length >= 2 || Boolean(category) || Boolean(visibilityFilter) || productStatusFilter !== "all";
   const productStatusCounts = useMemo(() => {
     const counts: Record<ProductStatusKind, number> = { approved: 0, "needs-review": 0, "dotykacka-hidden": 0, "menu-hidden": 0 };
     productsMatchingMainFilters.forEach((product) => { counts[productListStatus(product).kind] += 1; });
     return counts;
   }, [productsMatchingMainFilters]);
-  const filtered = useMemo(() => productStatusFilter === "all"
+  const filtered = useMemo(() => !productSearchReady ? [] : productStatusFilter === "all"
     ? productsMatchingMainFilters
     : productsMatchingMainFilters.filter((product) => productListStatus(product).kind === productStatusFilter),
-  [productsMatchingMainFilters, productStatusFilter]);
+  [productSearchReady, productsMatchingMainFilters, productStatusFilter]);
   const selected = products.find((product) => product.id === selectedId) ?? null;
   const auditIssues = useMemo(() => products.filter(visible).flatMap((product) => {
     const issues: AuditIssue[] = [];
@@ -811,8 +843,22 @@ export default function AdminPanel() {
     return issues;
   }), [products]);
 
+  function openProductSearch() {
+    setSelectedId(null);
+    setQuery("");
+    setCategory("");
+    setVisibilityFilter("");
+    setProductStatusFilter("all");
+    setView("products");
+  }
+
   function editAuditProduct(productId: number) {
+    const product = products.find((item) => item.id === productId);
     setSelectedId(productId);
+    setQuery(product?.name ?? "produkt");
+    setCategory("Wszystkie");
+    setVisibilityFilter("all");
+    setProductStatusFilter("all");
     setView("products");
   }
 
@@ -921,7 +967,7 @@ export default function AdminPanel() {
     payload.veganStatus = String(form.get("veganStatus") ?? selected.veganStatus ?? "UNKNOWN").trim() || "UNKNOWN";
     payload.attributes = Object.fromEntries(attributeKeys.map((key) => [key, String(form.get(`attribute_${key}`) ?? "").trim()]).filter(([, value]) => value));
     const productKind = selected.wineCode ? "wine" : sectionFor(selected.category);
-    if (supportsDrinkVessel(productKind)) {
+    if (supportsDrinkVessel(productKind, selected.category)) {
       const vesselId = String(form.get("drinkVesselId") ?? "").trim();
       const espressoShots = String(form.get("espressoShots") ?? "").trim();
       payload.drinkVesselId = vesselId ? Number(vesselId) : null;
@@ -1416,7 +1462,7 @@ export default function AdminPanel() {
         <img src="/logo-cafe.png" alt="Marta Banaszek atelier-café" />
         <div className="admin-top-title">
           <span className="admin-eyebrow">Cyfrowa karta kawiarni</span>
-          <h1>Menu główne</h1>
+          <h1>Panel konfiguracji</h1>
         </div>
         <nav className="admin-module-links" aria-label="Główne obszary panelu">
           <a className="admin-secondary" href="/admin/instructions">Instrukcje</a>
@@ -1425,6 +1471,7 @@ export default function AdminPanel() {
           <a className="admin-secondary" href="/admin/inventory">Inwentaryzacja</a>
           <a className="admin-secondary" href="/admin/waiters">Pracownicy</a>
           <a className="admin-secondary" href="/admin/reservations">Rezerwacje</a>
+          <a className="admin-secondary" href="/admin/lighting">Oświetlenie</a>
         </nav>
         <div className="admin-top-actions">
           {view !== "stock" && <button className="admin-primary admin-dotykacka-action" onClick={sync} disabled={syncing}>{syncing ? "Synchronizuję…" : "Synchronizuj z Dotykačką"}</button>}
@@ -1435,8 +1482,9 @@ export default function AdminPanel() {
       {(message || error) && <div className={error ? "admin-status is-error" : "admin-status"}>{error || message}</div>}
 
       <nav className="admin-view-tabs" aria-label="Sekcje panelu">
+        <button className={view === "home" ? "is-active" : ""} onClick={() => setView("home")}>Start</button>
         <button className={view === "connection" ? "is-active" : ""} onClick={() => setView("connection")}>Połączenie</button>
-        <button className={view === "products" ? "is-active" : ""} onClick={() => setView("products")}>Produkty</button>
+        <button className={view === "products" ? "is-active" : ""} onClick={openProductSearch}>Produkty</button>
         <button className={view === "stock" ? "is-active" : ""} onClick={() => setView("stock")}>Stany magazynowe</button>
         <button className={view === "categories" ? "is-active" : ""} onClick={() => setView("categories")}>Zakładki i kody PLU</button>
         <button className={view === "productOrder" ? "is-active" : ""} onClick={() => setView("productOrder")}>Podgrupy i produkty</button>
@@ -1447,41 +1495,59 @@ export default function AdminPanel() {
         <button className={view === "rules" ? "is-active" : ""} onClick={() => setView("rules")}>Dokumentacja i reguły</button>
       </nav>
 
-      {view === "connection" ? <DotykackaConnectionView key={`${dotykackaStatus?.cloudId ?? "loading"}-${dotykackaStatus?.warehouseId ?? ""}-${dotykackaStatus?.branchId ?? ""}-${dotykackaStatus?.stockWebhookRegistered ?? false}`} status={dotykackaStatus} saving={saving} onSave={saveDotykackaSettings} onEnableStockWebhook={enableStockWebhook} onHistoryApplied={async () => { await loadProducts(selectedId ?? undefined); }} /> : view === "stock" ? <StockLevelsView syncing={syncing} /> : view === "products" ? <section className="admin-workspace">
+      {view === "home" ? <section className="admin-welcome">
+        <header className="admin-welcome-hero">
+          <div className="admin-welcome-copy"><span className="admin-eyebrow">Panel konfiguracji · Marta Banaszek atelier-café</span><h2>Witaj, {greetingName}</h2><p>Wybierz obszar, który chcesz zmienić. Żaden produkt nie zostanie otwarty automatycznie — wyszukiwanie produktów rozpoczyna się od pustego widoku.</p></div>
+          <AdminWelcomeDateTime/>
+        </header>
+        <div className="admin-welcome-grid" aria-label="Najczęstsze działania">
+          <button type="button" onClick={openProductSearch}><span>01</span><strong>Produkty</strong><small>Wyszukaj produkt, wybierz kategorię lub ustaw status widoczności.</small><b className="admin-welcome-card-action">Znajdź produkt →</b></button>
+          <button type="button" onClick={() => setView("categories")}><span>02</span><strong>Zakładki i kody PLU</strong><small>Ustaw kolejność sekcji menu i sposób prezentacji kodów.</small></button>
+          <button type="button" onClick={() => setView("stock")}><span>03</span><strong>Stany magazynowe</strong><small>Sprawdź dostępność i zasady ukrywania produktów.</small></button>
+          <button type="button" className="is-dotykacka" onClick={() => setView("connection")}><span>04</span><strong>Połączenie z Dotykačką</strong><small>Kontroluj synchronizację, magazyn i oddział.</small></button>
+          <button type="button" onClick={() => setView("offers")}><span>05</span><strong>Oferty czasowe</strong><small>Skonfiguruj sezonowe i specjalne propozycje.</small></button>
+          <button type="button" onClick={() => setView("audit")}><span>06</span><strong>Kontrola karty</strong><small>Znajdź brakujące zdjęcia, opisy i tłumaczenia.</small></button>
+        </div>
+        <aside className="admin-welcome-note"><div><span className="admin-eyebrow">Bezpieczna praca</span><h3>Najpierw wybór, potem edycja</h3></div><p>Panel nie wskazuje już pierwszego produktu z listy. Edycja rozpocznie się dopiero po świadomym ustawieniu kryteriów i wybraniu konkretnej pozycji.</p></aside>
+      </section> : view === "connection" ? <DotykackaConnectionView key={`${dotykackaStatus?.cloudId ?? "loading"}-${dotykackaStatus?.warehouseId ?? ""}-${dotykackaStatus?.branchId ?? ""}-${dotykackaStatus?.stockWebhookRegistered ?? false}`} status={dotykackaStatus} saving={saving} onSave={saveDotykackaSettings} onEnableStockWebhook={enableStockWebhook} onHistoryApplied={async () => { await loadProducts(selectedId ?? undefined); }} /> : view === "stock" ? <StockLevelsView syncing={syncing} /> : view === "products" ? <section className="admin-workspace">
         <aside className="admin-products">
           <div className="admin-list-head">
             <strong>Produkty</strong><span>{filtered.length} / {products.length}</span>
           </div>
+          <div className="admin-product-search-intro"><strong>Co chcesz wyświetlić?</strong><span>Wpisz minimum 2 znaki albo wybierz kategorię, widoczność lub status produktu.</span></div>
           <div className="admin-dot-filter-label">Doprecyzuj wyniki według kropki:</div>
           <div className="admin-dot-legend" aria-label="Filtr statusu produktów">
-            <button type="button" className={productStatusFilter === "all" ? "is-active" : ""} aria-pressed={productStatusFilter === "all"} onClick={() => setProductStatusFilter("all")}>
+            <button type="button" className={productStatusFilter === "all" ? "is-active" : ""} aria-pressed={productStatusFilter === "all"} onClick={() => { setProductStatusFilter("all"); setSelectedId(null); }}>
               wszystkie <b>{productsMatchingMainFilters.length}</b>
             </button>
-            <button type="button" className={productStatusFilter === "approved" ? "is-active" : ""} aria-pressed={productStatusFilter === "approved"} onClick={() => setProductStatusFilter("approved")}>
+            <button type="button" className={productStatusFilter === "approved" ? "is-active" : ""} aria-pressed={productStatusFilter === "approved"} onClick={() => { setProductStatusFilter("approved"); setSelectedId(null); }}>
               <i className="admin-dot is-visible" />widoczne i zatwierdzone <b>{productStatusCounts.approved}</b>
             </button>
-            <button type="button" className={productStatusFilter === "needs-review" ? "is-active" : ""} aria-pressed={productStatusFilter === "needs-review"} onClick={() => setProductStatusFilter("needs-review")}>
+            <button type="button" className={productStatusFilter === "needs-review" ? "is-active" : ""} aria-pressed={productStatusFilter === "needs-review"} onClick={() => { setProductStatusFilter("needs-review"); setSelectedId(null); }}>
               <i className="admin-dot needs-review" />wymagają uwagi <b>{productStatusCounts["needs-review"]}</b>
             </button>
-            <button type="button" className={productStatusFilter === "dotykacka-hidden" ? "is-active" : ""} aria-pressed={productStatusFilter === "dotykacka-hidden"} onClick={() => setProductStatusFilter("dotykacka-hidden")}>
+            <button type="button" className={productStatusFilter === "dotykacka-hidden" ? "is-active" : ""} aria-pressed={productStatusFilter === "dotykacka-hidden"} onClick={() => { setProductStatusFilter("dotykacka-hidden"); setSelectedId(null); }}>
               <i className="admin-dot" />ukryte w menu lub bez stanu <b>{productStatusCounts["dotykacka-hidden"]}</b>
             </button>
-            <button type="button" className={productStatusFilter === "menu-hidden" ? "is-active" : ""} aria-pressed={productStatusFilter === "menu-hidden"} onClick={() => setProductStatusFilter("menu-hidden")}>
+            <button type="button" className={productStatusFilter === "menu-hidden" ? "is-active" : ""} aria-pressed={productStatusFilter === "menu-hidden"} onClick={() => { setProductStatusFilter("menu-hidden"); setSelectedId(null); }}>
               <i className="admin-dot is-menu-hidden" />ukryte ręcznie w naszym menu <b>{productStatusCounts["menu-hidden"]}</b>
             </button>
           </div>
-          <input className="admin-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Szukaj produktu lub kategorii…" />
-          <select className="admin-select" aria-label="Widoczność produktów" value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value as VisibilityFilter)}>
+          <input className="admin-search" value={query} onChange={(event) => { setQuery(event.target.value); setSelectedId(null); }} placeholder="Nazwa produktu — min. 2 znaki…" />
+          <select className="admin-select" aria-label="Widoczność produktów" value={visibilityFilter} onChange={(event) => { setVisibilityFilter(event.target.value as VisibilityFilter); setSelectedId(null); }}>
+            <option value="" disabled>Wybierz widoczność…</option>
             <option value="visible">Widoczne w menu</option>
             <option value="hidden">Ukryte</option>
             <option value="all">Wszystkie</option>
           </select>
-          <select className="admin-select" value={category} onChange={(event) => setCategory(event.target.value)}>
+          <select className="admin-select" value={category} onChange={(event) => { setCategory(event.target.value); setSelectedId(null); }}>
+            <option value="" disabled>Wybierz kategorię…</option>
             {categories.map((item) => <option value={item} key={item}>{item.trim()}</option>)}
           </select>
           <div className="admin-product-list">
             {loading && <p className="admin-muted">Pobieram produkty…</p>}
-            {!loading && !error && filtered.length === 0 && <p className="admin-muted">Brak produktów spełniających wybrane kryteria.</p>}
+            {!loading && !error && !productSearchReady && <div className="admin-product-search-empty"><b>Lista jest pusta</b><span>Najpierw ustaw kryteria wyszukiwania powyżej.</span></div>}
+            {!loading && !error && productSearchReady && filtered.length === 0 && <p className="admin-muted">Brak produktów spełniających wybrane kryteria.</p>}
             {filtered.map((product) => {
               const status = productListStatus(product);
               return <button key={product.id} className={product.id === selectedId ? "admin-product-row is-active" : "admin-product-row"} onClick={() => setSelectedId(product.id)}>
@@ -1493,7 +1559,7 @@ export default function AdminPanel() {
         </aside>
 
         <section className="admin-editor">
-          {!selected && <div className="admin-empty"><h2>Wybierz produkt</h2><p>Po lewej pojawiają się produkty menu, towary objęte inwentaryzacją oraz wszystkie syropy Leśne Życie.</p></div>}
+          {!selected && <div className="admin-empty"><h2>{productSearchReady ? "Wybierz produkt" : "Zacznij od wyszukiwania"}</h2><p>{productSearchReady ? "Wybierz konkretną pozycję z przygotowanej listy wyników." : "Określ po lewej, co ma zostać wyświetlone. Panel nie otwiera już automatycznie pierwszego produktu."}</p></div>}
           {selected && <ProductForm key={`${selected.id}-${selected.syncedAt}-${selected.contentUpdatedAt ?? "new"}`} product={selected} drinkVessels={drinkVessels} wineSources={wineSources} saving={saving} discovering={enriching} feedback={error || message} feedbackIsError={Boolean(error)} onSubmit={save} onImageImport={importImageFromUrl} onRemoveImage={removeProductImage} onBackdropImport={importBackdropFromUrl} onRemoveBackdrop={removeProductBackdrop} onRemoveGalleryImage={removeGalleryImage} onSetPrimaryGalleryImage={setPrimaryGalleryImage} onRemoveStaffMedia={removeStaffMedia} onDiscover={discoverProductInformation} onDecision={decideWineSource} />}
         </section>
       </section> : view === "categories" ? <section className="admin-category-workspace">
@@ -2224,7 +2290,7 @@ function ProductForm({ product, drinkVessels, wineSources, saving, discovering, 
         </div>
       </fieldset>}
 
-      {supportsDrinkVessel(productKind) && <fieldset className="admin-drink-vessel-config">
+      {supportsDrinkVessel(productKind, product.category) && <fieldset className="admin-drink-vessel-config">
         <legend>Naczynie i oznaczenia <small>espresso oraz alkohol</small></legend>
         <p className="admin-field-help">Pojemność jest przypisana do ikony naczynia. Cyfra oznacza liczbę espresso, a znak % informuje, że napój zawiera alkohol.</p>
         <div className="admin-form-grid">

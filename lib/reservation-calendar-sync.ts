@@ -4,7 +4,9 @@ import { getDb } from "../db";
 import { reservationCalendarSettings, reservationEvents, reservations } from "../db/schema";
 import { calendarEvents, decryptCalendarUrl } from "./workforce-calendar";
 import { importedReservation } from "./reservations";
-import { readIcloudReservationEvents, syncAppReservationsToIcloud } from "./icloud-caldav";
+import { icloudAppReservationEventExists, readIcloudReservationEvents, syncAppReservationsToIcloud } from "./icloud-caldav";
+
+const remoteDeletionGraceMs = 30 * 60_000;
 
 const importRange = () => ({
   from: new Date(Date.now() - 24 * 3_600_000),
@@ -67,6 +69,16 @@ export async function syncReservationCalendar() {
     for (const reservation of syncedAppReservations) {
       const uid = `atelier-reservation-${reservation.id}@atelier-cafe`;
       if (remoteUids.has(uid)) continue;
+      const lastConfirmedAt = reservation.calendarSyncedAt ?? reservation.updatedAt;
+      if (now.getTime() - lastConfirmedAt.getTime() < remoteDeletionGraceMs) continue;
+      let stillExists: boolean | null = null;
+      try {
+        stillExists = await icloudAppReservationEventExists(reservation.id);
+      } catch {
+        // A connection or iCloud indexing error must never be treated as a deletion.
+        continue;
+      }
+      if (stillExists !== false) continue;
       await db.transaction(async (tx) => {
         await tx.update(reservations).set({ status: "CANCELLED", cancelledAt: now, cancelledBy: "Usunięto w kalendarzu iCloud", calendarSyncedAt: now, updatedAt: now }).where(and(eq(reservations.id, reservation.id), eq(reservations.status, "BOOKED")));
         await tx.insert(reservationEvents).values({ reservationId: reservation.id, action: "CANCELLED_REMOTE", actorType: "CALENDAR", actorId: "icloud", actorName: "Kalendarz iCloud", details: { reason: "Wydarzenie usunięte z kalendarza" } });

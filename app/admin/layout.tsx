@@ -8,6 +8,7 @@ import "./reservations/reservations.css";
 import "./new-modules-tablet.css";
 import "./waiters/employee-qr.css";
 import "./unified-header.css";
+import "./lighting/lighting.css";
 
 export const metadata: Metadata = {
   title: "Panel menu — Banaszek Café",

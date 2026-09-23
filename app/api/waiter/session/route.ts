@@ -12,7 +12,8 @@ function cookie(value: string, maxAge: number) {
 
 export async function GET(request: Request) {
   const employee = await currentWaiter(request);
-  return employee ? Response.json({ employee }) : Response.json({ error: "Sesja kelnera wygasła." }, { status: 401 });
+  const headers = { "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate" };
+  return employee ? Response.json({ employee }, { headers }) : Response.json({ error: "Sesja kelnera wygasła." }, { status: 401, headers });
 }
 
 export async function POST(request: Request) {

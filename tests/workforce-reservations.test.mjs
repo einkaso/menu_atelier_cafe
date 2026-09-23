@@ -120,7 +120,9 @@ test("keeps staff navigation visible and ordered in unified black top bars", asy
     read("app/kelner/unified-header.css"),
   ]);
   assert.match(navigation, /"\/kelner\/instrukcje", "\/kelner\/grafik", "\/kelner\/rezerwacje", "\/kelner\/inventory"/);
-  assert.match(navigation, /logo-cafe\.png[^]*<Link href="\/kelner">← Menu<\/Link>[^]*<button type="button" onClick=\{logout\}>Wyloguj<\/button>/);
+  assert.match(navigation, /logo-cafe\.png[^]*<Link href="\/kelner">← Menu<\/Link>[^]*<button type="button" onClick=\{\(\) => void logout\(\)\}>Wyloguj<\/button>/);
+  assert.match(navigation, /fetch\("\/api\/waiter\/session", \{ method: "DELETE", credentials: "same-origin", headers: waiterSessionHeaders\(\) \}\)/);
+  assert.match(navigation, /window\.location\.replace\("\/"\)/);
   const mainBrand = waiter.indexOf("waiter-main-brand");
   const mainTools = waiter.indexOf("waiter-main-tools", mainBrand);
   const employeeSummary = waiter.indexOf("waiter-employee-summary", mainTools);
@@ -216,6 +218,11 @@ test("discovers the existing iCloud calendar for server-side write-back", async 
   assert.match(calendarSync, /CANCELLED_REMOTE/);
   assert.match(calendarSync, /Usunięto w kalendarzu iCloud/);
   assert.match(calendarSync, /remoteUids\.has\(uid\)/);
+  assert.match(calendarSync, /remoteDeletionGraceMs = 30 \* 60_000/);
+  assert.match(calendarSync, /icloudAppReservationEventExists\(reservation\.id\)/);
+  assert.match(calendarSync, /stillExists !== false/);
   assert.match(icloudWriteback, /reservation\.updatedAt <= reservation\.calendarSyncedAt/);
   assert.match(icloudWriteback, /readIcloudReservationEvents/);
+  assert.match(icloudWriteback, /caldavRequest\(eventUrl\(connection\.calendarUrl, id\)/);
+  assert.match(icloudWriteback, /response\.status === 404/);
 });

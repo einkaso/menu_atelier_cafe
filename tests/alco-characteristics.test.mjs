@@ -8,7 +8,7 @@ const vite = await createServer({ appType: "custom", configFile: false, root, se
 after(async () => vite.close());
 
 test("infers useful Alko Bar filters from existing names, descriptions and groups", async () => {
-  const { inferredAlcoBarAttributes } = await vite.ssrLoadModule("/lib/alco-characteristics.ts");
+  const { inferredAlcoBarAttributes, inferredAlcoBarAttributesEn, translatedAlcoAttributeValue } = await vite.ssrLoadModule("/lib/alco-characteristics.ts");
 
   assert.deepEqual(
     inferredAlcoBarAttributes("Sarti Spritz", "Sarti Rosa · prosecco · pomarańcza", "Spritze"),
@@ -22,4 +22,9 @@ test("infers useful Alko Bar filters from existing names, descriptions and group
     inferredAlcoBarAttributes("Wódka premium", "czysta wódka", "Wódka na butelki"),
     { cocktailType: "Alkohol na butelkę", cocktailBase: "Wódka", servingStyle: "Butelka" },
   );
+  assert.deepEqual(
+    inferredAlcoBarAttributesEn("Wódka premium", "czysta wódka", "Wódka na butelki"),
+    { cocktailType: "Bottled spirit", cocktailBase: "Vodka", servingStyle: "Bottle" },
+  );
+  assert.equal(translatedAlcoAttributeValue("tasteProfile", "Cytrusowy i kwaśny · Owocowy"), "Citrus & tart · Fruity");
 });

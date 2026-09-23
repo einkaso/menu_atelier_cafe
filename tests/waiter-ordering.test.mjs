@@ -19,12 +19,13 @@ test("opens the hidden waiter login only after three logo taps", async () => {
   assert.match(source, /logoTaps>=2/);
   assert.match(source, /window\.location\.assign\("\/kelner"\)/);
   assert.match(source, /onClick=\{tapLogo\}/);
-  assert.match(waiter, /waiter-login-shell[\s\S]*waiter-login-brand[\s\S]*logo-cafe\.png[\s\S]*STREFA PRACOWNIKA[\s\S]*Podaj swój PIN/);
+  assert.match(waiter, /waiter-login-shell" role="dialog" aria-modal="true"[\s\S]*waiter-login-close[\s\S]*waiter-login-brand[\s\S]*logo-cafe\.png[\s\S]*STREFA PRACOWNIKA[\s\S]*Podaj swój PIN/);
   assert.doesNotMatch(waiter, /STREFA KELNERA/);
   assert.match(waiter, /matchLoginLogoBackground[\s\S]*--waiter-login-brand-bg/);
   assert.match(layout, /login-redesign\.css/);
   assert.match(layout, /Strefa pracownika — Atelier Café/);
-  assert.match(loginStyles, /\.waiter-login > \.waiter-login-shell \{[\s\S]*grid-template-columns:[\s\S]*min-height: 610px/);
+  assert.match(loginStyles, /\.waiter-login > \.waiter-login-shell \{[\s\S]*width: min\(680px,[\s\S]*max-height: calc\(100dvh - 48px\);[\s\S]*min-height: 0/);
+  assert.match(loginStyles, /\.waiter-login \.waiter-login-close \{/);
 });
 
 test("merges cakes and desserts into one NA SŁODKO waiter category", async () => {
@@ -243,7 +244,8 @@ test("implements independently approved inventory stages with a gated Dotykacka 
   assert.match(adminScreen, /zer pominiętych/);
   assert.match(adminScreen, /Powtarzające się odchylenia/);
   assert.match(panel, /href="\/admin\/inventory"/);
-  assert.match(panel, /useState<VisibilityFilter>\("all"\)/);
+  assert.match(panel, /useState<VisibilityFilter>\(""\)/);
+  assert.match(panel, /Wybierz widoczność/);
 });
 
 test("omits a repeatedly confirmed zero until a positive stock movement occurs", () => {
@@ -802,10 +804,13 @@ test("keeps the waiter header on one continuous dark bar with ordered controls",
   const employee = client.indexOf("waiter-employee-summary");
   const controls = client.indexOf("waiter-main-controls", brand);
   assert.ok(brand >= 0 && brand < tools && tools < employee && employee < controls);
-  assert.match(client.slice(brand, tools), /PANEL PRACOWNIKA KAWIARNI/);
+  assert.match(client.slice(brand, tools), /PANEL PRACOWNIKA/);
   assert.match(client.slice(brand, tools), /waiter-main-logo[\s\S]*logo-cafe\.png[\s\S]*waiter-main-title/);
   assert.match(client.slice(tools, employee), /WaiterInstructionEntry[\s\S]*Grafik[\s\S]*Rezerwacje[\s\S]*Inwentaryzacja[\s\S]*Rozliczanie/);
   assert.match(client.slice(controls, controls + 700), /waiter-guest-receipt-entry[\s\S]*Rachunek dla gościa[\s\S]*waiter-main-exit-controls[\s\S]*← Menu[\s\S]*Wyloguj/);
+  assert.match(client, /waiter-ordering-app[\s\S]*waiter-table-focus[\s\S]*activeTableNumber[\s\S]*aria-label="Wybierz stolik"/);
+  assert.match(client, /waiter-context"><label className="waiter-guest-count">Liczba gości[\s\S]*<WaiterSearch/);
+  assert.match(client, /waiter-search-icon/);
   assert.doesNotMatch(client, /WaiterCurrentDate|waiter-main-calendar/);
   assert.match(settlement, /const POLAND_TIME_ZONE = "Europe\/Warsaw";[\s\S]*function CurrentDateCalendar\(\)[\s\S]*window\.setInterval\(refresh, 60_000\)/);
   assert.match(settlement, /Codzienny system rozliczania utargu\.[\s\S]*<\/h1>[\s\S]*<CurrentDateCalendar \/>/);
@@ -819,6 +824,9 @@ test("keeps the waiter header on one continuous dark bar with ordered controls",
   assert.match(styles, /\.waiter-main-header \.waiter-main-controls > \.waiter-guest-receipt-entry \{[\s\S]*background: #d92d76 !important;/);
   assert.match(styles, /\.waiter-main-header \.waiter-main-tools,[\s\S]*\.waiter-main-header \.waiter-main-controls \{[\s\S]*position: static !important;[\s\S]*padding: 0 !important;[\s\S]*background: #000 !important;[\s\S]*box-shadow: none !important;/);
   assert.match(styles, /\.waiter-main-header \.waiter-main-tools::before,[\s\S]*\.waiter-main-header \.waiter-main-controls::after \{[\s\S]*display: none !important;[\s\S]*content: none !important;/);
+  assert.match(styles, /\.waiter-main-tools \{[\s\S]*justify-content: flex-end;/);
+  const waiterCss = await read("app/kelner/waiter.css");
+  assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-context\{[^}]*border-top:4px solid #edf1ee/);
 });
 
 test("keeps staff section navigation on the same continuous dark bar", async () => {

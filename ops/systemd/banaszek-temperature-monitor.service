@@ -1,0 +1,21 @@
+[Unit]
+Description=Lokalny agent oswietlenia i temperatur BleBox
+After=network-online.target banaszek-menu.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=menuapp
+Group=menuapp
+WorkingDirectory=/opt/banaszek-menu
+EnvironmentFile=/etc/banaszek-menu/lighting-bridge.env
+ExecStart=/usr/local/bin/node /opt/banaszek-menu/bridge/lighting/agent.mjs
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

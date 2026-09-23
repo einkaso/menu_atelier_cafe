@@ -10,7 +10,7 @@ import { isForestLifeSyrupCategory, isGenericFlavorSyrupOption } from "../../../
 import { hasTag, isShelfProduct, menuProductDestinations, menuProductIsAvailable, productTemperatures, shelfHasPositiveStock } from "../../../lib/menu-tags";
 import { productAttributesEn, productAttributesPl } from "../../../lib/translation";
 import { isZeroAlcoholValue } from "../../../lib/wine-characteristics";
-import { inferredAlcoBarAttributes } from "../../../lib/alco-characteristics";
+import { inferredAlcoBarAttributes, inferredAlcoBarAttributesEn } from "../../../lib/alco-characteristics";
 
 export const dynamic = "force-dynamic";
 const APP_BUILD_VERSION = process.env.NEXT_PUBLIC_APP_BUILD_VERSION ?? "development";
@@ -267,8 +267,9 @@ export async function GET() {
       const publicAttributesEn = productAttributesEn(item.attributes);
       if (visualKind === "cocktails") {
         const inferredAttributes = inferredAlcoBarAttributes(item.name, item.descriptionPl || item.sourceDescription, groupPl);
+        const inferredAttributesEn = inferredAlcoBarAttributesEn(item.name, item.descriptionPl || item.sourceDescription, groupPl);
         Object.assign(publicAttributes, { ...inferredAttributes, ...publicAttributes });
-        Object.assign(publicAttributesEn, { ...inferredAttributes, ...publicAttributesEn });
+        Object.assign(publicAttributesEn, { ...inferredAttributesEn, ...publicAttributesEn });
       }
       if (visualKind !== "beer" && visualKind !== "cocktails") {
         delete publicAttributes.volume;

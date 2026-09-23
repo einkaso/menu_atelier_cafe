@@ -421,6 +421,41 @@
       "when": 1790188200000,
       "tag": "0059_guinness_zero_product_image",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1790191800000,
+      "tag": "0060_olmeca_shot_product_image",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1790195400000,
+      "tag": "0061_captain_morgan_shot_product_image",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1790199000000,
+      "tag": "0062_normalize_wine_thumbnail_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1790202600000,
+      "tag": "0063_jameson_thumbnail_image",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1790206200000,
+      "tag": "0064_cold_storage_temperature_alerts",
+      "breakpoints": true
     }
   ]
 }

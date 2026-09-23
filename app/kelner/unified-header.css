@@ -240,6 +240,7 @@
 
 .waiter-main-tools {
   flex: 1 1 auto;
+  justify-content: flex-end;
 }
 
 .waiter-main-header .waiter-main-tools .waiter-inventory-entry {
@@ -275,7 +276,7 @@
     grid-column: 1 / -1;
     grid-row: 2;
     width: 100%;
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .waiter-main-header .waiter-employee-summary {
@@ -348,7 +349,7 @@
   .waiter-main-header .waiter-main-tools {
     grid-column: 1 / -1;
     grid-row: 3;
-    justify-content: flex-start;
+    justify-content: flex-end;
     overflow-x: auto;
     padding-bottom: 2px;
   }

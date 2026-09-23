@@ -8,7 +8,7 @@ import { waiterSessionHeaders } from "./waiter-session-client";
 const money = new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" });
 const date = new Intl.DateTimeFormat("pl-PL", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 
-export default function GuestReceiptPicker({ employeeName, onBack, onHandoff, onLogout }: { employeeName: string; onBack: () => void; onHandoff: (receipt: GuestReceipt) => void; onLogout: () => void }) {
+export default function GuestReceiptPicker({ employeeName, onBack, onHandoff, onLogout }: { employeeName: string; onBack: () => void; onHandoff: (receipt: GuestReceipt) => Promise<void>; onLogout: () => void }) {
   const [receipts, setReceipts] = useState<GuestReceiptListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState<string | null>(null);
@@ -36,7 +36,13 @@ export default function GuestReceiptPicker({ employeeName, onBack, onHandoff, on
       void lockAppLandscapeOrientation();
       setError(body?.error ?? "Nie udało się otworzyć rachunku.");
     }
-    else onHandoff(body.receipt);
+    else {
+      try {
+        await onHandoff(body.receipt);
+      } catch {
+        setError("Nie udało się bezpiecznie wylogować pracownika. Nie przekazuj jeszcze tabletu gościowi.");
+      }
+    }
     setOpening(null);
   }
 
