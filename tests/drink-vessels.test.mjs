@@ -36,21 +36,66 @@ test("keeps vessel capacity in the icon catalog and only the relation on a drink
 
 test("ships the Churchill vessel catalog with optimized local icons", async () => {
   const migration = await read("drizzle/0047_churchill_drink_vessels.sql");
-  const expected = [
-    ["churchill-espresso-100ml.png", 100],
-    ["churchill-cup-220ml.png", 220],
-    ["churchill-mug-340ml.png", 340],
-    ["churchill-cup-340ml.png", 340],
-    ["churchill-teapot-400ml.png", 400],
+  const expectedFiles = [
+    "churchill-espresso-100ml.png",
+    "churchill-cup-220ml.png",
+    "churchill-mug-340ml.png",
+    "churchill-cup-340ml.png",
+    "churchill-teapot-400ml.png",
   ];
 
-  for (const [file, capacity] of expected) {
+  for (const file of expectedFiles) {
     await access(new URL(`../public/drink-vessels/${file}`, import.meta.url));
-    assert.match(migration, new RegExp(`${file.replace(".", "\\.")}[^\\n]+${capacity}|${capacity}[^\\n]+${file.replace(".", "\\.")}`));
+    assert.match(migration, new RegExp(file.replace(".", "\\.")));
   }
 });
 
-test("visually distinguishes the otherwise identical 220 ml and 340 ml Churchill cups", async () => {
+test("corrects the operational capacities without changing existing vessel assignments", async () => {
+  const migration = await read("drizzle/0051_correct_churchill_vessel_capacities.sql");
+
+  assert.match(migration, /capacity_ml" = 230[\s\S]*churchill-monochrome-cup-220/);
+  assert.match(migration, /capacity_ml" = 330[\s\S]*churchill-monochrome-mug-340/);
+});
+
+test("adds the 320 ml Luminarc New Morning mug to the assignable vessel catalog", async () => {
+  const migration = await read("drizzle/0052_luminarc_new_morning_vessel.sql");
+
+  await access(new URL("../public/drink-vessels/luminarc-new-morning-320ml.webp", import.meta.url));
+  assert.match(migration, /luminarc-new-morning-320/);
+  assert.match(migration, /Kubek szklany Luminarc New Morning/);
+  assert.match(migration, /320/);
+  assert.match(migration, /\/drink-vessels\/luminarc-new-morning-320ml\.webp/);
+});
+
+test("adds the 200 ml FAJA glass with a cleaned local catalog image", async () => {
+  const migration = await read("drizzle/0053_faja_200ml_vessel.sql");
+
+  await access(new URL("../public/drink-vessels/faja-glass-200ml.webp", import.meta.url));
+  assert.match(migration, /faja-stemmed-glass-200/);
+  assert.match(migration, /Kieliszek FAJA/);
+  assert.match(migration, /200/);
+  assert.match(migration, /\/drink-vessels\/faja-glass-200ml\.webp/);
+});
+
+test("adds every Elysia vessel to the assignable database catalog with local icons", async () => {
+  const migration = await read("drizzle/0054_elysia_vessel_catalog.sql");
+  const expected = [
+    ["elysia-whisky-350", 350],
+    ["elysia-highball-360", 360],
+    ["elysia-highball-280", 280],
+    ["elysia-carafe-1000", 1000],
+    ["elysia-cocktail-500", 500],
+    ["elysia-champagne-coupe-260", 260],
+  ];
+
+  for (const [key, capacity] of expected) {
+    await access(new URL(`../public/drink-vessels/${key}.webp`, import.meta.url));
+    assert.match(migration, new RegExp(`'${key}'[^\\n]+${capacity}`));
+    assert.match(migration, new RegExp(`/drink-vessels/${key}\\.webp`));
+  }
+});
+
+test("visually distinguishes the otherwise identical small and large Churchill cups", async () => {
   const [adminCss, guestCss, waiterCss] = await Promise.all([
     read("app/admin/admin.css"),
     read("app/globals.css"),

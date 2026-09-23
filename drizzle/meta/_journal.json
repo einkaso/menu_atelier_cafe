@@ -358,6 +358,34 @@
       "when": 1790155800001,
       "tag": "0050_lighting_snapshot_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1790159400000,
+      "tag": "0051_correct_churchill_vessel_capacities",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1790163000000,
+      "tag": "0052_luminarc_new_morning_vessel",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1790166600000,
+      "tag": "0053_faja_200ml_vessel",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1790170200000,
+      "tag": "0054_elysia_vessel_catalog",
+      "breakpoints": true
     }
   ]
 }

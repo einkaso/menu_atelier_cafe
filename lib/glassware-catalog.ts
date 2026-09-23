@@ -2,7 +2,7 @@ export type GlasswareCatalogItem = {
   id: string;
   namePl: string;
   nameEn: string;
-  kind: "whisky" | "highball" | "cocktail" | "wine" | "beer" | "shot" | "carafe" | "other";
+  kind: "whisky" | "highball" | "cocktail" | "wine" | "beer" | "shot" | "carafe" | "mug" | "other";
   capacityMl: number;
   imageUrl: string;
   aliases: readonly string[];
@@ -15,7 +15,7 @@ export const glasswareCatalog = [
     nameEn: "Elysia whisky tumbler",
     kind: "whisky",
     capacityMl: 350,
-    imageUrl: "https://b.assecobs.com/_img/dajarhoreca/c6f602fd-c246-479b-8d88-8250452107a1/elysia-szklanka-do-whisky-poj-355-ml-sr-84-mm-wys-98-mm-camrack-285845.jpg",
+    imageUrl: "/drink-vessels/elysia-whisky-350.webp",
     aliases: ["whisky", "tumbler", "rocks", "old fashioned"],
   },
   {
@@ -24,7 +24,7 @@ export const glasswareCatalog = [
     nameEn: "Elysia highball glass",
     kind: "highball",
     capacityMl: 360,
-    imageUrl: "https://b.assecobs.com/_img/dajarhoreca/7c7cab2b-a743-4e26-90d8-fd24696a60a6/elysia-szklanka-wysoka-poj-365-ml-ps-520445.jpg",
+    imageUrl: "/drink-vessels/elysia-highball-360.webp",
     aliases: ["highball", "long drink", "szklanka wysoka"],
   },
   {
@@ -33,7 +33,7 @@ export const glasswareCatalog = [
     nameEn: "Elysia slim highball glass",
     kind: "highball",
     capacityMl: 280,
-    imageUrl: "https://b.assecobs.com/_img/dajarhoreca/ab51d7ce-8ecc-4ef2-ba21-95c97ea5d683/elysia-szklanka-wysoka-poj-280-ml-sr-66-mm-wys-140-mm-ps-520125.jpg",
+    imageUrl: "/drink-vessels/elysia-highball-280.webp",
     aliases: ["highball", "slim highball", "long drink", "szklanka wysoka wąska"],
   },
   {
@@ -42,7 +42,7 @@ export const glasswareCatalog = [
     nameEn: "Elysia 1 l carafe",
     kind: "carafe",
     capacityMl: 1000,
-    imageUrl: "https://b.assecobs.com/_img/dajarhoreca/2148d092-2107-444c-b124-8915409ed8c1/elysia-karafka-poj-940-ml-ps-80403.jpg?w=1300&org_if_sml=0",
+    imageUrl: "/drink-vessels/elysia-carafe-1000.webp",
     aliases: ["karafka", "carafe", "dzbanek", "1 l"],
   },
   {
@@ -51,7 +51,7 @@ export const glasswareCatalog = [
     nameEn: "Elysia cocktail glass",
     kind: "cocktail",
     capacityMl: 500,
-    imageUrl: "https://b.assecobs.com/_img/dajarhoreca/7aa8ec6c-3f86-4853-9db0-cf646cb3bfb0/elysia-elysia-kieliszek-koktailowy-poj-500-ml-sr-101-mm-wys-198-mm-.jpg?w=1300&org_if_sml=0",
+    imageUrl: "/drink-vessels/elysia-cocktail-500.webp",
     aliases: ["kieliszek koktajlowy", "cocktail glass", "goblet", "500 ml"],
   },
   {
@@ -60,8 +60,26 @@ export const glasswareCatalog = [
     nameEn: "Elysia champagne coupe",
     kind: "cocktail",
     capacityMl: 260,
-    imageUrl: "https://b.assecobs.com/_img/dajarhoreca/469535fb-4d29-4a26-b3e4-5c084d44ec9c/elysia-kieliszek-koktajlowy-do-szampana-poj-260-ml-sr-101-mm-wys-164-mm-.jpg?w=1300&org_if_sml=0",
+    imageUrl: "/drink-vessels/elysia-champagne-coupe-260.webp",
     aliases: ["kieliszek do szampana", "champagne coupe", "coupe", "260 ml"],
+  },
+  {
+    id: "luminarc-new-morning-320",
+    namePl: "Kubek szklany Luminarc New Morning",
+    nameEn: "Luminarc New Morning glass mug",
+    kind: "mug",
+    capacityMl: 320,
+    imageUrl: "/drink-vessels/luminarc-new-morning-320ml.webp",
+    aliases: ["kubek szklany", "glass mug", "Luminarc", "New Morning", "320 ml"],
+  },
+  {
+    id: "faja-stemmed-glass-200",
+    namePl: "Kieliszek FAJA",
+    nameEn: "FAJA stemmed drinking glass",
+    kind: "wine",
+    capacityMl: 200,
+    imageUrl: "/drink-vessels/faja-glass-200ml.webp",
+    aliases: ["Trinkglas FAJA", "kieliszek na nóżce", "stemmed glass", "goblet", "200 ml"],
   },
 ] as const satisfies readonly GlasswareCatalogItem[];
 

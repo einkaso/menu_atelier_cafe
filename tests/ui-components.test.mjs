@@ -498,6 +498,8 @@ test("guides alternative coffee through beans, brewing method and product detail
   assert.match(source, /if\(kind==="coffee"\)\{setCoffeeProduct\(product\)/);
   assert.match(source, /<CoffeeDetailDialog product=\{coffeeProduct\}/);
   assert.match(source, /function CoffeeDetailDialog/);
+  assert.match(source, /className="coffee-detail-footer"[\s\S]*<DrinkVesselMark product=\{product\} lang=\{lang\}/);
+  assert.match(css, /\.coffee-detail-footer\{margin-top:auto;padding-top:22px\}/);
   assert.match(css, /\.motif-coffee \.product\.is-description-preview\.product-visual\{height:188px;min-height:188px/);
   assert.match(css, /\.motif-coffee \.product\.is-description-preview \.product-info>p\{[^}]*-webkit-line-clamp:3/);
   assert.match(source, /const alternativeCoffeeMethods=activeKind==="coffee"\?regularVisible\.filter\(isAlternativeCoffeeProduct\):\[\]/);
