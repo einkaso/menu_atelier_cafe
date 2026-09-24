@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const notifications = rows.length ? await db.select().from(reservationNotifications).where(eq(reservationNotifications.employeeDotykackaId, employee.dotykackaId)) : [];
   const notified = new Set(notifications.filter((item) => item.twoHourNotifiedAt).map((item) => item.reservationId)); const inTwoHours = new Date(now.getTime() + 2 * 3_600_000); const inOneHour = new Date(now.getTime() + 3_600_000);
   const notice = rows.find((item) => item.startsAt >= now && item.startsAt <= inTwoHours && !notified.has(item.id)) ?? null;
-  const preparation = rows.find((item) => item.startsAt >= new Date(now.getTime() - 30 * 60_000) && item.startsAt <= inOneHour && (!item.tableReadyAt || Boolean(item.specialRequest && !item.specialRequestReadyAt))) ?? null;
+  const preparation = rows.find((item) => item.startsAt >= now && item.startsAt <= inOneHour && (!item.tableReadyAt || Boolean(item.specialRequest && !item.specialRequestReadyAt))) ?? null;
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Warsaw", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
   return Response.json({ employee, reservations: rows, today, notice, preparation });
 }

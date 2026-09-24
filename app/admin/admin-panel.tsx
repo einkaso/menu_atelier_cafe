@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
+import { BookOpenCheck, CalendarDays, ChevronDown, ChevronRight, ChevronUp, ClipboardList, Coffee, DoorOpen, LayoutList, Lightbulb, PackageOpen, RefreshCw, Settings2, Tags, Users, WalletCards } from "lucide-react";
 import { sectionFor } from "../../lib/menu-categories";
 import { manualProductSearchUrl, productSearchTitle } from "../../lib/manual-product-search";
 import { hasTag, isShelfProduct, shelfHasPositiveStock } from "../../lib/menu-tags";
@@ -181,6 +182,82 @@ type DotykackaStatus = {
 type VisibilityFilter = "" | "visible" | "hidden" | "all";
 type ProductStatusKind = "approved" | "needs-review" | "dotykacka-hidden" | "menu-hidden";
 type ProductStatusFilter = "all" | ProductStatusKind;
+type AdminView = "home" | "connection" | "products" | "stock" | "categories" | "productOrder" | "offers" | "promotions" | "audit" | "visibilityHistory" | "rules";
+type AdminDashboardTileId = "products" | "reservations" | "settlements" | "connection" | "lighting" | "rooms" | "employees" | "stock" | "instructions" | "inventory" | "workforce" | "categories" | "offers";
+type AdminDashboardTilePreference = { id: AdminDashboardTileId; visible: boolean; background: string; foreground: string };
+
+const ADMIN_DASHBOARD_TILES: Array<{ id: AdminDashboardTileId; title: string; description: string; view?: AdminView; href?: string }> = [
+  { id: "products", title: "Produkty", description: "Wyszukiwanie, widoczność i edycja produktów.", view: "products" },
+  { id: "reservations", title: "Rezerwacje", description: "Kalendarz gości, stoliki i przygotowanie.", href: "/admin/reservations" },
+  { id: "settlements", title: "Rozliczenia", description: "Zmiany, napiwki i finanse operacyjne.", href: "/admin/settlements" },
+  { id: "connection", title: "Połączenie z Dotykačką", description: "Synchronizacja, produkty, magazyn i stoliki.", view: "connection" },
+  { id: "lighting", title: "Oświetlenie", description: "Strefy, lampy i automatyzacje BleBox.", href: "/admin/lighting" },
+  { id: "rooms", title: "Pomieszczenia", description: "Zamki, dostęp i stan wejść TTLock.", href: "/admin/rooms" },
+  { id: "employees", title: "Pracownicy", description: "Dostępy, uprawnienia i konta zespołu.", href: "/admin/waiters" },
+  { id: "stock", title: "Stany magazynowe", description: "Dostępność i zasady ukrywania produktów.", view: "stock" },
+  { id: "instructions", title: "Instrukcje", description: "Procedury i materiały dla zespołu.", href: "/admin/instructions" },
+  { id: "inventory", title: "Inwentaryzacja", description: "Zadania, liczenie i różnice magazynowe.", href: "/admin/inventory" },
+  { id: "workforce", title: "Grafik", description: "Planowanie pracy i ewidencja godzin.", href: "/admin/workforce" },
+  { id: "categories", title: "Zakładki i kody PLU", description: "Kolejność sekcji i prezentacja kodów.", view: "categories" },
+  { id: "offers", title: "Oferty czasowe", description: "Sezonowe i specjalne propozycje.", view: "offers" },
+];
+
+const DEFAULT_ADMIN_DASHBOARD_PREFERENCES: AdminDashboardTilePreference[] = ADMIN_DASHBOARD_TILES.map((tile) => ({
+  id: tile.id,
+  visible: ["products", "reservations", "settlements", "connection", "lighting", "rooms", "employees"].includes(tile.id),
+  background: tile.id === "connection" ? "#519e46" : tile.id === "settlements" ? "#0b3442" : "paper",
+  foreground: "auto",
+}));
+
+const ADMIN_DASHBOARD_COLORS = [
+  { value: "paper", label: "Jasny — polecany" },
+  { value: "#0b3442", label: "Granatowy" },
+  { value: "#519e46", label: "Zielony" },
+  { value: "#f36b30", label: "Pomarańczowy" },
+  { value: "#d51b77", label: "Różowy" },
+  { value: "#7763a7", label: "Fioletowy" },
+] as const;
+
+function normalizedDashboardPreferences(value: unknown): AdminDashboardTilePreference[] {
+  if (!Array.isArray(value)) return DEFAULT_ADMIN_DASHBOARD_PREFERENCES.map((item) => ({ ...item }));
+  const accepted = new Map<AdminDashboardTileId, AdminDashboardTilePreference>();
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const candidate = item as Record<string, unknown>;
+    const tile = ADMIN_DASHBOARD_TILES.find((entry) => entry.id === candidate.id);
+    const validBackground = candidate.background === "paper" || (typeof candidate.background === "string" && /^#[0-9a-f]{6}$/i.test(candidate.background));
+    const validForeground = candidate.foreground === undefined || candidate.foreground === "auto" || (typeof candidate.foreground === "string" && /^#[0-9a-f]{6}$/i.test(candidate.foreground));
+    if (tile && typeof candidate.visible === "boolean" && validBackground && validForeground) accepted.set(tile.id, { id: tile.id, visible: candidate.visible, background: String(candidate.background).toLowerCase(), foreground: candidate.foreground === undefined ? "auto" : String(candidate.foreground).toLowerCase() });
+  }
+  const ordered = value.flatMap((item) => item && typeof item === "object" && accepted.has((item as { id?: AdminDashboardTileId }).id!) ? [accepted.get((item as { id: AdminDashboardTileId }).id)!] : []);
+  for (const fallback of DEFAULT_ADMIN_DASHBOARD_PREFERENCES) if (!accepted.has(fallback.id)) ordered.push({ ...fallback });
+  return ordered.length === ADMIN_DASHBOARD_TILES.length && ordered.some((item) => item.visible) ? ordered : DEFAULT_ADMIN_DASHBOARD_PREFERENCES.map((item) => ({ ...item }));
+}
+
+function dashboardTileForeground(background: string, foreground = "auto") {
+  if (foreground !== "auto") return foreground;
+  if (background === "paper") return "#0b3442";
+  const channels = [1, 3, 5].map((offset) => Number.parseInt(background.slice(offset, offset + 2), 16));
+  const luminance = (channels[0] * 299 + channels[1] * 587 + channels[2] * 114) / 1000;
+  return luminance >= 158 ? "#0b3442" : "#ffffff";
+}
+
+function AdminDashboardTileIcon({ id }: { id: AdminDashboardTileId }) {
+  const props = { size: 21, strokeWidth: 1.8, "aria-hidden": true } as const;
+  if (id === "products") return <Coffee {...props}/>;
+  if (id === "reservations") return <CalendarDays {...props}/>;
+  if (id === "settlements") return <WalletCards {...props}/>;
+  if (id === "connection") return <RefreshCw {...props}/>;
+  if (id === "lighting") return <Lightbulb {...props}/>;
+  if (id === "rooms") return <DoorOpen {...props}/>;
+  if (id === "employees") return <Users {...props}/>;
+  if (id === "stock") return <PackageOpen {...props}/>;
+  if (id === "instructions") return <BookOpenCheck {...props}/>;
+  if (id === "inventory") return <ClipboardList {...props}/>;
+  if (id === "workforce") return <CalendarDays {...props}/>;
+  if (id === "categories") return <LayoutList {...props}/>;
+  return <Tags {...props}/>;
+}
 
 type HistoricalImportResult = {
   receiptDocuments: number;
@@ -436,7 +513,7 @@ const ruleSections = [
       ["Nasz panel", "W obrębie zwykłej kategorii kelner może podejrzeć ukryte produkty z tagiem MENU. Ukrywanie i ponowne ujawnianie jest dostępne wyłącznie pracownikom, którym administrator nadał imienne uprawnienie; domyślnie jest ono wyłączone."],
       ["Automatycznie", "Każda zmiana widoczności wykonana przez pracownika wymaga wybrania przyczyny i trafia do „Historii widoczności” z nazwą pracownika, produktem oraz czasem. Ręczne ukrycie administratora ma pierwszeństwo i nie może zostać cofnięte w strefie kelnera."],
       ["Automatycznie", "Każdy produkt ma sterowanie ilością. Przed wysłaniem można zmienić ilości, usunąć pozycje, dopisać uwagę do konkretnej konfiguracji oraz uwagę do całego zamówienia."],
-      ["Dotykačka", "Tagi WARM i COLD określają dostępność wersji ciepłej i zimnej. Jeżeli produkt ma oba, kelner wskazuje temperaturę dla dodawanej sztuki."],
+      ["Dotykačka", "Tagi WARM/CIEPŁO i COLD/ZIMNO albo wspólny tag WARM COLD określają dostępność wersji ciepłej i zimnej także dla produktów w kategoriach ALKOHOLE i DRINKI. Jeżeli produkt ma oba warianty, kelner obowiązkowo wskazuje sposób przygotowania dla dodawanej sztuki."],
       ["Dotykačka", "Tag TOGO udostępnia kelnerowi opcję „Zapakuj na wynos”. Domyślnie produkt pozostaje zamówieniem na miejscu, a w menu gościa nie pokazujemy ikony na wynos."],
       ["Automatycznie", "Filtry win, whisky i Alko Baru działają w strefie kelnera według tych samych cech co w menu gościa."],
       ["Automatycznie", "Przy pełnej butelce piwa, wina, whisky lub wódki zamawianej między 21:58 a 06:02 system pokazuje ostrzeżenie o zakazie sprzedaży na wynos. Reguła nie dotyczy produktów 0% ani porcji."],
@@ -547,7 +624,7 @@ const recognizedMenuTags = [
   },
   {
     tag: "WARM",
-    aliases: "—",
+    aliases: "CIEPŁO · WARM COLD · CIEPŁO ZIMNO",
     area: "Temperatura podania",
     effect: "Oznacza, że produkt można zamówić na ciepło. Jeżeli produkt ma także COLD, kelner musi wskazać temperaturę przed dodaniem pozycji.",
     condition: "Działa razem z tagiem MENU. Jako jedyny tag temperatury ustawia wariant ciepły automatycznie.",
@@ -555,7 +632,7 @@ const recognizedMenuTags = [
   },
   {
     tag: "COLD",
-    aliases: "—",
+    aliases: "ZIMNO · WARM COLD · CIEPŁO ZIMNO",
     area: "Temperatura podania",
     effect: "Oznacza, że produkt można zamówić na zimno. Jeżeli produkt ma także WARM, kelner musi wskazać temperaturę przed dodaniem pozycji.",
     condition: "Działa razem z tagiem MENU. Jako jedyny tag temperatury ustawia wariant zimny automatycznie.",
@@ -654,7 +731,7 @@ function productListStatus(product: Product): { kind: ProductStatusKind; classNa
 
 export default function AdminPanel({ administratorName }: { administratorName: string }) {
   const greetingName = administratorName.trim().split(/\s+/)[0] || "Administratorze";
-  const [view, setView] = useState<"home" | "connection" | "products" | "stock" | "categories" | "productOrder" | "offers" | "promotions" | "audit" | "visibilityHistory" | "rules">("home");
+  const [view, setView] = useState<AdminView>("home");
   const [products, setProducts] = useState<Product[]>([]);
   const [drinkVessels, setDrinkVessels] = useState<DrinkVessel[]>([]);
   const [wineSources, setWineSources] = useState<WineSource[]>([]);
@@ -682,6 +759,12 @@ export default function AdminPanel({ administratorName }: { administratorName: s
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [dotykackaStatus, setDotykackaStatus] = useState<DotykackaStatus | null>(null);
+  const [dashboardPreferences, setDashboardPreferences] = useState<AdminDashboardTilePreference[]>(() => DEFAULT_ADMIN_DASHBOARD_PREFERENCES.map((item) => ({ ...item })));
+  const [dashboardDraft, setDashboardDraft] = useState<AdminDashboardTilePreference[]>(() => DEFAULT_ADMIN_DASHBOARD_PREFERENCES.map((item) => ({ ...item })));
+  const [dashboardEditing, setDashboardEditing] = useState(false);
+  const [dashboardSaving, setDashboardSaving] = useState(false);
+  const [dashboardSelectedTile, setDashboardSelectedTile] = useState<AdminDashboardTileId>("products");
+  const [dashboardError, setDashboardError] = useState("");
 
   async function loadProducts(preferredId?: number) {
     setLoading(true);
@@ -777,9 +860,21 @@ export default function AdminPanel({ administratorName }: { administratorName: s
     setDotykackaStatus(body);
   }
 
+  async function loadDashboardPreferences() {
+    const response = await fetch("/api/admin/dashboard-preferences", { cache: "no-store" }).catch(() => null);
+    if (!response?.ok) {
+      setDashboardError("Nie udało się pobrać osobistego układu. Pokazuję układ domyślny.");
+      return;
+    }
+    const body = await response.json().catch(() => ({})) as { tiles?: unknown };
+    const next = normalizedDashboardPreferences(body.tiles);
+    setDashboardPreferences(next);
+    setDashboardDraft(next.map((item) => ({ ...item })));
+  }
+
   // Initial data hydration; subsequent refreshes keep the current selection.
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void Promise.all([loadProducts(), loadDrinkVessels()]); }, []);
+  useEffect(() => { void Promise.all([loadProducts(), loadDrinkVessels(), loadDashboardPreferences()]); }, []);
 
   useEffect(() => {
     const result = new URLSearchParams(window.location.search).get("dotykacka");
@@ -803,6 +898,76 @@ export default function AdminPanel({ administratorName }: { administratorName: s
   useEffect(() => { if (view === "offers") void loadOffers(); }, [view]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (view === "visibilityHistory") void loadVisibilityEvents(); }, [view]);
+
+  const effectiveDashboardPreferences = dashboardEditing ? dashboardDraft : dashboardPreferences;
+  const visibleDashboardTiles = effectiveDashboardPreferences.flatMap((preference) => {
+    const tile = ADMIN_DASHBOARD_TILES.find((item) => item.id === preference.id);
+    return tile && preference.visible ? [{ ...tile, ...preference }] : [];
+  });
+  const selectedDashboardPreference = dashboardDraft.find((item) => item.id === dashboardSelectedTile) ?? dashboardDraft[0];
+
+  function openDashboardEditor() {
+    setDashboardDraft(dashboardPreferences.map((item) => ({ ...item })));
+    setDashboardSelectedTile(dashboardPreferences.find((item) => item.visible)?.id ?? dashboardPreferences[0].id);
+    setDashboardError("");
+    setDashboardEditing(true);
+  }
+
+  function toggleDashboardTile(id: AdminDashboardTileId) {
+    setDashboardDraft((current) => {
+      const selected = current.find((item) => item.id === id);
+      if (selected?.visible && current.filter((item) => item.visible).length === 1) {
+        setDashboardError("Na pulpicie musi pozostać co najmniej jeden widoczny kafel.");
+        return current;
+      }
+      setDashboardError("");
+      return current.map((item) => item.id === id ? { ...item, visible: !item.visible } : item);
+    });
+    setDashboardSelectedTile(id);
+  }
+
+  function moveDashboardTile(id: AdminDashboardTileId, direction: -1 | 1) {
+    setDashboardDraft((current) => {
+      const index = current.findIndex((item) => item.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = current.map((item) => ({ ...item }));
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function setDashboardTileBackground(background: string) {
+    setDashboardDraft((current) => current.map((item) => item.id === dashboardSelectedTile ? { ...item, background } : item));
+  }
+
+  function setDashboardTileForeground(foreground: string) {
+    setDashboardDraft((current) => current.map((item) => item.id === dashboardSelectedTile ? { ...item, foreground } : item));
+  }
+
+  async function saveDashboardPreferences() {
+    setDashboardSaving(true); setDashboardError("");
+    const response = await fetch("/api/admin/dashboard-preferences", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ tiles: dashboardDraft }) }).catch(() => null);
+    const body = await response?.json().catch(() => ({})) as { tiles?: unknown; error?: string } | undefined;
+    if (!response?.ok) {
+      setDashboardError(body?.error ?? "Nie udało się zapisać układu pulpitu.");
+      setDashboardSaving(false);
+      return;
+    }
+    const saved = normalizedDashboardPreferences(body?.tiles);
+    setDashboardPreferences(saved);
+    setDashboardDraft(saved.map((item) => ({ ...item })));
+    setDashboardEditing(false);
+    setMessage("Osobisty układ pulpitu został zapisany.");
+    setDashboardSaving(false);
+  }
+
+  function activateDashboardTile(id: AdminDashboardTileId) {
+    if (dashboardEditing) { setDashboardSelectedTile(id); return; }
+    const tile = ADMIN_DASHBOARD_TILES.find((item) => item.id === id);
+    if (tile?.href) window.location.assign(tile.href);
+    else if (tile?.view) setView(tile.view);
+  }
 
   const categories = useMemo(() => ["Wszystkie", ...Array.from(new Set(products.map((product) => product.category ?? "Bez kategorii")))], [products]);
   const productsMatchingMainFilters = useMemo(() => {
@@ -1472,6 +1637,7 @@ export default function AdminPanel({ administratorName }: { administratorName: s
           <a className="admin-secondary" href="/admin/waiters">Pracownicy</a>
           <a className="admin-secondary" href="/admin/reservations">Rezerwacje</a>
           <a className="admin-secondary" href="/admin/lighting">Oświetlenie</a>
+          <a className="admin-secondary" href="/admin/rooms">Pomieszczenia</a>
         </nav>
         <div className="admin-top-actions">
           {view !== "stock" && <button className="admin-primary admin-dotykacka-action" onClick={sync} disabled={syncing}>{syncing ? "Synchronizuję…" : "Synchronizuj z Dotykačką"}</button>}
@@ -1497,18 +1663,45 @@ export default function AdminPanel({ administratorName }: { administratorName: s
 
       {view === "home" ? <section className="admin-welcome">
         <header className="admin-welcome-hero">
-          <div className="admin-welcome-copy"><span className="admin-eyebrow">Panel konfiguracji · Marta Banaszek atelier-café</span><h2>Witaj, {greetingName}</h2><p>Wybierz obszar, który chcesz zmienić. Żaden produkt nie zostanie otwarty automatycznie — wyszukiwanie produktów rozpoczyna się od pustego widoku.</p></div>
+          <div className="admin-welcome-copy"><span className="admin-eyebrow">Strona powitalna · Marta Banaszek atelier-café</span><h2>Witaj, {greetingName}</h2><p>Najczęściej używane moduły masz od razu pod ręką. Ten układ jest osobisty i nie zmienia pulpitu innych administratorów.</p></div>
           <AdminWelcomeDateTime/>
         </header>
-        <div className="admin-welcome-grid" aria-label="Najczęstsze działania">
-          <button type="button" onClick={openProductSearch}><span>01</span><strong>Produkty</strong><small>Wyszukaj produkt, wybierz kategorię lub ustaw status widoczności.</small><b className="admin-welcome-card-action">Znajdź produkt →</b></button>
-          <button type="button" onClick={() => setView("categories")}><span>02</span><strong>Zakładki i kody PLU</strong><small>Ustaw kolejność sekcji menu i sposób prezentacji kodów.</small></button>
-          <button type="button" onClick={() => setView("stock")}><span>03</span><strong>Stany magazynowe</strong><small>Sprawdź dostępność i zasady ukrywania produktów.</small></button>
-          <button type="button" className="is-dotykacka" onClick={() => setView("connection")}><span>04</span><strong>Połączenie z Dotykačką</strong><small>Kontroluj synchronizację, magazyn i oddział.</small></button>
-          <button type="button" onClick={() => setView("offers")}><span>05</span><strong>Oferty czasowe</strong><small>Skonfiguruj sezonowe i specjalne propozycje.</small></button>
-          <button type="button" onClick={() => setView("audit")}><span>06</span><strong>Kontrola karty</strong><small>Znajdź brakujące zdjęcia, opisy i tłumaczenia.</small></button>
+        <div className="admin-dashboard-heading">
+          <div><h3>Twój pulpit</h3><p>Wybierz kafel, aby przejść do modułu. Skróty, kolejność i kolory możesz ustawić po swojemu.</p></div>
+          {!dashboardEditing && <button type="button" className="admin-dashboard-customize" onClick={openDashboardEditor}><Settings2 size={18} aria-hidden="true"/>Dostosuj pulpit</button>}
         </div>
-        <aside className="admin-welcome-note"><div><span className="admin-eyebrow">Bezpieczna praca</span><h3>Najpierw wybór, potem edycja</h3></div><p>Panel nie wskazuje już pierwszego produktu z listy. Edycja rozpocznie się dopiero po świadomym ustawieniu kryteriów i wybraniu konkretnej pozycji.</p></aside>
+        <div className={dashboardEditing ? "admin-dashboard-workspace is-editing" : "admin-dashboard-workspace"}>
+          <div>
+            <div className="admin-welcome-grid" aria-label="Osobiste skróty administratora">
+              {visibleDashboardTiles.map((tile) => {
+                const foreground = dashboardTileForeground(tile.background, tile.foreground);
+                const style = { "--admin-dashboard-tile-bg": tile.background === "paper" ? "rgba(255,255,255,.94)" : tile.background, "--admin-dashboard-tile-fg": foreground } as CSSProperties;
+                return <button type="button" key={tile.id} className={dashboardEditing && tile.id === dashboardSelectedTile ? "is-selected" : ""} style={style} onClick={() => activateDashboardTile(tile.id)}>
+                  <span className="admin-dashboard-tile-icon"><AdminDashboardTileIcon id={tile.id}/></span>
+                  <span className="admin-dashboard-tile-copy"><strong>{tile.title}</strong><small>{tile.description}</small></span>
+                  <ChevronRight className="admin-dashboard-tile-arrow" size={20} aria-hidden="true"/>
+                </button>;
+              })}
+            </div>
+            <aside className="admin-welcome-note"><div><span className="admin-eyebrow">Bezpieczna praca</span><h3>Najpierw wybór, potem edycja</h3></div><p>Panel nie wskazuje pierwszego produktu z listy. Edycja rozpoczyna się dopiero po ustawieniu kryteriów i wybraniu konkretnej pozycji.</p></aside>
+          </div>
+          {dashboardEditing && <aside className="admin-dashboard-editor" aria-label="Zarządzanie pulpitem">
+            <header><div><span className="admin-eyebrow">Osobisty układ</span><h3>Zarządzaj kaflami</h3></div><button type="button" aria-label="Zamknij bez zapisywania" onClick={() => { setDashboardEditing(false); setDashboardError(""); }}>×</button></header>
+            <p>Włącz potrzebne skróty, ustaw ich kolejność i wybierz tło. Zmiana zapisze się tylko na Twoim koncie.</p>
+            <div className="admin-dashboard-editor-list">
+              {dashboardDraft.map((preference, index) => {
+                const tile = ADMIN_DASHBOARD_TILES.find((item) => item.id === preference.id)!;
+                return <article className={dashboardSelectedTile === preference.id ? "is-selected" : ""} key={preference.id} onClick={() => setDashboardSelectedTile(preference.id)}>
+                  <label><input type="checkbox" checked={preference.visible} onChange={() => toggleDashboardTile(preference.id)}/><span>{tile.title}</span></label>
+                  <div><button type="button" aria-label={`Przenieś ${tile.title} wyżej`} disabled={index === 0} onClick={(event) => { event.stopPropagation(); moveDashboardTile(preference.id, -1); }}><ChevronUp size={16}/></button><button type="button" aria-label={`Przenieś ${tile.title} niżej`} disabled={index === dashboardDraft.length - 1} onClick={(event) => { event.stopPropagation(); moveDashboardTile(preference.id, 1); }}><ChevronDown size={16}/></button></div>
+                </article>;
+              })}
+            </div>
+            <section className="admin-dashboard-colors"><strong>Kolory: {ADMIN_DASHBOARD_TILES.find((item) => item.id === dashboardSelectedTile)?.title}</strong><span>Kolor tła</span><div>{ADMIN_DASHBOARD_COLORS.map((color) => <button type="button" key={color.value} aria-label={color.label} aria-pressed={selectedDashboardPreference.background === color.value} style={{ background: color.value === "paper" ? "#fffdf7" : color.value }} onClick={() => setDashboardTileBackground(color.value)}/>)}</div><label>Dowolny kolor tła<input type="color" value={selectedDashboardPreference.background === "paper" ? "#fffdf7" : selectedDashboardPreference.background} onChange={(event) => setDashboardTileBackground(event.target.value)}/></label><span>Kolor tekstu i ikony</span><div className="admin-dashboard-foregrounds"><button type="button" className="is-auto" aria-label="Automatyczny kontrast" aria-pressed={selectedDashboardPreference.foreground === "auto"} onClick={() => setDashboardTileForeground("auto")}>A</button><button type="button" aria-label="Granatowy tekst" aria-pressed={selectedDashboardPreference.foreground === "#0b3442"} style={{ background: "#0b3442" }} onClick={() => setDashboardTileForeground("#0b3442")}/><button type="button" aria-label="Biały tekst" aria-pressed={selectedDashboardPreference.foreground === "#ffffff"} style={{ background: "#ffffff" }} onClick={() => setDashboardTileForeground("#ffffff")}/></div><label>Dowolny kolor tekstu<input type="color" value={selectedDashboardPreference.foreground === "auto" ? dashboardTileForeground(selectedDashboardPreference.background) : selectedDashboardPreference.foreground} onChange={(event) => setDashboardTileForeground(event.target.value)}/></label><small>Opcja „A” dobiera kontrast automatycznie. Przy własnym kolorze od razu zobaczysz rezultat na kaflu.</small></section>
+            {dashboardError && <p className="admin-dashboard-editor-error" role="alert">{dashboardError}</p>}
+            <footer><button type="button" className="admin-secondary" disabled={dashboardSaving} onClick={() => { const defaults = DEFAULT_ADMIN_DASHBOARD_PREFERENCES.map((item) => ({ ...item })); setDashboardDraft(defaults); setDashboardSelectedTile(defaults[0].id); setDashboardError(""); }}>Przywróć domyślny</button><button type="button" className="admin-primary" disabled={dashboardSaving} onClick={() => void saveDashboardPreferences()}>{dashboardSaving ? "Zapisuję…" : "Zapisz układ"}</button></footer>
+          </aside>}
+        </div>
       </section> : view === "connection" ? <DotykackaConnectionView key={`${dotykackaStatus?.cloudId ?? "loading"}-${dotykackaStatus?.warehouseId ?? ""}-${dotykackaStatus?.branchId ?? ""}-${dotykackaStatus?.stockWebhookRegistered ?? false}`} status={dotykackaStatus} saving={saving} onSave={saveDotykackaSettings} onEnableStockWebhook={enableStockWebhook} onHistoryApplied={async () => { await loadProducts(selectedId ?? undefined); }} /> : view === "stock" ? <StockLevelsView syncing={syncing} /> : view === "products" ? <section className="admin-workspace">
         <aside className="admin-products">
           <div className="admin-list-head">

@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { settlementTotals } from "../../lib/waiter-settlement";
 import { saveWaiterSessionToken, waiterSessionHeaders } from "./waiter-session-client";
 
 type Employee = { dotykackaId: string; name: string };
 type Correction = { key: string; direction: "CARD_TO_CASH" | "CASH_TO_CARD"; amount: string; reason: string };
-type Expense = { key: string; description: string; amount: string; receiptNumber: string; receiptIncluded: boolean };
+type Expense = { id?: number; key: string; description: string; amount: string; receiptNumber: string; receiptIncluded: boolean; saved: boolean; saving?: boolean };
 type Allocation = { key: string; employeeDotykackaId: string; amount: string };
 type Tip = { key: string; paymentMethod: "CASH" | "CARD"; amount: string; note: string; allocations: Allocation[] };
 type Snapshot = { cash: number; card: number; capturedAt: string; periodFrom: string; periodTo: string };
@@ -49,6 +49,7 @@ type Workflow = {
   cashDesk: string;
   day: CashDay | null;
   checkpoints: Checkpoint[];
+  pendingExpenses: Array<{ id: number; description: string; amount: string; receiptNumber: string | null; receiptIncluded: boolean }>;
   latest: Checkpoint | null;
   previousClose: PreviousClose | null;
   snapshot: Snapshot | null;
@@ -65,7 +66,13 @@ type Workflow = {
 
 const amountProps = { min: "0", step: "0.01", inputMode: "decimal" as const };
 const POLAND_TIME_ZONE = "Europe/Warsaw";
-const newKey = () => crypto.randomUUID();
+let fallbackKeyCounter = 0;
+const newKey = () => {
+  const browserCrypto = globalThis.crypto;
+  if (typeof browserCrypto?.randomUUID === "function") return browserCrypto.randomUUID();
+  fallbackKeyCounter += 1;
+  return `settlement-${Date.now().toString(36)}-${fallbackKeyCounter.toString(36)}`;
+};
 const cents = (value: string | number | null | undefined) =>
   Math.round((Number(String(value ?? "0").replace(",", ".")) || 0) * 100);
 const money = (value: number | string | null | undefined) =>
@@ -210,6 +217,7 @@ export default function SettlementForm({
     posCash?: string;
     posCard?: string;
   } | null>(null);
+  const hydratedExpenseDay = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -221,6 +229,19 @@ export default function SettlementForm({
       else {
         setWorkflow(body);
         setEmployees(body.employees ?? [employee]);
+        const dayId = body.day?.id ?? null;
+        if (dayId !== hydratedExpenseDay.current) {
+          hydratedExpenseDay.current = dayId;
+          setExpenses((body.pendingExpenses ?? []).map((item) => ({
+            id: item.id,
+            key: `cash-expense-${item.id}`,
+            description: item.description,
+            amount: item.amount,
+            receiptNumber: item.receiptNumber ?? "",
+            receiptIncluded: item.receiptIncluded,
+            saved: true,
+          })));
+        }
       }
     } catch {
       setError("Nie udało się połączyć z modułem rozliczeń.");
@@ -261,7 +282,7 @@ export default function SettlementForm({
     cashLeft: action === "CLOSE" ? cents(cashLeft) : cents(countedCash),
     envelopeCash: action === "CLOSE" ? cents(envelopeCash) : 0,
     corrections: corrections.map((item) => ({ direction: item.direction, amount: cents(item.amount) })),
-    expenses: expenses.map((item) => ({ amount: cents(item.amount) })),
+    expenses: expenses.filter((item) => item.saved).map((item) => ({ amount: cents(item.amount) })),
     tips: tips.map((item) => ({ paymentMethod: item.paymentMethod, amount: cents(item.amount) })),
   }), [baselineCash, posCash, posCard, countedCash, cashLeft, envelopeCash, action, corrections, expenses, tips]);
   const openingDifference = cents(countedCash) - previousCash;
@@ -274,7 +295,7 @@ export default function SettlementForm({
     tip.allocations.reduce((sum, allocation) => sum + cents(allocation.amount), 0) === cents(tip.amount));
   const detailsComplete =
     corrections.every((item) => cents(item.amount) > 0 && item.reason.trim()) &&
-    expenses.every((item) => cents(item.amount) > 0 && item.description.trim() && item.receiptIncluded) &&
+    expenses.every((item) => item.saved && cents(item.amount) > 0 && item.description.trim() && item.receiptIncluded) &&
     tipsComplete;
   const openReady =
     openingMode &&
@@ -301,7 +322,7 @@ export default function SettlementForm({
   const updateCorrection = (rowKey: string, change: Partial<Correction>) =>
     setCorrections((rows) => rows.map((row) => row.key === rowKey ? { ...row, ...change } : row));
   const updateExpense = (rowKey: string, change: Partial<Expense>) =>
-    setExpenses((rows) => rows.map((row) => row.key === rowKey ? { ...row, ...change } : row));
+    setExpenses((rows) => rows.map((row) => row.key === rowKey ? { ...row, ...change, saved: change.saved ?? false } : row));
   const updateTip = (rowKey: string, change: Partial<Tip>) =>
     setTips((rows) => rows.map((row) => row.key === rowKey ? { ...row, ...change } : row));
   const updateAllocation = (tipKey: string, allocationKey: string, change: Partial<Allocation>) =>
@@ -346,6 +367,46 @@ export default function SettlementForm({
     setEnvelopeCash(((counted - preferred) / 100).toFixed(2));
   }
 
+  async function saveExpense(item: Expense) {
+    if (!item.description.trim() || cents(item.amount) <= 0 || !item.receiptIncluded || item.saving) return;
+    updateExpense(item.key, { saving: true, saved: item.saved });
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/waiter/settlements", {
+        method: "POST",
+        headers: waiterSessionHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ action: "SAVE_EXPENSE", expenseId: item.id, expense: { description: item.description, amount: item.amount, receiptNumber: item.receiptNumber, receiptIncluded: item.receiptIncluded } }),
+      });
+      const body = await response.json().catch(() => ({})) as { expense?: { id: number; description: string; amount: string; receiptNumber: string | null; receiptIncluded: boolean }; error?: string };
+      if (!response.ok || !body.expense) setError(body.error ?? "Nie udało się zapisać wydatku.");
+      else {
+        setExpenses((rows) => rows.map((row) => row.key === item.key ? { id: body.expense!.id, key: `cash-expense-${body.expense!.id}`, description: body.expense!.description, amount: body.expense!.amount, receiptNumber: body.expense!.receiptNumber ?? "", receiptIncluded: body.expense!.receiptIncluded, saved: true, saving: false } : row));
+        setMessage("Wydatek został zapisany w bieżącym dniu kasowym.");
+      }
+    } catch {
+      setError("Nie udało się połączyć z modułem rozliczeń.");
+    } finally {
+      setExpenses((rows) => rows.map((row) => row.key === item.key ? { ...row, saving: false } : row));
+    }
+  }
+
+  async function removeExpense(item: Expense) {
+    if (!item.id) { setExpenses((rows) => rows.filter((row) => row.key !== item.key)); return; }
+    updateExpense(item.key, { saving: true, saved: item.saved });
+    setError("");
+    try {
+      const response = await fetch("/api/waiter/settlements", { method: "POST", headers: waiterSessionHeaders({ "content-type": "application/json" }), body: JSON.stringify({ action: "DELETE_EXPENSE", expenseId: item.id }) });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) setError(body.error ?? "Nie udało się usunąć wydatku.");
+      else { setExpenses((rows) => rows.filter((row) => row.key !== item.key)); setMessage("Wydatek został usunięty."); }
+    } catch {
+      setError("Nie udało się połączyć z modułem rozliczeń.");
+    } finally {
+      setExpenses((rows) => rows.map((row) => row.key === item.key ? { ...row, saving: false } : row));
+    }
+  }
+
   async function submit() {
     if (!canSubmit) return;
     const requestedAction = openingMode ? "OPEN" : action;
@@ -363,7 +424,7 @@ export default function SettlementForm({
           envelopeCash,
           envelopeNumber,
           corrections: corrections.map(({ direction, amount, reason }) => ({ direction, amount, reason })),
-          expenses: expenses.map(({ description, amount, receiptNumber, receiptIncluded }) => ({
+          expenses: expenses.filter((item) => item.saved).map(({ description, amount, receiptNumber, receiptIncluded }) => ({
             description,
             amount,
             receiptNumber,
@@ -519,7 +580,7 @@ export default function SettlementForm({
                     <h2>Napiwki</h2>
                     <p>Wpisz napiwki z tej zmiany i przypisz je pracownikom.</p>
                   </div>
-                  <button className="cash-tip-add" onClick={() => setTips((rows) => [
+                  <button type="button" className="cash-tip-add" onClick={() => setTips((rows) => [
                     ...rows,
                     {
                       key: newKey(),
@@ -559,8 +620,8 @@ export default function SettlementForm({
                     <div className="waiter-tip-head">
                       <b>Podział napiwku</b>
                       <div>
-                        <button onClick={() => splitEvenly(tip)}>Podziel równo</button>
-                        <button disabled={tip.allocations.length >= employees.length} onClick={() => addAllocation(tip)}>+ Osoba</button>
+                        <button type="button" onClick={() => splitEvenly(tip)}>Podziel równo</button>
+                        <button type="button" disabled={tip.allocations.length >= employees.length} onClick={() => addAllocation(tip)}>+ Osoba</button>
                       </div>
                     </div>
                     {tip.allocations.map((allocation) => (
@@ -582,6 +643,7 @@ export default function SettlementForm({
                           onChange={(event) => updateAllocation(tip.key, allocation.key, { amount: event.target.value })}
                         />
                         <button
+                          type="button"
                           disabled={tip.allocations.length === 1}
                           onClick={() => updateTip(tip.key, {
                             allocations: tip.allocations.filter((row) => row.key !== allocation.key),
@@ -593,7 +655,7 @@ export default function SettlementForm({
                       <small>
                         Przydzielono {money(tip.allocations.reduce((sum, row) => sum + cents(row.amount), 0))} z {money(cents(tip.amount))} zł
                       </small>
-                      <button className="waiter-remove-row" onClick={() => setTips((rows) => rows.filter((row) => row.key !== tip.key))}>Usuń napiwek</button>
+                      <button type="button" className="waiter-remove-row" onClick={() => setTips((rows) => rows.filter((row) => row.key !== tip.key))}>Usuń napiwek</button>
                     </footer>
                   </article>
                 ))}
@@ -713,7 +775,7 @@ export default function SettlementForm({
                   <section>
                     <header>
                       <div><h3>Korekty płatności</h3><p>Gdy sposób płatności w POS różni się od faktycznego.</p></div>
-                      <button onClick={() => setCorrections((rows) => [
+                      <button type="button" onClick={() => setCorrections((rows) => [
                         ...rows,
                         { key: newKey(), direction: "CARD_TO_CASH", amount: "", reason: "" },
                       ])}>+ Dodaj</button>
@@ -737,21 +799,21 @@ export default function SettlementForm({
                           Wyjaśnienie
                           <input value={item.reason} maxLength={300} onChange={(event) => updateCorrection(item.key, { reason: event.target.value })} />
                         </label>
-                        <button className="waiter-remove-row" onClick={() => setCorrections((rows) => rows.filter((row) => row.key !== item.key))}>Usuń</button>
+                        <button type="button" className="waiter-remove-row" onClick={() => setCorrections((rows) => rows.filter((row) => row.key !== item.key))}>Usuń</button>
                       </article>
                     ))}
                   </section>
 
                   <section>
                     <header>
-                      <div><h3>Wydatki z gotówki</h3><p>Tylko wydatki od ostatniego przeliczenia.</p></div>
-                      <button onClick={() => setExpenses((rows) => [
+                      <div><h3>Wydatki z gotówki</h3><p>Tylko wydatki od ostatniego przeliczenia. Saldo uwzględnia wyłącznie pozycje oznaczone „Zapisano w kasie”.</p></div>
+                      <button type="button" onClick={() => setExpenses((rows) => [
                         ...rows,
-                        { key: newKey(), description: "", amount: "", receiptNumber: "", receiptIncluded: false },
+                        { key: newKey(), description: "", amount: "", receiptNumber: "", receiptIncluded: false, saved: false },
                       ])}>+ Dodaj</button>
                     </header>
                     {expenses.map((item) => (
-                      <article className="waiter-settlement-row" key={item.key}>
+                      <article className="waiter-settlement-row cash-expense-row" key={item.key}>
                         <label className="is-wide">
                           Co kupiono
                           <input value={item.description} maxLength={300} onChange={(event) => updateExpense(item.key, { description: event.target.value })} />
@@ -765,7 +827,8 @@ export default function SettlementForm({
                           <input type="checkbox" checked={item.receiptIncluded} onChange={(event) => updateExpense(item.key, { receiptIncluded: event.target.checked })} />
                           Paragon zabezpieczony
                         </label>
-                        <button className="waiter-remove-row" onClick={() => setExpenses((rows) => rows.filter((row) => row.key !== item.key))}>Usuń</button>
+                        <div className={`cash-expense-save${item.saved ? " is-saved" : ""}`}><span>{item.saved ? "✓ Zapisano w kasie" : "Niezapisany"}</span><button type="button" disabled={item.saving || item.saved || !item.description.trim() || cents(item.amount) <= 0 || !item.receiptIncluded} onClick={() => void saveExpense(item)}>{item.saving ? "Zapisuję…" : item.saved ? "Zapisano" : "Zapisz wydatek"}</button></div>
+                        <button type="button" disabled={item.saving} className="waiter-remove-row" onClick={() => void removeExpense(item)}>Usuń</button>
                       </article>
                     ))}
                   </section>

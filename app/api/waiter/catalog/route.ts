@@ -109,7 +109,8 @@ export async function GET(request: Request) {
     }).from(waiterExtraProducts)
       .orderBy(sql`coalesce(${waiterExtraProducts.categorySortOrder}, 2147483647)`, asc(waiterExtraProducts.category), sql`coalesce(${waiterExtraProducts.productSortOrder}, 2147483647)`, asc(waiterExtraProducts.name)),
     db.select({ dotykackaId: waiterTables.dotykackaId, name: waiterTables.name })
-      .from(waiterTables).where(and(eq(waiterTables.display, true), eq(waiterTables.deleted, false))).orderBy(asc(waiterTables.name)),
+      .from(waiterTables).where(and(eq(waiterTables.display, true), eq(waiterTables.deleted, false)))
+      .orderBy(sql`case when trim(${waiterTables.name}) ~ '^[0-9]+$' then trim(${waiterTables.name})::integer else 2147483647 end`, asc(waiterTables.name)),
     db.select({ id: waiterSurveyQuestions.id, prompt: waiterSurveyQuestions.prompt, kind: waiterSurveyQuestions.kind, options: waiterSurveyQuestions.options, required: waiterSurveyQuestions.required })
       .from(waiterSurveyQuestions).where(eq(waiterSurveyQuestions.active, true)).orderBy(asc(waiterSurveyQuestions.sortOrder), asc(waiterSurveyQuestions.id)),
     db.select({ parentId: menuAddons.parentDotykackaId, id: menuAddons.addonDotykackaId, groupName: menuAddons.groupName, name: menuAddons.name, price: menuAddons.priceWithVat, currency: menuAddons.currency, sortOrder: menuAddons.sortOrder })

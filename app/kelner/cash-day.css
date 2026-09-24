@@ -403,6 +403,40 @@
 
 .cash-employee-note { padding-top: 18px; }
 
+.cash-expense-save {
+  display: flex;
+  grid-column: 1 / 4;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 7px 9px 7px 13px;
+  border: 1px solid #e4b7a5;
+  background: #fff6f0;
+  color: #9a4d31;
+  font-size: .65rem;
+  font-weight: 800;
+}
+
+.cash-expense-save.is-saved {
+  border-color: #9cc6b4;
+  background: #edf7f2;
+  color: #276a50;
+}
+
+.cash-expense-save button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 0;
+  background: var(--w-orange);
+  color: var(--w-navy);
+  font-size: .62rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.cash-expense-save button:disabled { opacity: .48; }
+
 .cash-use-float {
   margin: 18px 20px 0;
   background: #e9f2ef;
@@ -515,6 +549,10 @@
 .cash-done > div { display: grid; grid-template-columns: 1fr 1fr; margin: 25px 0; }
 .cash-done .cash-summary-amount { border: 1px solid var(--w-line); text-align: left; }
 .cash-done .cash-final-snapshot { margin-top: -12px; color: #276a50; font-size: .7rem; }
+
+@media (max-width: 850px) {
+  .cash-expense-save { grid-column: 1; }
+}
 
 @media (max-width: 720px) {
   .cash-equation { display: grid; grid-template-columns: 1fr 1fr; }

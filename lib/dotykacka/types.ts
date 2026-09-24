@@ -112,6 +112,16 @@ export type DotykackaPosActionResponse = {
     status?: string;
   };
   items?: Array<{ id: number; "product-id": number; qty: number }>;
+  orders?: Array<{
+    order?: {
+      id: number;
+      "table-id"?: number | null;
+      "external-id"?: string | null;
+      created?: string | number | null;
+      status?: string;
+    };
+    items?: Array<{ id: number; "product-id": number; qty: number }>;
+  }>;
 };
 
 export type DotykackaConfig = {

@@ -17,10 +17,22 @@ export function isShelfProduct(tags: string[]) {
 
 export type ServingTemperature = "warm" | "cold";
 
+function hasServingTemperatureTag(tags: string[], expected: "warm" | "cold") {
+  const warmTags = new Set(["warm", "cieplo"]);
+  const coldTags = new Set(["cold", "zimno"]);
+  const expectedTags = expected === "warm" ? warmTags : coldTags;
+  return tags.some((tag) => {
+    const tokens = normalizedTag(tag).replace(/[+/|,_-]+/g, " ").split(/\s+/).filter(Boolean);
+    return tokens.length > 0
+      && tokens.every((token) => warmTags.has(token) || coldTags.has(token))
+      && tokens.some((token) => expectedTags.has(token));
+  });
+}
+
 export function productTemperatures(tags: string[]): ServingTemperature[] {
   return [
-    ...(hasTag(tags, "WARM") ? ["warm" as const] : []),
-    ...(hasTag(tags, "COLD") ? ["cold" as const] : []),
+    ...(hasServingTemperatureTag(tags, "warm") ? ["warm" as const] : []),
+    ...(hasServingTemperatureTag(tags, "cold") ? ["cold" as const] : []),
   ];
 }
 

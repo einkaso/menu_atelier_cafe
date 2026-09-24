@@ -96,15 +96,55 @@ test("employee profiles control future planning without removing historical sett
   assert.match(employeePlanner, /Nadal masz dostęp do ewidencji godzin i rozliczeń/);
 });
 
+test("plans availability, assigned shifts and QR time in one locked weekly grid", async () => {
+  const [schema, migration, adminRoute, employeeRoute, adminClient, employeeClient, adminCss] = await Promise.all([
+    read("db/schema.ts"),
+    read("drizzle/0067_workforce_availability_lock.sql"),
+    read("app/api/admin/workforce/route.ts"),
+    read("app/api/waiter/workforce/route.ts"),
+    read("app/admin/workforce/workforce-admin-client.tsx"),
+    read("app/kelner/grafik/workforce-employee-client.tsx"),
+    read("app/admin/workforce/workforce.css"),
+  ]);
+
+  for (const source of [schema, migration]) {
+    assert.match(source, /availability_locked/);
+    assert.match(source, /availability_locked_at/);
+    assert.match(source, /availability_locked_by/);
+  }
+  assert.match(adminRoute, /allEmployees\.filter\(\(employee\) => employee\.includeInSchedule\)/);
+  assert.match(adminRoute, /SET_AVAILABILITY_LOCK/);
+  assert.match(adminRoute, /weekEntries/);
+  assert.match(adminRoute, /warsawDateTime\(weekStart, "00:00"\)/);
+  assert.match(employeeRoute, /schedule\?\.availabilityLocked/);
+  assert.match(employeeRoute, /Administrator zablokował już dyspozycje/);
+  assert.match(employeeClient, /Dyspozycja zablokowana/);
+  assert.match(adminClient, /Dyspozycja · zmiana · faktyczny czas/);
+  assert.match(adminClient, /BLOKADA DYSPOZYCJI/);
+  assert.match(adminClient, /DYSPOZYCJA/);
+  assert.match(adminClient, /FAKTYCZNIE/);
+  assert.match(adminClient, /Zmiana 1/);
+  assert.match(adminClient, /08:30–15:30/);
+  assert.match(adminClient, /Zmiana 2/);
+  assert.match(adminClient, /15:30–/);
+  assert.match(adminClient, /Zmiana 3/);
+  assert.match(adminClient, /11:00–19:00/);
+  assert.match(adminClient, /index <= 2 \|\| index === 6 \? "21:00" : "22:00"/);
+  assert.match(adminCss, /\.workforce-schedule-cell/);
+  assert.match(adminCss, /\.is-available\{background:#dff1e9/);
+});
+
 test("kiosk alternates clock-in and clock-out and guards duplicate scans", async () => {
   const route = await read("app/api/workforce/kiosk/scan/route.ts");
   assert.match(route, /CLOCK_IN/); assert.match(route, /CLOCK_OUT/); assert.match(route, /20_000/); assert.match(route, /workedMinutes/);
 });
 
 test("reservation workflow tracks two-hour notice and one-hour preparation separately", async () => {
-  const [route, reminder, schema] = await Promise.all([read("app/api/waiter/reservations/route.ts"), read("app/kelner/reservation-reminder.tsx"), read("db/schema.ts")]);
-  assert.match(route, /2 \* 3_600_000/); assert.match(route, /inOneHour/); assert.match(route, /ACK_2H/); assert.match(route, /TABLE_READY/); assert.match(route, /REQUEST_READY/);
+  const [route, reminder, schema, waiter] = await Promise.all([read("app/api/waiter/reservations/route.ts"), read("app/kelner/reservation-reminder.tsx"), read("db/schema.ts"), read("app/kelner/waiter-client.tsx")]);
+  assert.match(route, /2 \* 3_600_000/); assert.match(route, /inOneHour/); assert.match(route, /item\.startsAt >= now && item\.startsAt <= inOneHour/); assert.doesNotMatch(route, /now\.getTime\(\) - 30 \* 60_000/); assert.match(route, /ACK_2H/); assert.match(route, /TABLE_READY/); assert.match(route, /REQUEST_READY/);
   assert.match(reminder, /Zamknij do następnego logowania/); assert.match(reminder, /Stolik gotowy/); assert.match(reminder, /Potwierdź przygotowanie życzenia/);
+  assert.match(reminder, /void load\(true\)/); assert.match(reminder, /setInterval\(refresh, 60_000\)/); assert.match(reminder, /visibilitychange/); assert.match(reminder, /dismissedReminder/);
+  assert.match(waiter, /import ReservationReminder from "\.\/reservation-reminder"/); assert.match(waiter, /<WaiterInstructionEntry\/><Link href="\/kelner\/grafik">Grafik<\/Link><ReservationReminder\/>/);
   assert.match(schema, /reservation_notifications/); assert.match(schema, /table_ready_at/); assert.match(schema, /special_request_ready_at/); assert.match(schema, /added_by_name/);
 });
 
@@ -125,10 +165,11 @@ test("keeps staff navigation visible and ordered in unified black top bars", asy
   assert.match(navigation, /window\.location\.replace\("\/"\)/);
   const mainBrand = waiter.indexOf("waiter-main-brand");
   const mainTools = waiter.indexOf("waiter-main-tools", mainBrand);
-  const employeeSummary = waiter.indexOf("waiter-employee-summary", mainTools);
+  const employeeSummary = waiter.indexOf("waiter-employee-summary", mainBrand);
   const mainControls = waiter.indexOf("waiter-main-controls", employeeSummary);
-  assert.ok(mainBrand >= 0 && mainBrand < mainTools && mainTools < employeeSummary && employeeSummary < mainControls);
-  assert.match(waiter.slice(mainTools, employeeSummary), /WaiterInstructionEntry[^]*Grafik[^]*Rezerwacje[^]*Inwentaryzacja[^]*Rozliczanie/);
+  assert.ok(mainBrand >= 0 && mainBrand < employeeSummary && employeeSummary < mainControls && mainControls < mainTools);
+  assert.match(waiter.slice(mainTools, mainTools + 700), /WaiterInstructionEntry[^]*Grafik[^]*ReservationReminder[^]*Inwentaryzacja[^]*Rozliczanie/);
+  assert.match(waiter, /<\/header><nav className="waiter-main-tools waiter-ordering-tools"/);
   assert.match(waiter.slice(mainControls, mainControls + 700), /Rachunek dla gościa[^]*waiter-main-exit-controls[^]*← Menu[^]*Wyloguj/);
   assert.match(reservations, /<WaiterSectionHeader eyebrow="Goście i stoliki" title="Rezerwacje"/);
   assert.match(instructions, /<WaiterSectionHeader className="waiter-instruction-header" eyebrow="Katalog wiedzy"/);
@@ -139,7 +180,7 @@ test("keeps staff navigation visible and ordered in unified black top bars", asy
   assert.match(css, /\.waiter-section-header[^]*background-color: #000 !important;/);
   assert.match(css, /\.waiter-section-header > img[^]*width: 158px/);
   assert.match(css, /\.workforce-employee > header\.waiter-section-header[^]*margin: -28px calc\(-1 \* clamp\(18px, 4vw, 58px\)\) 0/);
-  assert.match(css, /@media \(max-width: 760px\)[^]*\.waiter-main-tools[^]*overflow-x: auto/);
+  assert.match(css, /@media \(max-width: 760px\)[^]*\.waiter-ordering-tools[^]*overflow-x: auto/);
 });
 
 test("reservation calendar supports secure import and iPhone subscription export", async () => {

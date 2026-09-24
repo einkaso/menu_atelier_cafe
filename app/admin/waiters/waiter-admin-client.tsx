@@ -12,6 +12,7 @@ type Employee = {
   accessLevel: string | null;
   canManageMenuVisibility: boolean;
   canControlLighting: boolean;
+  canControlRooms: boolean;
   pinConfigured: boolean;
   adminConfigured: boolean;
   adminUsername: string | null;
@@ -122,6 +123,19 @@ export default function WaiterAdminClient() {
     setBusy("");
   }
 
+  async function setRoomsAccess(employee: Employee, enabled: boolean) {
+    setBusy(`rooms:${employee.dotykackaId}`); setError(""); setMessage("");
+    const response = await fetch(`/api/admin/waiter/employees/${encodeURIComponent(employee.dotykackaId)}/rooms`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    const body = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) setError(body.error ?? "Nie udało się zmienić uprawnienia do pomieszczeń.");
+    else { setMessage(`${employee.name}: ${enabled ? "włączono" : "wyłączono"} sterowanie zamkami.`); await load(); }
+    setBusy("");
+  }
+
   async function uploadThankYouMedia(event: FormEvent<HTMLFormElement>, employee: Employee) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -227,7 +241,7 @@ export default function WaiterAdminClient() {
       <section className="waiter-admin-intro"><div><span className="admin-eyebrow">Jedna lista z Dotykački</span><h2>Dostęp dla obsługi</h2><p>Aktywnemu pracownikowi możesz niezależnie nadać PIN do strefy kelnera oraz login do całego panelu zarządzania menu. Hasła i PIN-y zapisujemy wyłącznie jako bezpieczne skróty.</p></div><a className="admin-primary" href="/admin">Synchronizuj w panelu</a></section>
       <section className="waiter-qr-management"><div><span className="admin-eyebrow">EWIDENCJA CZASU PRACY</span><h2>Kody QR pracowników</h2><p>Kody są podpisane cyfrowo i tworzone automatycznie z identyfikatora oraz kodu kreskowego pracownika w Dotykačce.</p></div><div><a className="admin-primary" href="/admin/workforce/kiosk">Uruchom skaner QR</a><button type="button" className="admin-secondary" onClick={() => window.print()}>Drukuj wszystkie karty QR</button></div></section>
       {!posEnabled && <p className="waiter-admin-warning"><b>Tryb projektowy:</b> wysyłanie zamówień do POS jest zablokowane. Można bezpiecznie ustawić PIN-y i sprawdzić interfejs.</p>}
-      <div className="waiter-admin-summary"><span><b>{employees.length}</b> aktywnych pracowników</span><span><b>{employees.filter((item) => item.pinConfigured).length}</b> z PIN-em kelnera</span><span><b>{employees.filter((item) => item.canManageMenuVisibility).length}</b> może zmieniać widoczność</span><span><b>{employees.filter((item) => item.canControlLighting).length}</b> może sterować światłem</span><span><b>{employees.filter((item) => item.adminConfigured).length}</b> administratorów menu</span><span><b>{tables.filter((item) => item.display && !item.deleted).length}</b> aktywnych stolików</span></div>
+      <div className="waiter-admin-summary"><span><b>{employees.length}</b> aktywnych pracowników</span><span><b>{employees.filter((item) => item.pinConfigured).length}</b> z PIN-em kelnera</span><span><b>{employees.filter((item) => item.canManageMenuVisibility).length}</b> może zmieniać widoczność</span><span><b>{employees.filter((item) => item.canControlLighting).length}</b> może sterować światłem</span><span><b>{employees.filter((item) => item.canControlRooms).length}</b> może sterować zamkami</span><span><b>{employees.filter((item) => item.adminConfigured).length}</b> administratorów menu</span><span><b>{tables.filter((item) => item.display && !item.deleted).length}</b> aktywnych stolików</span></div>
       <section className="waiter-admin-list">{employees.map((employee) => <article className="waiter-admin-row" key={employee.dotykackaId}>
         <div className="waiter-employee-heading"><div><h3>{employee.name}</h3><small>ID Dotykački: {employee.dotykackaId}{employee.accessLevel ? ` · poziom ${employee.accessLevel}` : ""}</small></div><span className={`waiter-schedule-badge ${employee.includeInSchedule ? "is-on" : "is-off"}`}>Grafik: {employee.includeInSchedule ? "TAK" : "NIE"}</span></div>
         <div className="waiter-access-grid">
@@ -237,6 +251,7 @@ export default function WaiterAdminClient() {
           <section className="waiter-access-card is-admin"><header><div><b>Administrator menu</b><small>{employee.adminLastLoginAt ? `Ostatnie logowanie: ${new Date(employee.adminLastLoginAt).toLocaleString("pl-PL")}` : "Dostęp do panelu /admin"}</small></div><span className={`waiter-admin-state ${employee.adminConfigured ? "is-ready" : ""}`}>{employee.adminConfigured ? "Aktywny" : "Wyłączony"}</span></header><form className="waiter-admin-login-form" onSubmit={(event) => saveAdminAccess(event, employee)}><label>Login<input name="username" defaultValue={employee.adminUsername ?? ""} minLength={3} maxLength={50} pattern="[a-z0-9._-]+" autoComplete="off" placeholder="np. anna.nowak" required/></label><label>{employee.adminConfigured ? "Nowe hasło (opcjonalnie)" : "Hasło"}<input name="password" type="password" minLength={10} maxLength={128} autoComplete="new-password" placeholder={employee.adminConfigured ? "pozostaw puste bez zmiany" : "minimum 10 znaków"} required={!employee.adminConfigured}/></label><div><button className="admin-primary" disabled={busy === `admin:${employee.dotykackaId}`}>{employee.adminConfigured ? "Zapisz zmiany" : "Nadaj dostęp"}</button>{employee.adminConfigured && <button type="button" className="admin-secondary" disabled={busy === `admin:${employee.dotykackaId}`} onClick={() => disableAdminAccess(employee)}>Wyłącz</button>}</div></form></section>
           <section className="waiter-access-card waiter-menu-visibility-card"><header><div><b>Widoczność menu gościa</b><small>Włączanie i ukrywanie produktów z tagiem MENU</small></div><span className={`waiter-admin-state ${employee.canManageMenuVisibility ? "is-ready" : ""}`}>{employee.canManageMenuVisibility ? "Dozwolone" : "Zablokowane"}</span></header><p>Uprawnienie jest domyślnie wyłączone. Każda zmiana wymaga podania powodu i trafia do historii administratora.</p><button type="button" className={employee.canManageMenuVisibility ? "admin-secondary" : "admin-primary"} disabled={busy === `visibility:${employee.dotykackaId}`} onClick={() => void setMenuVisibilityAccess(employee, !employee.canManageMenuVisibility)}>{employee.canManageMenuVisibility ? "Odbierz uprawnienie" : "Nadaj uprawnienie"}</button></section>
           <section className="waiter-access-card"><header><div><b>Sterowanie oświetleniem</b><small>Mapa, grupy i zatwierdzone sceny w strefie kelnera</small></div><span className={`waiter-admin-state ${employee.canControlLighting ? "is-ready" : ""}`}>{employee.canControlLighting ? "Dozwolone" : "Zablokowane"}</span></header><p>Uprawnienie jest domyślnie wyłączone. Konfiguracja urządzeń, mapy i scen pozostaje dostępna wyłącznie dla administratorów.</p><button type="button" className={employee.canControlLighting ? "admin-secondary" : "admin-primary"} disabled={busy === `lighting:${employee.dotykackaId}`} onClick={() => void setLightingAccess(employee, !employee.canControlLighting)}>{employee.canControlLighting ? "Odbierz uprawnienie" : "Nadaj uprawnienie"}</button></section>
+          <section className="waiter-access-card"><header><div><b>Pomieszczenia</b><small>Zamki TTLock przez bramkę internetową</small></div><span className={`waiter-admin-state ${employee.canControlRooms ? "is-ready" : ""}`}>{employee.canControlRooms ? "Dozwolone" : "Zablokowane"}</span></header><p>Osobne uprawnienie do otwierania i zamykania. Każde polecenie jest potwierdzane i zapisywane z nazwiskiem pracownika.</p><button type="button" className={employee.canControlRooms ? "admin-secondary" : "admin-primary"} disabled={busy === `rooms:${employee.dotykackaId}`} onClick={() => void setRoomsAccess(employee, !employee.canControlRooms)}>{employee.canControlRooms ? "Odbierz uprawnienie" : "Nadaj uprawnienie"}</button></section>
           <section className="waiter-access-card waiter-thanks-card">
             <header><div><b>Podziękowanie na rachunku</b><small>Każdy pracownik może mieć własny tekst i do 3 animacji</small></div><span className={`waiter-admin-state ${employee.thankYouMedia.length ? "is-ready" : ""}`}>{employee.thankYouMedia.length}/3</span></header>
             <form className="waiter-thanks-message-form" onSubmit={(event) => { event.preventDefault(); void saveThankYouMessage(employee); }}>

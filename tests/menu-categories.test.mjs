@@ -27,6 +27,7 @@ test("classifies Dotykacka drinks and alcohol as one Alko Bar section", async ()
   const { sectionFor } = await vite.ssrLoadModule("/lib/menu-categories.ts");
   assert.equal(sectionFor("DRINKI"), "cocktails");
   assert.equal(sectionFor("ALKOHOLE"), "cocktails");
+  assert.equal(sectionFor("ALKOHOLE DRINKI"), "cocktails");
   assert.equal(sectionFor("BEZALKOHOLOWE"), "zero");
 });
 

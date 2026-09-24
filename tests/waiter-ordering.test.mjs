@@ -20,12 +20,14 @@ test("opens the hidden waiter login only after three logo taps", async () => {
   assert.match(source, /window\.location\.assign\("\/kelner"\)/);
   assert.match(source, /onClick=\{tapLogo\}/);
   assert.match(waiter, /waiter-login-shell" role="dialog" aria-modal="true"[\s\S]*waiter-login-close[\s\S]*waiter-login-brand[\s\S]*logo-cafe\.png[\s\S]*STREFA PRACOWNIKA[\s\S]*Podaj swój PIN/);
+  assert.match(waiter, /if \(loading\) return <main className="waiter-loading" aria-busy="true"[\s\S]*logo-cafe\.png[\s\S]*Przygotowuję strefę pracownika/);
   assert.doesNotMatch(waiter, /STREFA KELNERA/);
   assert.match(waiter, /matchLoginLogoBackground[\s\S]*--waiter-login-brand-bg/);
   assert.match(layout, /login-redesign\.css/);
   assert.match(layout, /Strefa pracownika — Atelier Café/);
   assert.match(loginStyles, /\.waiter-login > \.waiter-login-shell \{[\s\S]*width: min\(680px,[\s\S]*max-height: calc\(100dvh - 48px\);[\s\S]*min-height: 0/);
   assert.match(loginStyles, /\.waiter-login \.waiter-login-close \{/);
+  assert.match(loginStyles, /\.waiter-loading \{[\s\S]*min-height: 100dvh;[\s\S]*place-items: center;[\s\S]*background: #050505;/);
 });
 
 test("merges cakes and desserts into one NA SŁODKO waiter category", async () => {
@@ -134,9 +136,13 @@ test("stores only a scrypt waiter PIN hash and sends orders only through the gat
   assert.doesNotMatch(schema, /pin: text\("pin"\)/);
   assert.match(auth, /scrypt\$/);
   assert.match(orders, /WAITER_POS_ACTIONS_ENABLED !== "true"/);
+  assert.match(orders, /action: "order\/list"/);
+  assert.match(orders, /action: "order\/add-item"/);
   assert.match(orders, /action: "order\/create"/);
+  assert.match(orders, /pg_advisory_xact_lock/);
+  assert.match(orders, /openOrderIds\.length > 1/);
   assert.match(orders, /"idempotency-key": externalId/);
-  assert.match(orders, /client\)\.posAction|DotykackaClient\(config\)\.posAction/);
+  assert.match(orders, /client\.posAction/);
   assert.match(orders, /status: "UNKNOWN"/);
   assert.doesNotMatch(orders, /status: 501/);
   assert.match(client, /posAction\(input: Record<string, unknown>\)/);
@@ -332,7 +338,7 @@ test("keeps separately configured coffees as distinct order lines", async () => 
   assert.match(css, /\.waiter-alternative-coffee>div\{display:grid;grid-template-columns:repeat\(3/);
   assert.match(orders, /fallback: "bean"/);
   assert.match(orders, /standaloneAddons/);
-  assert.match(orders, /items: normalizedItems\.flatMap/);
+  assert.match(orders, /const posItems = normalizedItems\.flatMap/);
 });
 
 test("supports WARM and COLD serving choices throughout waiter ordering", async () => {
@@ -343,11 +349,15 @@ test("supports WARM and COLD serving choices throughout waiter ordering", async 
   assert.match(client, /function WaiterTemperatureChoice/);
   assert.match(client, /temperature: item\.temperature/);
   assert.match(client, /configuring\.temperatures\.length>1/);
+  assert.match(client, /<legend>Sposób przygotowania<small>wymagany wybór<\/small><\/legend>/);
   assert.match(client, /M10 5a2 2 0 0 1 4 0v8\.4a4 4 0 1 1-4 0V5/);
   assert.match(orders, /productTemperatures\(tags\)/);
-  assert.match(orders, /Sposób podania:/);
+  assert.match(orders, /Sposób przygotowania:/);
   assert.match(admin, /tag: "WARM"/);
   assert.match(admin, /tag: "COLD"/);
+  assert.match(admin, /CIEPŁO · WARM COLD · CIEPŁO ZIMNO/);
+  assert.match(admin, /ZIMNO · WARM COLD · CIEPŁO ZIMNO/);
+  assert.match(admin, /kategoriach ALKOHOLE i DRINKI/);
   assert.match(css, /\.waiter-temperature-choice/);
   assert.match(css, /\.waiter-temperature-fieldset button\.is-selected/);
 });
@@ -611,6 +621,7 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   ]);
   assert.match(schema, /waiterCashDays = pgTable\("waiter_cash_days"/);
   assert.match(schema, /waiterSettlements = pgTable\("waiter_settlements"/);
+  assert.match(schema, /waiterCashExpenses = pgTable\("waiter_cash_expenses"/);
   assert.match(schema, /waiterTipAllocations = pgTable\("waiter_tip_allocations"/);
   assert.match(schema, /waiterTipAdjustments = pgTable\("waiter_tip_adjustments"/);
   assert.match(schema, /waiterSettlementEvents = pgTable\("waiter_settlement_events"/);
@@ -652,6 +663,19 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(form, /Dotykačka · karta od ostatniego przeliczenia/);
   assert.match(form, /Napiwki gotówkowe/);
   assert.match(form, /Wydatki z kasy/);
+  assert.match(form, /typeof browserCrypto\?\.randomUUID === "function"/);
+  assert.match(form, /return `settlement-\$\{Date\.now\(\)\.toString\(36\)\}-\$\{fallbackKeyCounter\.toString\(36\)\}`/);
+  assert.match(form, /type="button" className="cash-tip-add"/);
+  assert.match(form, /<h3>Korekty płatności<\/h3>[^]*<button type="button" onClick=\{\(\) => setCorrections/);
+  assert.match(form, /<h3>Wydatki z gotówki<\/h3>[^]*<button type="button" onClick=\{\(\) => setExpenses/);
+  assert.match(form, /action: "SAVE_EXPENSE"/);
+  assert.match(form, /action: "DELETE_EXPENSE"/);
+  assert.match(form, /Zapisz wydatek/);
+  assert.match(form, /item\.saved \? "✓ Zapisano w kasie" : "Niezapisany"/);
+  assert.match(form, /expenses\.filter\(\(item\) => item\.saved\)/);
+  assert.match(waiterRoute, /\["SAVE_EXPENSE", "DELETE_EXPENSE"\]/);
+  assert.match(waiterRoute, /pendingExpenseRows/);
+  assert.match(waiterRoute, /status: "SETTLED"/);
   assert.match(form, /Etap 1/);
   assert.match(form, /Etap 2/);
   assert.match(form, /Etap 3/);
@@ -793,24 +817,30 @@ test("calculates a mixed cash, card, correction, expense, envelope, and tip sett
 });
 
 test("keeps the waiter header on one continuous dark bar with ordered controls", async () => {
-  const [client, styles, settlement, cashStyles] = await Promise.all([
+  const [client, styles, settlement, cashStyles, catalog] = await Promise.all([
     read("app/kelner/waiter-client.tsx"),
     read("app/kelner/unified-header.css"),
     read("app/kelner/settlement-form.tsx"),
     read("app/kelner/cash-day.css"),
+    read("app/api/waiter/catalog/route.ts"),
   ]);
   const brand = client.indexOf("waiter-main-brand");
   const tools = client.indexOf("waiter-main-tools");
   const employee = client.indexOf("waiter-employee-summary");
   const controls = client.indexOf("waiter-main-controls", brand);
-  assert.ok(brand >= 0 && brand < tools && tools < employee && employee < controls);
-  assert.match(client.slice(brand, tools), /PANEL PRACOWNIKA/);
-  assert.match(client.slice(brand, tools), /waiter-main-logo[\s\S]*logo-cafe\.png[\s\S]*waiter-main-title/);
-  assert.match(client.slice(tools, employee), /WaiterInstructionEntry[\s\S]*Grafik[\s\S]*Rezerwacje[\s\S]*Inwentaryzacja[\s\S]*Rozliczanie/);
+  assert.ok(brand >= 0 && brand < employee && employee < controls && controls < tools);
+  assert.match(client.slice(brand, employee), /PANEL PRACOWNIKA/);
+  assert.match(client.slice(brand, employee), /waiter-main-logo[\s\S]*logo-cafe\.png[\s\S]*waiter-main-title/);
+  assert.match(client.slice(tools, tools + 700), /WaiterInstructionEntry[\s\S]*Grafik[\s\S]*ReservationReminder[\s\S]*Inwentaryzacja[\s\S]*Rozliczanie/);
+  assert.match(client, /<\/header><nav className="waiter-main-tools waiter-ordering-tools"/);
   assert.match(client.slice(controls, controls + 700), /waiter-guest-receipt-entry[\s\S]*Rachunek dla gościa[\s\S]*waiter-main-exit-controls[\s\S]*← Menu[\s\S]*Wyloguj/);
   assert.match(client, /waiter-ordering-app[\s\S]*waiter-table-focus[\s\S]*activeTableNumber[\s\S]*aria-label="Wybierz stolik"/);
+  assert.match(client, /<select required value=\{tableId\}[\s\S]*<option value="" disabled>Wybierz stolik<\/option>/);
+  assert.match(client, /setTableId\(""\); setLoading\(false\);/);
+  assert.doesNotMatch(client, /body\.tables\?\.\[0\]\?\.dotykackaId/);
   assert.match(client, /waiter-context"><label className="waiter-guest-count">Liczba gości[\s\S]*<WaiterSearch/);
   assert.match(client, /waiter-search-icon/);
+  assert.match(catalog, /case when trim\(\$\{waiterTables\.name\}\) ~ '\^\[0-9\]\+\$' then trim\(\$\{waiterTables\.name\}\)::integer/);
   assert.doesNotMatch(client, /WaiterCurrentDate|waiter-main-calendar/);
   assert.match(settlement, /const POLAND_TIME_ZONE = "Europe\/Warsaw";[\s\S]*function CurrentDateCalendar\(\)[\s\S]*window\.setInterval\(refresh, 60_000\)/);
   assert.match(settlement, /Codzienny system rozliczania utargu\.[\s\S]*<\/h1>[\s\S]*<CurrentDateCalendar \/>/);
@@ -818,15 +848,23 @@ test("keeps the waiter header on one continuous dark bar with ordered controls",
   assert.equal((settlement.match(/<SettlementHeader /g) ?? []).length, 2);
   assert.match(cashStyles, /\.cash-current-date \{[\s\S]*width: 146px;[\s\S]*text-align: center;/);
   assert.match(styles, /\.waiter-main-header \{[\s\S]*display: grid !important;[\s\S]*background-color: #000 !important;[\s\S]*background-image: linear-gradient\(#000, #000\) !important;/);
-  assert.match(styles, /grid-template-columns: auto minmax\(0, 1fr\) auto auto/);
+  assert.match(styles, /grid-template-columns: auto minmax\(0, 1fr\) auto/);
   assert.match(styles, /\.waiter-main-header \.waiter-main-brand > \.waiter-main-logo \{[\s\S]*display: block !important;[\s\S]*width: 170px !important;[\s\S]*visibility: visible !important;/);
   assert.match(styles, /\.waiter-main-exit-controls \{[\s\S]*display: flex;[\s\S]*gap: 7px;/);
   assert.match(styles, /\.waiter-main-header \.waiter-main-controls > \.waiter-guest-receipt-entry \{[\s\S]*background: #d92d76 !important;/);
-  assert.match(styles, /\.waiter-main-header \.waiter-main-tools,[\s\S]*\.waiter-main-header \.waiter-main-controls \{[\s\S]*position: static !important;[\s\S]*padding: 0 !important;[\s\S]*background: #000 !important;[\s\S]*box-shadow: none !important;/);
-  assert.match(styles, /\.waiter-main-header \.waiter-main-tools::before,[\s\S]*\.waiter-main-header \.waiter-main-controls::after \{[\s\S]*display: none !important;[\s\S]*content: none !important;/);
-  assert.match(styles, /\.waiter-main-tools \{[\s\S]*justify-content: flex-end;/);
+  assert.match(styles, /\.waiter-ordering-tools,[\s\S]*\.waiter-main-header \.waiter-main-controls \{[\s\S]*position: static !important;[\s\S]*padding: 0 !important;[\s\S]*box-shadow: none !important;/);
+  assert.match(styles, /\.waiter-ordering-tools \{[\s\S]*min-height: 58px;[\s\S]*justify-content: center;[\s\S]*margin: 6px 0 0 !important;[\s\S]*padding: 6px clamp\(18px, 3vw, 42px\) 8px !important;[\s\S]*background: #f7f3ea !important;/);
+  assert.match(styles, /\.waiter-main-tools > a,[\s\S]*\.waiter-main-tools > button \{[\s\S]*border: 1px solid rgba\(243, 146, 104, \.72\) !important;[\s\S]*background: #fff !important;[\s\S]*color: #082f3c !important;/);
+  assert.match(styles, /\.waiter-ordering-tools::before,[\s\S]*\.waiter-main-header \.waiter-main-controls::after \{[\s\S]*display: none !important;[\s\S]*content: none !important;/);
+  assert.match(styles, /\.waiter-main-tools \{[\s\S]*justify-content: center;/);
   const waiterCss = await read("app/kelner/waiter.css");
   assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-context\{[^}]*border-top:4px solid #edf1ee/);
+  assert.match(waiterCss, /\.waiter-ordering-app\{[^}]*grid-template-columns:clamp\(82px,7\.5vw,105px\)/);
+  assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-main-header\{[^}]*grid-column:1\/-1;grid-row:1/);
+  assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-ordering-tools\{[^}]*grid-column:1\/-1;grid-row:2/);
+  assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-table-focus\{[^}]*z-index:2;[^}]*grid-column:1;grid-row:3;[^}]*width:100%;height:auto;min-height:0;aspect-ratio:1;align-self:start/);
+  assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-context\{[^}]*grid-column:2;grid-row:3/);
+  assert.match(waiterCss, /\.waiter-search>span>button\{[^}]*min-width:112px;min-height:48px;padding:0 18px/);
 });
 
 test("keeps staff section navigation on the same continuous dark bar", async () => {

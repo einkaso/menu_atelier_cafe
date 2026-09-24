@@ -105,7 +105,7 @@
 .waiter-main-header {
   box-sizing: border-box;
   display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
   background-color: #000 !important;
@@ -134,7 +134,7 @@
 
 /* The public menu defines broad styles for every nav element. Keep those
    rules from creating light padding blocks inside the staff header. */
-.waiter-main-header .waiter-main-tools,
+.waiter-ordering-tools,
 .waiter-main-header .waiter-main-controls {
   position: static !important;
   z-index: auto !important;
@@ -144,12 +144,26 @@
   padding: 0 !important;
   overflow: visible;
   border: 0 !important;
-  background: #000 !important;
   box-shadow: none !important;
 }
 
-.waiter-main-header .waiter-main-tools::before,
-.waiter-main-header .waiter-main-tools::after,
+.waiter-ordering-tools {
+  box-sizing: border-box;
+  min-height: 58px;
+  width: 100%;
+  justify-content: center;
+  margin: 6px 0 0 !important;
+  padding: 6px clamp(18px, 3vw, 42px) 8px !important;
+  overflow-x: auto;
+  background: #f7f3ea !important;
+}
+
+.waiter-main-header .waiter-main-controls {
+  background: #000 !important;
+}
+
+.waiter-ordering-tools::before,
+.waiter-ordering-tools::after,
 .waiter-main-header .waiter-main-controls::before,
 .waiter-main-header .waiter-main-controls::after {
   display: none !important;
@@ -178,7 +192,15 @@
   white-space: nowrap;
 }
 
-.waiter-main-tools > .waiter-lighting-entry {
+.waiter-main-tools > a,
+.waiter-main-tools > button {
+  border: 1px solid rgba(243, 146, 104, .72) !important;
+  background: #fff !important;
+  color: #082f3c !important;
+}
+
+.waiter-main-tools > .waiter-lighting-entry,
+.waiter-main-tools > .waiter-rooms-entry {
   display: grid;
   min-width: 104px;
   gap: 1px;
@@ -187,11 +209,13 @@
   text-align: center;
 }
 
-.waiter-lighting-entry > span {
+.waiter-lighting-entry > span,
+.waiter-rooms-entry > span {
   line-height: 1.05;
 }
 
-.waiter-lighting-entry > small {
+.waiter-lighting-entry > small,
+.waiter-rooms-entry > small {
   color: #f39268;
   font-size: .43rem;
   font-weight: 850;
@@ -240,13 +264,13 @@
 
 .waiter-main-tools {
   flex: 1 1 auto;
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .waiter-main-header .waiter-main-tools .waiter-inventory-entry {
   min-height: 42px;
-  background: #000 !important;
-  color: #fff !important;
+  background: #fff !important;
+  color: #082f3c !important;
 }
 
 .waiter-employee-summary {
@@ -270,13 +294,6 @@
 @media (max-width: 1280px) {
   .waiter-main-header {
     grid-template-columns: auto minmax(0, 1fr) auto;
-  }
-
-  .waiter-main-header .waiter-main-tools {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-    justify-content: flex-end;
   }
 
   .waiter-main-header .waiter-employee-summary {
@@ -346,12 +363,9 @@
     font-size: .82rem;
   }
 
-  .waiter-main-header .waiter-main-tools {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    justify-content: flex-end;
+  .waiter-ordering-tools {
+    justify-content: safe center;
     overflow-x: auto;
-    padding-bottom: 2px;
   }
 
   .waiter-main-header .waiter-main-controls {

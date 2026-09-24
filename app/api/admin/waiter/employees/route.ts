@@ -19,6 +19,7 @@ export async function GET() {
       accessLevel: waiterEmployees.accessLevel,
       canManageMenuVisibility: waiterEmployees.canManageMenuVisibility,
       canControlLighting: waiterEmployees.canControlLighting,
+      canControlRooms: waiterEmployees.canControlRooms,
       thankYouMessage: waiterEmployees.thankYouMessage,
       includeInSchedule: waiterEmployees.includeInSchedule,
       hourlyRate: waiterEmployees.hourlyRate,

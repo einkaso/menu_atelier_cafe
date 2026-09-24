@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { menuAddons, menuCategories, menuProducts, waiterExtraProducts, waiterOrders, waiterSurveyQuestions, waiterTables } from "../../../../db/schema";
 import { currentWaiter, waiterCookie } from "../../../../lib/waiter-auth";
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
     const beanNotes = selected.filter((selection) => selection.fallback === "bean").map((selection) => `Ziarno: ${selection.addon.name}`);
     const syrupNotes = selected.filter((selection) => selection.flavorName).map((selection) => `Syrop: ${selection.flavorName}`);
     const rawNote = typeof item.note === "string" ? item.note.trim().slice(0, 500) : "";
-    const temperatureNotes = temperature ? [`Sposób podania: ${temperature === "warm" ? "na ciepło" : "na zimno"}`] : [];
+    const temperatureNotes = temperature ? [`Sposób przygotowania: ${temperature === "warm" ? "na ciepło" : "na zimno"}`] : [];
     const fulfillmentNotes = takeaway ? ["Sposób wydania: na wynos"] : [];
     const note = [rawNote, ...fulfillmentNotes, ...temperatureNotes, ...beanNotes, ...syrupNotes].filter(Boolean).join(" · ") || undefined;
     const unitPrice = Number(product.price ?? 0) + selected.reduce((sum, selection) => sum + Number(selection.addon.price ?? 0), 0);
@@ -166,28 +166,72 @@ export async function POST(request: Request) {
   try {
     const config = await getDotykackaConfig();
     if (!config.branchId) throw new Error("Nie wybrano oddziału Dotykački.");
-    const result = await new DotykackaClient(config).posAction({
-      action: "order/create",
-      "idempotency-key": externalId,
-      "external-id": externalId,
-      "user-id": Number(employee.dotykackaId),
-      "table-id": Number(tableId),
-      "guest-count": guestCount,
-      note: typeof body.note === "string" ? body.note.trim().slice(0, 1000) || undefined : undefined,
-      items: normalizedItems.flatMap((item) => [{
-        id: Number(item.productId),
-        qty: item.quantity,
-        note: item.note,
-        ...(item.posCustomizations.length ? { customizations: item.posCustomizations.map((addon) => ({ "product-customization-id": Number(addon.customizationId), "product-id": Number(addon.productId), qty: 1 })) } : {}),
-      }, ...item.standaloneAddons.map((addon) => ({ id: Number(addon.productId), qty: item.quantity, note: `Dodatek do: ${item.name}` }))]),
+    const client = new DotykackaClient(config);
+    const posItems = normalizedItems.flatMap((item) => [{
+      id: Number(item.productId),
+      qty: item.quantity,
+      note: item.note,
+      ...(item.posCustomizations.length ? { customizations: item.posCustomizations.map((addon) => ({ "product-customization-id": Number(addon.customizationId), "product-id": Number(addon.productId), qty: 1 })) } : {}),
+    }, ...item.standaloneAddons.map((addon) => ({ id: Number(addon.productId), qty: item.quantity, note: `Dodatek do: ${item.name}` }))]);
+    const dispatch = await db.transaction(async (tx) => {
+      // Serialise sends for one table so two tablets cannot both observe an empty table and create duplicate bills.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`waiter-pos-table:${tableId}`}))`);
+      const listResult = await client.posAction({
+        action: "order/list",
+        "idempotency-key": `${externalId}:list`,
+        "user-id": Number(employee.dotykackaId),
+        "table-id": Number(tableId),
+      });
+      if (listResult.code !== 0 || !Array.isArray(listResult.orders)) {
+        return { kind: "failed" as const, result: listResult, message: listResult.localizedMessage || listResult.message || `Dotykačka nie zwróciła listy rachunków stolika (kod ${listResult.code}).` };
+      }
+
+      const openOrderIds = [...new Set(listResult.orders.flatMap((entry) => {
+        const orderId = Number(entry.order?.id);
+        return Number.isSafeInteger(orderId) && orderId > 0 ? [orderId] : [];
+      }))];
+      if (openOrderIds.length > 1) {
+        return { kind: "conflict" as const, orderIds: openOrderIds };
+      }
+
+      const existingOrderId = openOrderIds[0];
+      const result = await client.posAction(existingOrderId ? {
+        action: "order/add-item",
+        "idempotency-key": externalId,
+        "user-id": Number(employee.dotykackaId),
+        "order-id": existingOrderId,
+        items: posItems,
+      } : {
+        action: "order/create",
+        "idempotency-key": externalId,
+        "external-id": externalId,
+        "user-id": Number(employee.dotykackaId),
+        "table-id": Number(tableId),
+        "guest-count": guestCount,
+        note: typeof body.note === "string" ? body.note.trim().slice(0, 1000) || undefined : undefined,
+        items: posItems,
+      });
+      return { kind: "sent" as const, result, existingOrderId };
     });
-    if (result.code !== 0 || !result.order?.id) {
+
+    if (dispatch.kind === "conflict") {
+      const message = `Dotykačka ma ${dispatch.orderIds.length} otwarte rachunki dla tego stolika (${dispatch.orderIds.join(", ")}). Zamknij lub połącz nadmiarowe rachunki na kasie i spróbuj ponownie.`;
+      await db.update(waiterOrders).set({ status: "FAILED", error: message, updatedAt: new Date() }).where(eq(waiterOrders.id, localOrder.id));
+      return Response.json({ error: message, externalId }, { status: 409 });
+    }
+    if (dispatch.kind === "failed") {
+      await db.update(waiterOrders).set({ status: "FAILED", error: dispatch.message, updatedAt: new Date() }).where(eq(waiterOrders.id, localOrder.id));
+      return Response.json({ error: dispatch.message, code: dispatch.result.code, externalId }, { status: 409 });
+    }
+    const { result, existingOrderId } = dispatch;
+    const dotykackaOrderId = existingOrderId ?? result.order?.id;
+    if (result.code !== 0 || !dotykackaOrderId) {
       const message = result.localizedMessage || result.message || `Dotykačka odrzuciła zamówienie (kod ${result.code}).`;
       await db.update(waiterOrders).set({ status: "FAILED", error: message, updatedAt: new Date() }).where(eq(waiterOrders.id, localOrder.id));
       return Response.json({ error: message, code: result.code, externalId }, { status: 409 });
     }
-    await db.update(waiterOrders).set({ status: "SENT", dotykackaOrderId: String(result.order.id), error: null, updatedAt: new Date() }).where(eq(waiterOrders.id, localOrder.id));
-    return clearCookie(Response.json({ status: "sent", externalId, dotykackaOrderId: String(result.order.id) }));
+    await db.update(waiterOrders).set({ status: "SENT", dotykackaOrderId: String(dotykackaOrderId), error: null, updatedAt: new Date() }).where(eq(waiterOrders.id, localOrder.id));
+    return clearCookie(Response.json({ status: "sent", mode: existingOrderId ? "appended" : "created", externalId, dotykackaOrderId: String(dotykackaOrderId) }));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Nieznany błąd wysyłki do Dotykački.";
     await db.update(waiterOrders).set({ status: "UNKNOWN", error: message, updatedAt: new Date() }).where(eq(waiterOrders.id, localOrder.id));

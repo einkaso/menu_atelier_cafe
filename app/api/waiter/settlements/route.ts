@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { waiterCashDays, waiterEmployees, waiterSettlementEvents, waiterSettlements, waiterTipAllocations } from "../../../../db/schema";
+import { waiterCashDays, waiterCashExpenses, waiterEmployees, waiterSettlementEvents, waiterSettlements, waiterTipAllocations } from "../../../../db/schema";
 import { CASH_DESK_NAME, currentBusinessDate, snapshotDelta, type CashSnapshot } from "../../../../lib/cash-day";
 import { fetchCashSnapshot } from "../../../../lib/dotykacka/cash-snapshot";
 import { currentWaiter, waiterCookie } from "../../../../lib/waiter-auth";
@@ -12,6 +12,8 @@ export const dynamic = "force-dynamic";
 type CashAction = "OPEN" | "HANDOVER" | "CLOSE";
 type SettlementInput = {
   action?: unknown;
+  expenseId?: unknown;
+  expense?: unknown;
   countedCash?: unknown;
   cashLeft?: unknown;
   envelopeCash?: unknown;
@@ -27,6 +29,12 @@ type SettlementInput = {
 
 const textValue = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 const numeric = (value: string | null | undefined) => Math.round(Number(value ?? 0) * 100);
+function normalizedExpense(value: unknown) {
+  const item = value && typeof value === "object" ? value as SettlementExpenseInput : {} as SettlementExpenseInput;
+  const expense = { description: textValue(item.description, 300), amount: moneyToCents(item.amount), receiptNumber: textValue(item.receiptNumber, 100), receiptIncluded: item.receiptIncluded === true };
+  if (!expense.description || !expense.amount || !expense.receiptIncluded) throw new Error("Wydatek wymaga opisu, dodatniej kwoty i potwierdzenia zabezpieczenia paragonu.");
+  return expense;
+}
 const snapshotFromDay = (day: typeof waiterCashDays.$inferSelect): CashSnapshot => ({
   cash: numeric(day.openingPosCash),
   card: numeric(day.openingPosCard),
@@ -75,7 +83,10 @@ export async function GET(request: Request) {
       .orderBy(desc(waiterSettlements.submittedAt)).limit(10),
   ]);
   const day = openDays[0] ?? todayDays[0] ?? null;
-  const checkpoints = day ? await db.select().from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id)).orderBy(waiterSettlements.submittedAt) : [];
+  const [checkpoints, pendingExpenses] = day ? await Promise.all([
+    db.select().from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id)).orderBy(waiterSettlements.submittedAt),
+    db.select().from(waiterCashExpenses).where(and(eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).orderBy(waiterCashExpenses.createdAt, waiterCashExpenses.id),
+  ]) : [[], []];
   const latest = checkpoints.at(-1) ?? null;
   const report = day?.status === "CLOSED" ? { snapshot: null, snapshotError: null } : await safeSnapshot(day?.businessDate ?? businessDate);
   const baselineSnapshot = day ? (latest ? snapshotFromSettlement(latest) : snapshotFromDay(day)) : null;
@@ -89,6 +100,7 @@ export async function GET(request: Request) {
   return Response.json({
     employee, employees, recent, businessDate, cashDesk: CASH_DESK_NAME,
     day, checkpoints, latest, previousClose: previousClose[0] ?? null,
+    pendingExpenses,
     snapshot: report.snapshot, snapshotError: report.snapshotError,
     baseline: { cash: centsToMoney(baselineCash), snapshot: baselineSnapshot },
     interval: { posCash: centsToMoney(delta.cash), posCard: centsToMoney(delta.card), expectedCash: centsToMoney(baselineCash + delta.cash) },
@@ -130,14 +142,38 @@ export async function POST(request: Request) {
   const employee = await currentWaiter(request);
   if (!employee) return Response.json({ error: "Sesja pracownika wygasła." }, { status: 401 });
   const body = await request.json().catch(() => ({})) as SettlementInput;
-  const action = typeof body.action === "string" ? body.action as CashAction : "" as CashAction;
+  const requestedAction = typeof body.action === "string" ? body.action : "";
+  const businessDate = currentBusinessDate();
+  const db = getDb();
+  if (["SAVE_EXPENSE", "DELETE_EXPENSE"].includes(requestedAction)) {
+    const [day] = await db.select({ id: waiterCashDays.id }).from(waiterCashDays).where(and(eq(waiterCashDays.businessDate, businessDate), eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).limit(1);
+    if (!day) return Response.json({ error: "Najpierw otwórz dzisiejszy dzień kasowy." }, { status: 409 });
+    const expenseId = Number(body.expenseId);
+    if (requestedAction === "DELETE_EXPENSE") {
+      if (!Number.isInteger(expenseId) || expenseId < 1) return Response.json({ error: "Nieprawidłowy wydatek." }, { status: 400 });
+      const removed = await db.delete(waiterCashExpenses).where(and(eq(waiterCashExpenses.id, expenseId), eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).returning({ id: waiterCashExpenses.id });
+      if (!removed.length) return Response.json({ error: "Wydatek został już rozliczony albo usunięty." }, { status: 409 });
+      return Response.json({ ok: true, expenseId });
+    }
+    let expense: ReturnType<typeof normalizedExpense>;
+    try { expense = normalizedExpense(body.expense); }
+    catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Nieprawidłowy wydatek." }, { status: 400 }); }
+    const now = new Date();
+    const values = { description: expense.description, amount: centsToMoney(expense.amount!), receiptNumber: expense.receiptNumber || null, receiptIncluded: true, updatedByDotykackaId: employee.dotykackaId, updatedByName: employee.name, updatedAt: now };
+    if (Number.isInteger(expenseId) && expenseId > 0) {
+      const [saved] = await db.update(waiterCashExpenses).set(values).where(and(eq(waiterCashExpenses.id, expenseId), eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).returning();
+      if (!saved) return Response.json({ error: "Wydatek został już rozliczony albo usunięty." }, { status: 409 });
+      return Response.json({ ok: true, expense: saved });
+    }
+    const [saved] = await db.insert(waiterCashExpenses).values({ cashDayId: day.id, ...values, createdByDotykackaId: employee.dotykackaId, createdByName: employee.name }).returning();
+    return Response.json({ ok: true, expense: saved }, { status: 201 });
+  }
+  const action = requestedAction as CashAction;
   if (!["OPEN", "HANDOVER", "CLOSE"].includes(action)) return Response.json({ error: "Wybierz otwarcie, przekazanie albo zamknięcie dnia." }, { status: 400 });
   const countedCash = moneyToCents(body.countedCash);
   if (countedCash == null) return Response.json({ error: "Podaj fizycznie policzoną gotówkę." }, { status: 400 });
   const discrepancyNote = textValue(body.discrepancyNote, 1000);
   const employeeNote = textValue(body.employeeNote, 1000);
-  const businessDate = currentBusinessDate();
-  const db = getDb();
   const snapshotResult = await safeSnapshot(businessDate);
   if (!snapshotResult.snapshot) return Response.json({ error: `Nie można zapisać operacji bez aktualnego raportu Dotykački. ${snapshotResult.snapshotError ?? ""}`.trim() }, { status: 502 });
   const snapshot = snapshotResult.snapshot;
@@ -186,8 +222,10 @@ export async function POST(request: Request) {
   if (!day) return Response.json({ error: "Najpierw otwórz dzisiejszy dzień kasowy." }, { status: 409 });
   const checkpoints = await db.select().from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id)).orderBy(waiterSettlements.submittedAt, waiterSettlements.id);
   const latest = checkpoints.at(-1);
+  const pendingExpenseRows = await db.select().from(waiterCashExpenses).where(and(eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).orderBy(waiterCashExpenses.createdAt, waiterCashExpenses.id);
+  const expenseFingerprint = pendingExpenseRows.map((item) => `${item.id}:${item.updatedAt.getTime()}`).join("|");
   let details: Awaited<ReturnType<typeof normalizedDetails>>;
-  try { details = await normalizedDetails(body); }
+  try { details = await normalizedDetails({ ...body, expenses: pendingExpenseRows.map((item) => ({ description: item.description, amount: item.amount, receiptNumber: item.receiptNumber ?? undefined, receiptIncluded: item.receiptIncluded })) }); }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Nieprawidłowe dane rozliczenia." }, { status: 400 }); }
   const baselineCash = numeric(latest?.countedCash ?? day.countedOpeningCash);
   const baselineSnapshot = latest ? snapshotFromSettlement(latest) : snapshotFromDay(day);
@@ -220,6 +258,8 @@ export async function POST(request: Request) {
       if (lockedDay?.status !== "OPEN") throw new Error("STALE_CASH_DAY");
       const [currentLatest] = await tx.select({ id: waiterSettlements.id }).from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id)).orderBy(desc(waiterSettlements.submittedAt), desc(waiterSettlements.id)).limit(1);
       if ((currentLatest?.id ?? null) !== (latest?.id ?? null)) throw new Error("STALE_CASH_DAY");
+      const currentExpenseRows = await tx.select({ id: waiterCashExpenses.id, updatedAt: waiterCashExpenses.updatedAt }).from(waiterCashExpenses).where(and(eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).orderBy(waiterCashExpenses.createdAt, waiterCashExpenses.id);
+      if (currentExpenseRows.map((item) => `${item.id}:${item.updatedAt.getTime()}`).join("|") !== expenseFingerprint) throw new Error("STALE_CASH_DAY");
       const checkpointNumber = (await tx.select({ id: waiterSettlements.id }).from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id))).length + 1;
       const shiftName = action === "HANDOVER" ? `Przekazanie zmiany #${checkpointNumber}` : "Zamknięcie dnia";
       const [saved] = await tx.insert(waiterSettlements).values({
@@ -235,6 +275,7 @@ export async function POST(request: Request) {
       }).returning({ id: waiterSettlements.id });
       const allocationRows = normalizedTips.flatMap((tip) => tip.allocations.map((allocation) => ({ settlementId: saved.id, tipKey: tip.key, employeeDotykackaId: allocation.employeeDotykackaId, employeeName: allocation.employeeName, paymentMethod: tip.paymentMethod, amount: allocation.amount })));
       if (allocationRows.length) await tx.insert(waiterTipAllocations).values(allocationRows);
+      if (pendingExpenseRows.length) await tx.update(waiterCashExpenses).set({ settlementId: saved.id, status: "SETTLED", settledAt: new Date(), updatedAt: new Date() }).where(inArray(waiterCashExpenses.id, pendingExpenseRows.map((item) => item.id)));
       await tx.insert(waiterSettlementEvents).values({ settlementId: saved.id, actorType: "EMPLOYEE", actorId: employee.dotykackaId, action: action === "HANDOVER" ? "HANDOVER_SUBMITTED" : "CLOSING_SUBMITTED", details: { externalId, cashDayId: day.id, snapshotAt: snapshot.capturedAt } });
       if (action === "CLOSE") await tx.update(waiterCashDays).set({ status: "CLOSED", finalCashLeft: centsToMoney(closeCashLeft), closedByDotykackaId: employee.dotykackaId, closedByName: employee.name, closedAt: new Date(), updatedAt: new Date() }).where(eq(waiterCashDays.id, day.id));
       return saved.id;

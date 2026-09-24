@@ -456,6 +456,34 @@
       "when": 1790206200000,
       "tag": "0064_cold_storage_temperature_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1790241000000,
+      "tag": "0065_cash_expense_drafts",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1790249400000,
+      "tag": "0066_admin_dashboard_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790253000000,
+      "tag": "0067_workforce_availability_lock",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1790256600000,
+      "tag": "0068_ttlock_rooms",
+      "breakpoints": true
     }
   ]
 }

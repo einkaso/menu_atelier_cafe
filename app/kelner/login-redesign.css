@@ -7,6 +7,59 @@
     var(--w-paper);
 }
 
+.waiter-loading {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: 28px;
+  background: #050505;
+  color: #fff;
+  font-family: "DM Sans", Arial, sans-serif;
+}
+
+.waiter-loading > section {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.waiter-loading img {
+  display: block;
+  width: min(240px, 64vw);
+  height: auto;
+}
+
+.waiter-loading i {
+  width: 88px;
+  height: 2px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .18);
+}
+
+.waiter-loading i::after {
+  display: block;
+  width: 42px;
+  height: 100%;
+  background: #ee764b;
+  content: "";
+  animation: waiter-loading-progress 1.1s ease-in-out infinite alternate;
+}
+
+.waiter-loading p {
+  margin: 0;
+  color: rgba(255, 255, 255, .78);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+@keyframes waiter-loading-progress {
+  from { transform: translateX(-42px); }
+  to { transform: translateX(88px); }
+}
+
 .waiter-login > .waiter-login-shell {
   position: relative;
   display: grid;

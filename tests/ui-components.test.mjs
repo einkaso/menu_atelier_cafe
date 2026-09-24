@@ -415,10 +415,13 @@ test("opens Harney teas with official cup-and-leaf photography and the full Doty
   assert.match(source, /onOpen=\{openProductDetails\}/);
   assert.match(source, /<TeaDetailDialog product=\{teaProduct\}/);
   assert.match(source, /className="wine-detail-dialog tea-detail-dialog"/);
+  assert.match(source, /function TeaDetailDialog[\s\S]*className="product-detail-serving"><DrinkVesselMark product=\{product\} lang=\{lang\}/);
+  assert.match(source, /function TeaDetailDialog[\s\S]*<TemperatureChoice temperatures=\{product\.temperatures\?\?\[\]\} lang=\{lang\}/);
   assert.match(source, /Napar i liście herbaty/);
   assert.match(source, /Zobacz herbatę i pełny opis/);
   assert.match(css, /\.tea-detail-visual>img\{[^}]*object-fit:cover[^}]*filter:none/);
   assert.match(css, /\.motif-tea \.product\.is-openable/);
+  assert.match(css, /\.product-detail-serving\{display:flex;flex-wrap:wrap;align-items:center/);
   for (const name of teaPhotos) {
     if (!name.endsWith(".jpg")) continue;
     const photo = await readFile(path.join(root, "public/tea", name));
@@ -531,7 +534,8 @@ test("guides alternative coffee through beans, brewing method and product detail
   assert.match(source, /<CoffeeDetailDialog product=\{coffeeProduct\}/);
   assert.match(source, /function CoffeeDetailDialog/);
   assert.match(source, /className="coffee-detail-footer"[\s\S]*<DrinkVesselMark product=\{product\} lang=\{lang\}/);
-  assert.match(css, /\.coffee-detail-footer\{margin-top:auto;padding-top:22px\}/);
+  assert.match(css, /\.coffee-detail-footer,\.drink-detail-footer,\.generic-product-detail-footer\{margin-top:auto;padding-top:22px\}/);
+  assert.match(source, /function DrinkDetailDialog[\s\S]*className="drink-detail-footer"[\s\S]*<DrinkVesselMark product=\{product\} lang=\{lang\}/);
   assert.match(css, /\.motif-coffee \.product\.is-description-preview\.product-visual\{height:188px;min-height:188px/);
   assert.match(css, /\.motif-coffee \.product\.is-description-preview \.product-info>p\{[^}]*-webkit-line-clamp:3/);
   assert.match(source, /const alternativeCoffeeMethods=activeKind==="coffee"\?regularVisible\.filter\(isAlternativeCoffeeProduct\):\[\]/);
@@ -591,6 +595,9 @@ test("shows WARM and COLD serving graphics in the guest menu", async () => {
   ]);
   assert.match(source, /function TemperatureChoice/);
   assert.match(source, /<TemperatureChoice temperatures=\{p\.temperatures\?\?\[\]\}/);
+  for (const dialog of ["CoffeeDetailDialog", "DrinkDetailDialog", "TeaDetailDialog", "GenericProductDetailDialog"]) {
+    assert.match(source, new RegExp(`function ${dialog}[\\s\\S]*?<TemperatureChoice temperatures=\\{product\\.temperatures\\?\\?\\[\\]\\} lang=\\{lang\\}`));
+  }
   assert.match(source, /M10 5a2 2 0 0 1 4 0v8\.4a4 4 0 1 1-4 0V5/);
   assert.match(api, /temperatures: productTemperatures\(item\.tags\)/);
   assert.match(css, /\.temperature-pill\.is-warm/);

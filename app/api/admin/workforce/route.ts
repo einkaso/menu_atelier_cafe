@@ -3,7 +3,7 @@ import { getDb } from "../../../../db";
 import { reservations, waiterEmployees, workAvailabilityWeeks, workforceCalendarSettings, workSchedules, workShifts, workTimeCorrectionRequests, workTimeEntries } from "../../../../db/schema";
 import { currentAdmin } from "../../../../lib/admin-auth";
 import { calendarEvents, decryptCalendarUrl, encryptCalendarUrl } from "../../../../lib/workforce-calendar";
-import { addDays, validDate, validateShift, weekDates, type ShiftInput } from "../../../../lib/workforce";
+import { addDays, validDate, validateShift, warsawDateTime, weekDates, type ShiftInput } from "../../../../lib/workforce";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +21,16 @@ async function readWeek(weekStart: string) {
   const shifts = schedule ? await db.select().from(workShifts).where(eq(workShifts.scheduleId, schedule.id)).orderBy(asc(workShifts.startsAt)) : [];
   const monthStart = `${weekStart.slice(0, 7)}-01`;
   const monthEndDate = new Date(`${monthStart}T00:00:00Z`); monthEndDate.setUTCMonth(monthEndDate.getUTCMonth() + 1);
-  const entries = await db.select().from(workTimeEntries).where(and(gte(workTimeEntries.startedAt, new Date(`${monthStart}T00:00:00Z`)), lt(workTimeEntries.startedAt, monthEndDate))).orderBy(asc(workTimeEntries.startedAt));
+  const [entries, weekEntries] = await Promise.all([
+    db.select().from(workTimeEntries).where(and(gte(workTimeEntries.startedAt, new Date(`${monthStart}T00:00:00Z`)), lt(workTimeEntries.startedAt, monthEndDate))).orderBy(asc(workTimeEntries.startedAt)),
+    db.select().from(workTimeEntries).where(and(gte(workTimeEntries.startedAt, warsawDateTime(weekStart, "00:00")), lt(workTimeEntries.startedAt, warsawDateTime(addDays(weekStart, 7), "00:00")))).orderBy(asc(workTimeEntries.startedAt)),
+  ]);
   const weekReservations = await db.select({ id: reservations.id, guestName: reservations.guestName, partySize: reservations.partySize, startsAt: reservations.startsAt, endsAt: reservations.endsAt, location: reservations.location, specialRequest: reservations.specialRequest }).from(reservations).where(and(eq(reservations.status, "BOOKED"), gte(reservations.startsAt, new Date(`${weekStart}T00:00:00Z`)), lt(reservations.startsAt, new Date(`${addDays(weekStart, 7)}T00:00:00Z`)))).orderBy(asc(reservations.startsAt));
   const [calendarSetting] = await db.select().from(workforceCalendarSettings).where(eq(workforceCalendarSettings.key, "main")).limit(1);
   let events: Awaited<ReturnType<typeof calendarEvents>> = []; let calendarError: string | null = null;
   const encryptedUrl = calendarSetting?.icalUrlEncrypted;
   if (encryptedUrl) try { events = await calendarEvents(decryptCalendarUrl(encryptedUrl), new Date(`${weekStart}T00:00:00Z`), new Date(`${addDays(weekStart, 7)}T00:00:00Z`)); } catch (error) { calendarError = error instanceof Error ? error.message : "Nie udało się pobrać wydarzeń."; }
-  return { employees, settlementEmployees: allEmployees, availability, schedule, shifts, corrections, entries, events, reservations: weekReservations, calendar: { connected: Boolean(encryptedUrl), name: calendarSetting?.name ?? "Kalendarz wydarzeń", error: calendarError } };
+  return { employees, settlementEmployees: allEmployees, availability, schedule, shifts, corrections, entries, weekEntries, events, reservations: weekReservations, calendar: { connected: Boolean(encryptedUrl), name: calendarSetting?.name ?? "Kalendarz wydarzeń", error: calendarError } };
 }
 
 export async function GET(request: Request) {
@@ -65,6 +68,11 @@ export async function POST(request: Request) {
     if (!validDate(weekStart) || weekDates(weekStart)[0] !== weekStart) throw new Error("Nieprawidłowy tydzień.");
     let [schedule] = await db.select().from(workSchedules).where(eq(workSchedules.weekStart, weekStart)).limit(1);
     if (!schedule) [schedule] = await db.insert(workSchedules).values({ weekStart, createdBy: administrator.username, updatedBy: administrator.username }).returning();
+    if (action === "SET_AVAILABILITY_LOCK") {
+      const locked = body.locked === true;
+      await db.update(workSchedules).set({ availabilityLocked: locked, availabilityLockedAt: locked ? now : null, availabilityLockedBy: locked ? administrator.username : null, updatedBy: administrator.username, updatedAt: now }).where(eq(workSchedules.id, schedule.id));
+      return Response.json({ ok: true, locked });
+    }
     if (action === "SAVE_PLAN") {
       const openingHours = Array.isArray(body.openingHours) ? body.openingHours : [];
       const dates = new Set(weekDates(weekStart));

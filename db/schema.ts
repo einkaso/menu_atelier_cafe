@@ -239,6 +239,7 @@ export const waiterEmployees = pgTable("waiter_employees", {
   requirePinAlways: boolean("require_pin_always").notNull().default(false),
   canManageMenuVisibility: boolean("can_manage_menu_visibility").notNull().default(false),
   canControlLighting: boolean("can_control_lighting").notNull().default(false),
+  canControlRooms: boolean("can_control_rooms").notNull().default(false),
   pinHash: text("pin_hash"),
   thankYouMessage: text("thank_you_message").notNull().default("Dziękuję i zapraszam ponownie!"),
   includeInSchedule: boolean("include_in_schedule").notNull().default(true),
@@ -285,6 +286,9 @@ export const workSchedules = pgTable("work_schedules", {
   status: text("status").notNull().default("DRAFT"),
   version: integer("version").notNull().default(1),
   openingHours: jsonb("opening_hours").$type<WorkOpeningDay[]>().notNull().default([]),
+  availabilityLocked: boolean("availability_locked").notNull().default(false),
+  availabilityLockedAt: timestamp("availability_locked_at", { withTimezone: true }),
+  availabilityLockedBy: text("availability_locked_by"),
   createdBy: text("created_by").notNull(),
   updatedBy: text("updated_by").notNull(),
   publishedAt: timestamp("published_at", { withTimezone: true }),
@@ -535,6 +539,14 @@ export const adminUsers = pgTable("admin_users", {
   index("admin_users_enabled_idx").on(table.enabled),
 ]);
 
+export const adminDashboardPreferences = pgTable("admin_dashboard_preferences", {
+  administratorKey: text("administrator_key").primaryKey(),
+  tiles: jsonb("tiles").$type<Array<{ id: string; visible: boolean; background: string; foreground?: string }>>().notNull().default([]),
+  updatedBy: text("updated_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const waiterTables = pgTable("waiter_tables", {
   id: serial("id").primaryKey(),
   dotykackaId: text("dotykacka_id").notNull(),
@@ -737,6 +749,27 @@ export const waiterSettlements = pgTable("waiter_settlements", {
   index("waiter_settlements_business_date_idx").on(table.businessDate),
   index("waiter_settlements_employee_idx").on(table.employeeDotykackaId),
   index("waiter_settlements_cash_day_idx").on(table.cashDayId),
+]);
+
+export const waiterCashExpenses = pgTable("waiter_cash_expenses", {
+  id: serial("id").primaryKey(),
+  cashDayId: integer("cash_day_id").notNull().references(() => waiterCashDays.id, { onDelete: "cascade" }),
+  settlementId: integer("settlement_id").references(() => waiterSettlements.id, { onDelete: "restrict" }),
+  description: text("description").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  receiptNumber: text("receipt_number"),
+  receiptIncluded: boolean("receipt_included").notNull().default(false),
+  status: text("status").notNull().default("PENDING"),
+  createdByDotykackaId: text("created_by_dotykacka_id").notNull(),
+  createdByName: text("created_by_name").notNull(),
+  updatedByDotykackaId: text("updated_by_dotykacka_id").notNull(),
+  updatedByName: text("updated_by_name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  settledAt: timestamp("settled_at", { withTimezone: true }),
+}, (table) => [
+  index("waiter_cash_expenses_day_status_idx").on(table.cashDayId, table.status),
+  index("waiter_cash_expenses_settlement_idx").on(table.settlementId),
 ]);
 
 export const waiterTipAllocations = pgTable("waiter_tip_allocations", {
@@ -947,6 +980,21 @@ export const lightingBridges = pgTable("lighting_bridges", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("lighting_bridges_token_hash_uq").on(table.tokenHash)]);
+
+export const roomLockEvents = pgTable("room_lock_events", {
+  id: serial("id").primaryKey(),
+  actorDotykackaId: text("actor_dotykacka_id"),
+  actorName: text("actor_name").notNull(),
+  lockId: text("lock_id").notNull(),
+  lockName: text("lock_name").notNull(),
+  action: text("action").notNull(),
+  status: text("status").notNull(),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("room_lock_events_lock_created_idx").on(table.lockId, table.createdAt),
+  index("room_lock_events_actor_created_idx").on(table.actorDotykackaId, table.createdAt),
+]);
 
 export const lightingDevices = pgTable("lighting_devices", {
   id: serial("id").primaryKey(),

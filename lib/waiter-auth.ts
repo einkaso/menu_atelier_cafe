@@ -85,6 +85,7 @@ export async function currentWaiter(request?: Request) {
     name: waiterEmployees.name,
     canManageMenuVisibility: waiterEmployees.canManageMenuVisibility,
     canControlLighting: waiterEmployees.canControlLighting,
+    canControlRooms: waiterEmployees.canControlRooms,
     includeInSchedule: waiterEmployees.includeInSchedule,
   }).from(waiterEmployees).where(and(
     eq(waiterEmployees.dotykackaId, dotykackaId),

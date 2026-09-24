@@ -17,7 +17,13 @@ test("keeps exact tag semantics after normalization", () => {
 test("maps WARM and COLD tags to available serving temperatures", () => {
   assert.deepEqual(productTemperatures(["MENU", "WARM"]), ["warm"]);
   assert.deepEqual(productTemperatures(["cold", " WARM "]), ["warm", "cold"]);
+  assert.deepEqual(productTemperatures(["MENU", "WARM COLD"]), ["warm", "cold"]);
+  assert.deepEqual(productTemperatures(["MENU", "COLD/WARM"]), ["warm", "cold"]);
+  assert.deepEqual(productTemperatures(["MENU", "CIEPŁO"]), ["warm"]);
+  assert.deepEqual(productTemperatures(["MENU", "ZIMNO"]), ["cold"]);
+  assert.deepEqual(productTemperatures(["MENU", "CIEPŁO/ZIMNO"]), ["warm", "cold"]);
   assert.deepEqual(productTemperatures(["MENU", "WARMER"]), []);
+  assert.deepEqual(productTemperatures(["MENU", "CIEPŁY"]), []);
 });
 
 test("recognizes only the exact TOGO tag as takeaway availability", () => {

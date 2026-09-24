@@ -21,7 +21,8 @@ export async function GET(request: Request) {
   if (weekDates(weekStart)[0] !== weekStart) return Response.json({ error: "Nieprawidłowy tydzień." }, { status: 400 });
   const db = getDb();
   const [availability] = await db.select().from(workAvailabilityWeeks).where(and(eq(workAvailabilityWeeks.employeeDotykackaId, employee.dotykackaId), eq(workAvailabilityWeeks.weekStart, weekStart))).limit(1);
-  const [schedule] = await db.select().from(workSchedules).where(and(eq(workSchedules.weekStart, weekStart), eq(workSchedules.status, "PUBLISHED"))).limit(1);
+  const [weekSchedule] = await db.select().from(workSchedules).where(eq(workSchedules.weekStart, weekStart)).limit(1);
+  const schedule = weekSchedule?.status === "PUBLISHED" ? weekSchedule : null;
   const ownShifts = schedule ? await db.select().from(workShifts).where(and(eq(workShifts.scheduleId, schedule.id), eq(workShifts.employeeDotykackaId, employee.dotykackaId))).orderBy(asc(workShifts.startsAt)) : [];
   const coworkers = schedule && url.searchParams.get("coworkers") === "1" && ownShifts.length ? await db.select().from(workShifts).where(and(eq(workShifts.scheduleId, schedule.id), inArray(workShifts.workDate, [...new Set(ownShifts.map((shift) => shift.workDate))]))).orderBy(asc(workShifts.startsAt)) : [];
   const [receipt] = schedule ? await db.select().from(workScheduleReceipts).where(and(eq(workScheduleReceipts.scheduleId, schedule.id), eq(workScheduleReceipts.scheduleVersion, schedule.version), eq(workScheduleReceipts.employeeDotykackaId, employee.dotykackaId))).limit(1) : [];
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
   const recentEntries = await db.select().from(workTimeEntries).where(and(eq(workTimeEntries.employeeDotykackaId, employee.dotykackaId), gte(workTimeEntries.startedAt, recentFrom)));
   const missedShifts = recentShifts.filter((shift) => !recentEntries.some((entry) => entry.startedAt < shift.endsAt && (entry.endedAt ?? now) > shift.startsAt));
   const calendarUrl = `${appOrigin(request)}/api/workforce/calendar/${encodeURIComponent(employee.dotykackaId)}/${calendarToken(employee.dotykackaId)}`;
-  return Response.json({ employee, weekStart, earliestAvailabilityWeek: nextAvailabilityWeek(), availability: schedule ? null : availability ?? null, schedule, shifts: ownShifts, coworkers, entries, corrections, monthlyMinutes: entries.reduce((sum, entry) => sum + (entry.workedMinutes ?? (!entry.endedAt ? Math.max(0, Math.round((now.getTime() - entry.startedAt.getTime()) / 60_000)) : 0)), 0), calendarUrl, calendarNeedsUpdate: Boolean(schedule && !receipt?.calendarUpdatedAt), alerts: { overdueOpen, missedShifts } });
+  return Response.json({ employee, weekStart, earliestAvailabilityWeek: nextAvailabilityWeek(), availabilityLocked: Boolean(weekSchedule?.availabilityLocked), availability: schedule ? null : availability ?? null, schedule, shifts: ownShifts, coworkers, entries, corrections, monthlyMinutes: entries.reduce((sum, entry) => sum + (entry.workedMinutes ?? (!entry.endedAt ? Math.max(0, Math.round((now.getTime() - entry.startedAt.getTime()) / 60_000)) : 0)), 0), calendarUrl, calendarNeedsUpdate: Boolean(schedule && !receipt?.calendarUpdatedAt), alerts: { overdueOpen, missedShifts } });
 }
 
 export async function POST(request: Request) {
@@ -49,8 +50,9 @@ export async function POST(request: Request) {
     if (action === "SAVE_AVAILABILITY") {
       if (!employee.includeInSchedule) throw new Error("Nie jesteś obecnie uwzględniany/a przy planowaniu grafiku. Skontaktuj się z administratorem.");
       const input = validateAvailability({ weekStart: body.weekStart, minShifts: body.minShifts, maxShifts: body.maxShifts, days: body.days });
-      const [published] = await db.select().from(workSchedules).where(and(eq(workSchedules.weekStart, input.weekStart), eq(workSchedules.status, "PUBLISHED"))).limit(1);
-      if (published) throw new Error("Grafik na ten tydzień został już opublikowany.");
+      const [schedule] = await db.select().from(workSchedules).where(eq(workSchedules.weekStart, input.weekStart)).limit(1);
+      if (schedule?.availabilityLocked) throw new Error("Administrator zablokował już dyspozycje na ten tydzień.");
+      if (schedule?.status === "PUBLISHED") throw new Error("Grafik na ten tydzień został już opublikowany.");
       await db.insert(workAvailabilityWeeks).values({ employeeDotykackaId: employee.dotykackaId, employeeName: employee.name, ...input, updatedAt: now }).onConflictDoUpdate({ target: [workAvailabilityWeeks.employeeDotykackaId, workAvailabilityWeeks.weekStart], set: { employeeName: employee.name, minShifts: input.minShifts, maxShifts: input.maxShifts, days: input.days, updatedAt: now } });
       return Response.json({ ok: true });
     }
