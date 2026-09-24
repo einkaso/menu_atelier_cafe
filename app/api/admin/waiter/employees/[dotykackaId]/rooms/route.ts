@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../../../../db";
-import { waiterEmployees } from "../../../../../../../db/schema";
+import { roomLockPermissions, waiterEmployees } from "../../../../../../../db/schema";
 import { isAdmin } from "../../../../../../../lib/admin-auth";
 
 export async function PUT(request: Request, context: { params: Promise<{ dotykackaId: string }> }) {
@@ -17,5 +17,8 @@ export async function PUT(request: Request, context: { params: Promise<{ dotykac
     ))
     .returning({ id: waiterEmployees.id });
   if (!employee) return Response.json({ error: "Pracownik nie istnieje lub jest nieaktywny." }, { status: 404 });
+  if (!body.enabled) {
+    await getDb().delete(roomLockPermissions).where(eq(roomLockPermissions.employeeDotykackaId, dotykackaId));
+  }
   return Response.json({ ok: true, canControlRooms: body.enabled });
 }

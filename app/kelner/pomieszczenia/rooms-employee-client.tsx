@@ -52,6 +52,7 @@ export default function RoomsEmployeeClient() {
     {error && <div className="waiter-rooms-message is-error" role="alert">{error}</div>}
     {forbidden && <section className="waiter-rooms-empty"><strong>Brak uprawnienia</strong><p>Administrator musi nadać Ci osobne uprawnienie „Pomieszczenia”.</p></section>}
     {!forbidden && data?.configured === false && <section className="waiter-rooms-empty"><strong>System zamków nie jest jeszcze skonfigurowany</strong><p>Administrator musi połączyć konto TTLock na serwerze.</p></section>}
+    {!forbidden && data?.configured && data.rooms?.length === 0 && <section className="waiter-rooms-empty"><strong>Brak przypisanych zamków</strong><p>Administrator nie przypisał Ci jeszcze żadnego pomieszczenia do otwierania.</p></section>}
     <section className="waiter-rooms-grid">{data?.rooms?.map((room) => <article className={`waiter-room-card is-${room.state.toLowerCase()}`} key={room.id}>
       <header><span>{room.state === "UNLOCKED" ? "OTWARTE" : "POMIESZCZENIE"}</span><i className={room.hasGateway ? "is-online" : ""}>{room.hasGateway ? "Bramka" : "Offline"}</i></header>
       <h2>{room.name}</h2><strong>{stateLabel[room.state]}</strong><small>{room.battery === null ? "Bateria: brak odczytu" : `Bateria: ${room.battery}%`}</small>

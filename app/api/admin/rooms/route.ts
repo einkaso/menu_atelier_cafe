@@ -1,5 +1,6 @@
+import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { roomLockEvents } from "../../../../db/schema";
+import { roomLockEvents, roomLockPermissions, waiterEmployees } from "../../../../db/schema";
 import { currentAdmin } from "../../../../lib/admin-auth";
 import { commandTtLock, listRoomLocks, listTtLocks, queryTtLockState, ttlockConfigured } from "../../../../lib/ttlock";
 
@@ -11,9 +12,15 @@ function message(error: unknown) {
 
 export async function GET() {
   if (!(await currentAdmin())) return Response.json({ error: "Unauthorized" }, { status: 401 });
-  if (!ttlockConfigured()) return Response.json({ configured: false, rooms: [] });
+  const [employees, permissions] = await Promise.all([
+    getDb().select({ dotykackaId: waiterEmployees.dotykackaId, name: waiterEmployees.name, canControlRooms: waiterEmployees.canControlRooms })
+      .from(waiterEmployees).where(and(eq(waiterEmployees.enabled, true), eq(waiterEmployees.deleted, false))).orderBy(asc(waiterEmployees.name)),
+    getDb().select({ employeeDotykackaId: roomLockPermissions.employeeDotykackaId, lockId: roomLockPermissions.lockId })
+      .from(roomLockPermissions),
+  ]);
+  if (!ttlockConfigured()) return Response.json({ configured: false, rooms: [], employees, permissions });
   try {
-    return Response.json({ configured: true, rooms: await listRoomLocks() });
+    return Response.json({ configured: true, rooms: await listRoomLocks(), employees, permissions });
   } catch (error) {
     return Response.json({ error: message(error) }, { status: 502 });
   }

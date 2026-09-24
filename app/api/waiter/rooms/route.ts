@@ -1,5 +1,6 @@
 import { getDb } from "../../../../db";
-import { roomLockEvents } from "../../../../db/schema";
+import { and, eq } from "drizzle-orm";
+import { roomLockEvents, roomLockPermissions } from "../../../../db/schema";
 import { commandTtLock, listRoomLocks, listTtLocks, queryTtLockState, ttlockConfigured } from "../../../../lib/ttlock";
 import { currentWaiter } from "../../../../lib/waiter-auth";
 
@@ -15,7 +16,12 @@ export async function GET(request: Request) {
   if (!employee.canControlRooms) return Response.json({ error: "Nie masz uprawnienia do sterowania pomieszczeniami." }, { status: 403 });
   if (!ttlockConfigured()) return Response.json({ configured: false, rooms: [], employeeName: employee.name });
   try {
-    return Response.json({ configured: true, rooms: await listRoomLocks(), employeeName: employee.name });
+    const permissions = await getDb().select({ lockId: roomLockPermissions.lockId }).from(roomLockPermissions)
+      .where(eq(roomLockPermissions.employeeDotykackaId, employee.dotykackaId));
+    const allowedLockIds = new Set(permissions.map((permission) => permission.lockId));
+    if (!allowedLockIds.size) return Response.json({ configured: true, rooms: [], employeeName: employee.name });
+    const rooms = (await listRoomLocks()).filter((room) => allowedLockIds.has(String(room.id)));
+    return Response.json({ configured: true, rooms, employeeName: employee.name });
   } catch (error) {
     return Response.json({ error: message(error) }, { status: 502 });
   }
@@ -29,6 +35,12 @@ export async function POST(request: Request) {
   const lockId = Number(body.lockId);
   const action = body.action === "LOCK" || body.action === "UNLOCK" ? body.action : null;
   if (!Number.isSafeInteger(lockId) || lockId <= 0 || !action) return Response.json({ error: "Nieprawidłowe polecenie." }, { status: 400 });
+
+  const [permission] = await getDb().select({ id: roomLockPermissions.id }).from(roomLockPermissions).where(and(
+    eq(roomLockPermissions.employeeDotykackaId, employee.dotykackaId),
+    eq(roomLockPermissions.lockId, String(lockId)),
+  )).limit(1);
+  if (!permission) return Response.json({ error: "Nie masz uprawnienia do tego zamka." }, { status: 403 });
 
   let lockName = `Pomieszczenie ${lockId}`;
   try {

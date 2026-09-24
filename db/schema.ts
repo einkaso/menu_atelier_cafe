@@ -996,6 +996,19 @@ export const roomLockEvents = pgTable("room_lock_events", {
   index("room_lock_events_actor_created_idx").on(table.actorDotykackaId, table.createdAt),
 ]);
 
+export const roomLockPermissions = pgTable("room_lock_permissions", {
+  id: serial("id").primaryKey(),
+  employeeDotykackaId: text("employee_dotykacka_id").notNull(),
+  lockId: text("lock_id").notNull(),
+  lockName: text("lock_name").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("room_lock_permissions_employee_lock_uq").on(table.employeeDotykackaId, table.lockId),
+  index("room_lock_permissions_lock_idx").on(table.lockId),
+]);
+
 export const lightingDevices = pgTable("lighting_devices", {
   id: serial("id").primaryKey(),
   bridgeId: integer("bridge_id").notNull().references(() => lightingBridges.id, { onDelete: "cascade" }),
