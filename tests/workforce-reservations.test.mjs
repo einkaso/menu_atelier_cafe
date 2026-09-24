@@ -21,10 +21,44 @@ test("requires availability at least a week ahead and accepts a seven-day declar
 
 test("creates signed employee QR payloads and rejects a modified payload", async () => {
   process.env.ADMIN_SESSION_SECRET = "test-workforce-secret";
-  const { employeeQrPayload, parseEmployeeQrPayload } = await vite.ssrLoadModule("/lib/workforce-secrets.ts");
+  const { employeeQrPayload, parseEmployeeQrPayload, teamCalendarToken, validTeamCalendarToken } = await vite.ssrLoadModule("/lib/workforce-secrets.ts");
   const payload = employeeQrPayload("42", "EMP-0042");
   assert.deepEqual(parseEmployeeQrPayload(payload), { employeeDotykackaId: "42", barcode: "EMP-0042" });
   assert.equal(parseEmployeeQrPayload(`${payload}x`), null);
+  const teamToken = teamCalendarToken();
+  assert.equal(validTeamCalendarToken(teamToken), true);
+  assert.equal(validTeamCalendarToken(`${teamToken}x`), false);
+});
+
+test("administrator team calendar combines published shifts with exact QR punches", async () => {
+  const { teamScheduleIcs } = await vite.ssrLoadModule("/lib/workforce.ts");
+  const body = teamScheduleIcs({
+    shifts: [{ id: 10, employeeName: "Anna Nowak", startsAt: new Date("2026-09-24T06:30:00Z"), endsAt: new Date("2026-09-24T13:30:00Z"), note: null, scheduleVersion: 3, updatedAt: new Date("2026-09-23T10:00:00Z") }],
+    punches: [
+      { id: 20, employeeName: "Anna Nowak", action: "CLOCK_IN", kioskName: "Tablet wejściowy", occurredAt: new Date("2026-09-24T06:27:00Z") },
+      { id: 21, employeeName: "Anna Nowak", action: "CLOCK_OUT", kioskName: "Tablet wejściowy", occurredAt: new Date("2026-09-24T13:34:00Z") },
+    ],
+  });
+  assert.match(body, /X-WR-CALNAME:Atelier Café — plan i odbicia/);
+  assert.match(body, /SUMMARY:PLAN • Anna Nowak/);
+  assert.match(body, /DTSTART:20260924T063000Z/);
+  assert.match(body, /SUMMARY:WEJŚCIE • Anna Nowak/);
+  assert.match(body, /SUMMARY:WYJŚCIE • Anna Nowak/);
+  assert.match(body, /REFRESH-INTERVAL;VALUE=DURATION:PT5M/);
+
+  const [route, adminRoute, adminUi] = await Promise.all([
+    read("app/api/workforce/calendar/team/[token]/route.ts"),
+    read("app/api/admin/workforce/route.ts"),
+    read("app/admin/workforce/workforce-admin-client.tsx"),
+  ]);
+  assert.match(route, /validTeamCalendarToken/);
+  assert.match(route, /workTimeEvents/);
+  assert.match(route, /createHash\("sha256"\)/);
+  assert.match(route, /status: 304/);
+  assert.match(adminRoute, /teamCalendarToken/);
+  assert.match(adminRoute, /teamCalendarUrl/);
+  assert.match(adminUi, /Plan zespołu i rzeczywiste odbicia kart/);
+  assert.match(adminUi, /Dodaj kalendarz zespołu/);
 });
 
 test("manages employee QR cards in the employee administration screen", async () => {

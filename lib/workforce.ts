@@ -109,3 +109,38 @@ export function scheduleIcs(input: { employeeId: string; employeeName: string; s
   lines.push("END:VCALENDAR");
   return `${lines.join("\r\n")}\r\n`;
 }
+
+const workforceClock = new Intl.DateTimeFormat("pl-PL", { timeZone: WARSAW_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+
+export function teamScheduleIcs(input: {
+  shifts: Array<{ id: number; employeeName: string; startsAt: Date; endsAt: Date; note: string | null; scheduleVersion: number; updatedAt: Date }>;
+  punches: Array<{ id: number; employeeName: string; action: string; kioskName: string; occurredAt: Date }>;
+}) {
+  const now = icsDate(new Date());
+  const lines = [
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Atelier Cafe//Kalendarz zespolu//PL", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+    `X-WR-CALNAME:${icsEscape("Atelier Café — plan i odbicia")}`, "X-WR-TIMEZONE:Europe/Warsaw", "REFRESH-INTERVAL;VALUE=DURATION:PT5M", "X-PUBLISHED-TTL:PT5M",
+  ];
+  for (const shift of input.shifts) {
+    const planned = `${workforceClock.format(shift.startsAt)}–${workforceClock.format(shift.endsAt)}`;
+    const description = [`Planowana zmiana ${planned}`, shift.note].filter(Boolean).join("\n");
+    lines.push(
+      "BEGIN:VEVENT", `UID:atelier-team-shift-${shift.id}@atelier-cafe`, `DTSTAMP:${now}`, `LAST-MODIFIED:${icsDate(shift.updatedAt)}`,
+      `DTSTART:${icsDate(shift.startsAt)}`, `DTEND:${icsDate(shift.endsAt)}`, `SEQUENCE:${shift.scheduleVersion}`,
+      `SUMMARY:${icsEscape(`PLAN • ${shift.employeeName}`)}`, `DESCRIPTION:${icsEscape(description)}`, "CATEGORIES:PLAN", "STATUS:CONFIRMED", "END:VEVENT",
+    );
+  }
+  for (const punch of input.punches) {
+    const isExit = punch.action === "CLOCK_OUT";
+    const end = new Date(punch.occurredAt.getTime() + 60_000);
+    lines.push(
+      "BEGIN:VEVENT", `UID:atelier-team-punch-${punch.id}@atelier-cafe`, `DTSTAMP:${now}`, `LAST-MODIFIED:${icsDate(punch.occurredAt)}`,
+      `DTSTART:${icsDate(punch.occurredAt)}`, `DTEND:${icsDate(end)}`, "SEQUENCE:0",
+      `SUMMARY:${icsEscape(`${isExit ? "WYJŚCIE" : "WEJŚCIE"} • ${punch.employeeName}`)}`,
+      `DESCRIPTION:${icsEscape(`${isExit ? "Odbicie wyjścia" : "Odbicie wejścia"} o ${workforceClock.format(punch.occurredAt)} · ${punch.kioskName}`)}`,
+      "CATEGORIES:ODBICIE KARTY", "STATUS:CONFIRMED", "END:VEVENT",
+    );
+  }
+  lines.push("END:VCALENDAR");
+  return `${lines.join("\r\n")}\r\n`;
+}

@@ -4,8 +4,14 @@ import { reservations, waiterEmployees, workAvailabilityWeeks, workforceCalendar
 import { currentAdmin } from "../../../../lib/admin-auth";
 import { calendarEvents, decryptCalendarUrl, encryptCalendarUrl } from "../../../../lib/workforce-calendar";
 import { addDays, validDate, validateShift, warsawDateTime, weekDates, type ShiftInput } from "../../../../lib/workforce";
+import { teamCalendarToken } from "../../../../lib/workforce-secrets";
 
 export const dynamic = "force-dynamic";
+
+function appOrigin(request: Request) {
+  const url = new URL(request.url);
+  return process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || url.origin;
+}
 
 async function readWeek(weekStart: string) {
   const db = getDb();
@@ -37,7 +43,8 @@ export async function GET(request: Request) {
   if (!await currentAdmin()) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const weekStart = new URL(request.url).searchParams.get("weekStart") ?? "";
   if (!validDate(weekStart) || weekDates(weekStart)[0] !== weekStart) return Response.json({ error: "Nieprawidłowy tydzień." }, { status: 400 });
-  return Response.json(await readWeek(weekStart));
+  const teamCalendarUrl = `${appOrigin(request)}/api/workforce/calendar/team/${teamCalendarToken()}`;
+  return Response.json({ ...await readWeek(weekStart), teamCalendarUrl });
 }
 
 export async function POST(request: Request) {

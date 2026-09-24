@@ -37,8 +37,6 @@ export default function RoomsAdminClient() {
   }, [load]);
 
   async function command(room: Room, action: "LOCK" | "UNLOCK") {
-    const wording = action === "UNLOCK" ? "OTWORZYĆ" : "ZAMKNĄĆ";
-    if (!window.confirm(`${wording} zamek „${room.name}”? Operacja zostanie zapisana w historii.`)) return;
     setBusy(room.id); setError("");
     const response = await fetch("/api/admin/rooms", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ lockId: room.id, action }) }).catch(() => null);
     const body = await response?.json().catch(() => ({})) as { error?: string; state?: Room["state"] } | undefined;

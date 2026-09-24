@@ -32,8 +32,6 @@ export default function RoomsEmployeeClient() {
   }, [load]);
 
   async function command(room: Room, action: "LOCK" | "UNLOCK") {
-    const wording = action === "UNLOCK" ? "OTWORZYĆ" : "ZAMKNĄĆ";
-    if (!window.confirm(`${wording} „${room.name}”?\n\nPolecenie wykona się natychmiast i zostanie zapisane z Twoim nazwiskiem.`)) return;
     setBusy(room.id); setError("");
     const response = await fetch("/api/waiter/rooms", { method: "POST", credentials: "same-origin", headers: waiterSessionHeaders({ "content-type": "application/json" }), body: JSON.stringify({ lockId: room.id, action }) }).catch(() => null);
     const body = await response?.json().catch(() => ({})) as { error?: string; state?: Room["state"] } | undefined;

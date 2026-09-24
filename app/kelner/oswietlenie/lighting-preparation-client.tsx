@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { clearWaiterSessionToken, createClientRequestId, waiterSessionHeaders } from "../waiter-session-client";
 import { WaiterSectionHeader } from "../staff-navigation";
 
@@ -120,7 +120,16 @@ export default function LightingPreparationClient() {
     {error && <div className="waiter-lighting-message is-error">{error}</div>}
     {forbidden ? <section className="waiter-lighting-empty"><strong>Brak uprawnienia</strong><p>Administrator musi włączyć dla Twojego konta uprawnienie „Sterowanie oświetleniem”.</p></section> : null}
     {!forbidden && data && !data.outputs.length ? <section className="waiter-lighting-empty"><strong>Nie skonfigurowano jeszcze punktów światła</strong><p>Administrator powinien zatwierdzić właściwe wyjścia BleBox i przypisać im nazwy oraz pomieszczenia.</p></section> : null}
-    {!forbidden && groups.map(([room, outputs]) => <section className="waiter-lighting-room" key={room}>
+    {!forbidden && groups.map(([room, outputs]) => {
+      const desktopColumns = Math.min(outputs.length, 4);
+      const tabletColumns = Math.min(outputs.length, 2);
+      const roomStyle = {
+        "--lighting-room-columns": desktopColumns,
+        "--lighting-room-tablet-columns": tabletColumns,
+        "--lighting-room-width": `${desktopColumns * 232 + Math.max(0, desktopColumns - 1) * 12}px`,
+        "--lighting-room-tablet-width": `${tabletColumns * 232 + Math.max(0, tabletColumns - 1) * 12}px`,
+      } as CSSProperties;
+      return <section className="waiter-lighting-room" key={room} style={roomStyle}>
       <header><span>STREFA</span><h2>{room}</h2></header>
       <div className="waiter-lighting-grid">{outputs.map((output) => {
         const unavailable = !data?.bridge.online || output.stale || busyOutputId === output.id;
@@ -137,7 +146,7 @@ export default function LightingPreparationClient() {
           </div>
         </article>;
       })}</div>
-    </section>)}
+    </section>})}
     {!data && !forbidden && !error ? <section className="waiter-lighting-empty"><strong>Ładuję stan oświetlenia…</strong></section> : null}
   </main>;
 }

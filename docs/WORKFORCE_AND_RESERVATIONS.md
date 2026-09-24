@@ -72,6 +72,8 @@ Stan dokumentu: 21 września 2026 r.
 - Każdy pracownik ma prywatny, podpisany adres iCalendar. Nie wymaga on sesji PIN i dlatego nie wolno go udostępniać innym osobom.
 - iPhone może subskrybować adres przez `webcal:`. Publikowane aktualizacje zachowują identyfikatory zdarzeń i numer wersji grafiku.
 - Pracownik może też pobrać jednorazowy plik `.ics`. Kliknięcie opcji kalendarza zapisuje potwierdzenie aktualizacji bieżącej wersji.
+- Administrator ma osobny prywatny kalendarz zespołu. Zawiera wszystkie opublikowane zmiany jako wydarzenia `PLAN` oraz każde rzeczywiste odbicie czytnika jako minutowy punkt `WEJŚCIE` lub `WYJŚCIE` z nazwiskiem, dokładną godziną i nazwą kiosku.
+- Kalendarz zespołu obejmuje plan od 31 dni wstecz i wszystkie przyszłe opublikowane zmiany oraz odbicia z ostatnich 31 dni. Nie zawiera szkiców grafiku ani ręcznych korekt czasu udających odbicie karty.
 - Adres `webcal://` służy do subskrypcji w aplikacji Kalendarz. Jeżeli formularz konfiguracyjny wymaga bezpiecznego URL, należy użyć tego samego adresu ze schematem `https://`; aplikacja normalizuje wejściowy `webcal:` do HTTPS przed pobraniem.
 
 ## Odbicia QR i korekty

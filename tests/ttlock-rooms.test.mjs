@@ -65,6 +65,8 @@ test("administrator and employee interfaces use the Pomieszczenia name", async (
   assert.match(preferences, /"rooms"/);
   assert.doesNotMatch(admin, /process\.env/);
   assert.doesNotMatch(employee, /process\.env/);
+  assert.doesNotMatch(admin, /window\.confirm/);
+  assert.doesNotMatch(employee, /window\.confirm/);
   assert.match(adminStyles, /\.rooms-grid\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:12px\}/);
   assert.match(employeeStyles, /\.waiter-rooms-grid\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\);gap:12px\}/);
   assert.match(adminStyles, /\.room-card\{min-height:178px;padding:16px\}/);

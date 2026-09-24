@@ -85,9 +85,13 @@ test("lighting inventory, administration and employee controls are wired", async
   assert.match(waiterUi, /Tablet nie zdołał wysłać polecenia/);
   assert.doesNotMatch(waiterUi, /crypto\.randomUUID\(\)/);
   assert.match(waiterUi, /<header><span>STREFA<\/span><h2>\{room\}<\/h2><\/header>/);
+  assert.match(waiterUi, /desktopColumns = Math\.min\(outputs\.length, 4\)/);
+  assert.match(waiterUi, /--lighting-room-width/);
   assert.match(waiterCss, /\.waiter-lighting-room > header \{ display: grid;[^}]*background: #0b3440; color: #fff;/);
   assert.match(waiterCss, /\.waiter-lighting-room h2 \{[^}]*color: #fff;/);
-  assert.match(waiterCss, /\.waiter-lighting-actions button \{[^}]*min-height: 48px;[^}]*touch-action: manipulation;/);
+  assert.match(waiterCss, /\.waiter-lighting-room \{[^}]*width: min\(var\(--lighting-room-width\), calc\(100% - 40px\)\)/);
+  assert.match(waiterCss, /\.waiter-lighting-card \{[^}]*min-height: 174px; padding: 16px/);
+  assert.match(waiterCss, /\.waiter-lighting-actions button \{[^}]*min-height: 42px;[^}]*touch-action: manipulation;/);
   assert.match(agent, /inspectBleboxHost/);
   assert.match(agent, /Nie udało się potwierdzić nowego stanu urządzenia/);
 });
