@@ -42,6 +42,6 @@ export function WaiterStaffNavigation({ className = "" }: { className?: string }
 
 export default function WaiterStaffDock() {
   const pathname = usePathname();
-  if (pathname === "/kelner" || ["/kelner/instrukcje", "/kelner/grafik", "/kelner/rezerwacje", "/kelner/inventory", "/kelner/oswietlenie", "/kelner/pomieszczenia"].some((path) => pathname.startsWith(path))) return null;
+  if (pathname === "/kelner" || ["/kelner/instrukcje", "/kelner/grafik", "/kelner/rezerwacje", "/kelner/inventory", "/kelner/oswietlenie", "/kelner/chlodnie", "/kelner/pomieszczenia"].some((path) => pathname.startsWith(path))) return null;
   return <WaiterStaffNavigation className="waiter-staff-floating"/>;
 }

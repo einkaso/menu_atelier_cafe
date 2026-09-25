@@ -200,6 +200,7 @@
 }
 
 .waiter-main-tools > .waiter-lighting-entry,
+.waiter-main-tools > .waiter-cold-storage-entry,
 .waiter-main-tools > .waiter-rooms-entry {
   display: grid;
   min-width: 104px;
@@ -210,11 +211,13 @@
 }
 
 .waiter-lighting-entry > span,
+.waiter-cold-storage-entry > span,
 .waiter-rooms-entry > span {
   line-height: 1.05;
 }
 
 .waiter-lighting-entry > small,
+.waiter-cold-storage-entry > small,
 .waiter-rooms-entry > small {
   color: #f39268;
   font-size: .43rem;

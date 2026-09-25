@@ -8,13 +8,13 @@ import {
 } from "../bridge/lighting/blebox-adapters.mjs";
 import { hostsFromCidr, isPrivateIpv4 } from "../bridge/lighting/discovery.mjs";
 import { temperatureReadings } from "../bridge/lighting/temperature-monitor.mjs";
-import { relayCommandPayload } from "../bridge/lighting/agent.mjs";
+import { dimmerBrightnessPath, relayCommandPayload, shutterCommandPath } from "../bridge/lighting/agent.mjs";
 
 test("BleBox discovery classifies actual Atelier product families without trusting names", () => {
   assert.equal(classifyBleboxDevice({ deviceName: "Dowolna nazwa", type: "switchBox", product: "switchBoxD_DIN" }).adapter, "relay");
   assert.equal(classifyBleboxDevice({ type: "dimmerBox", product: "dimmerBox_v2" }).adapter, "dimmer");
   assert.equal(classifyBleboxDevice({ type: "buttonBox", product: "actionBox" }).controllable, false);
-  assert.equal(classifyBleboxDevice({ type: "shutterBox", product: "shutterBox" }).adapter, "unsupported");
+  assert.equal(classifyBleboxDevice({ type: "shutterBox", product: "shutterBox" }).adapter, "shutter");
 });
 
 test("relay state keeps channels separate and uses absolute state", () => {
@@ -37,6 +37,14 @@ test("relay commands use explicit target state and never a toggle", () => {
   assert.throws(() => relayCommandPayload("relay:0", "TOGGLE"), /nieobsługiwane polecenie/);
 });
 
+test("dimmer commands convert an absolute percentage to the BleBox hexadecimal path", () => {
+  assert.equal(dimmerBrightnessPath("dimmer:0", 0), "/s/00");
+  assert.equal(dimmerBrightnessPath("dimmer:0", 50), "/s/80");
+  assert.equal(dimmerBrightnessPath("dimmer:0", 100), "/s/FF");
+  assert.throws(() => dimmerBrightnessPath("relay:0", 50), /nieprawidłową wartość jasności/);
+  assert.throws(() => dimmerBrightnessPath("dimmer:0", 101), /nieprawidłową wartość jasności/);
+});
+
 test("dimmer state converts BleBox 0-255 values to panel percentages", () => {
   const [output] = parseBleboxState("dimmer", {
     dimmer: { currentBrightness: 128, minimumBrightness: 51, overloaded: false, overheated: false, temperature: 28 },
@@ -46,6 +54,24 @@ test("dimmer state converts BleBox 0-255 values to panel percentages", () => {
   assert.equal(output.brightness, 50);
   assert.equal(output.minBrightness, 20);
   assert.equal(output.diagnostics.temperature, 28);
+});
+
+test("shutter state and commands expose screen movement and calibrated position", () => {
+  const [output] = parseBleboxState("shutter", { shutter: {
+    state: 2,
+    currentPos: { position: 74 },
+    desiredPos: { position: 75 },
+    calibrationParameters: { isCalibrated: 1 },
+  } });
+  assert.equal(output.channel, "shutter:0");
+  assert.equal(output.position, 74);
+  assert.equal(output.desiredPosition, 75);
+  assert.equal(output.motion, "STOPPED");
+  assert.equal(output.calibrated, true);
+  assert.equal(shutterCommandPath("shutter:0", "SHUTTER_UP"), "/s/u");
+  assert.equal(shutterCommandPath("shutter:0", "SHUTTER_DOWN"), "/s/d");
+  assert.equal(shutterCommandPath("shutter:0", "SHUTTER_STOP"), "/s/s");
+  assert.equal(shutterCommandPath("shutter:0", "SHUTTER_POSITION", 75), "/s/p/75");
 });
 
 test("all discovered devices require explicit approval", () => {

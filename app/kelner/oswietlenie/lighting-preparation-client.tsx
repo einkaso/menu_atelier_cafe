@@ -1,10 +1,11 @@
 "use client";
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clearWaiterSessionToken, createClientRequestId, waiterSessionHeaders } from "../waiter-session-client";
 import { WaiterSectionHeader } from "../staff-navigation";
 
 type Employee = { name: string };
+type LightingScene = { id: number; name: string; actionCount: number; maxFadeSeconds: number };
 type LightingOutput = {
   id: number;
   label: string;
@@ -15,10 +16,20 @@ type LightingOutput = {
   observedAt: string | null;
   stale: boolean;
   controlAvailable: boolean;
+  dimmingAvailable: boolean;
+  shutterAvailable: boolean;
+  minBrightness: number;
+  maxBrightness: number;
+  preferredPosition: number;
+  position: number | null;
+  desiredPosition: number | null;
+  motion: "UP" | "DOWN" | "STOPPED" | "UNKNOWN" | null;
+  calibrated: boolean | null;
   lastError: string | null;
 };
 type LightingResponse = {
   bridge: { online: boolean; lastHeartbeatAt: string | null; error: string | null };
+  scenes: LightingScene[];
   outputs: LightingOutput[];
   error?: string;
 };
@@ -34,6 +45,12 @@ export default function LightingPreparationClient() {
   const [error, setError] = useState("");
   const [forbidden, setForbidden] = useState(false);
   const [busyOutputId, setBusyOutputId] = useState<number | null>(null);
+  const [busySceneId, setBusySceneId] = useState<number | null>(null);
+  const [sceneMessage, setSceneMessage] = useState("");
+  const [delayValue, setDelayValue] = useState(0);
+  const [delayUnit, setDelayUnit] = useState<"SECONDS" | "MINUTES">("SECONDS");
+  const [brightnessDrafts, setBrightnessDrafts] = useState<Record<number, number>>({});
+  const brightnessTimers = useRef(new Map<number, number>());
 
   const load = useCallback(async () => {
     const response = await fetch("/api/waiter/lighting", { cache: "no-store", headers: waiterSessionHeaders() });
@@ -77,6 +94,11 @@ export default function LightingPreparationClient() {
     return () => { active = false; window.clearInterval(timer); };
   }, [load]);
 
+  useEffect(() => () => {
+    for (const timer of brightnessTimers.current.values()) window.clearTimeout(timer);
+    brightnessTimers.current.clear();
+  }, []);
+
   const groups = useMemo(() => {
     const result = new Map<string, LightingOutput[]>();
     for (const output of data?.outputs ?? []) {
@@ -86,7 +108,16 @@ export default function LightingPreparationClient() {
     return [...result.entries()];
   }, [data]);
 
-  async function sendCommand(output: LightingOutput, command: "ON" | "OFF") {
+  function clearBrightnessDraft(outputId: number) {
+    setBrightnessDrafts((current) => {
+      if (!(outputId in current)) return current;
+      const next = { ...current };
+      delete next[outputId];
+      return next;
+    });
+  }
+
+  async function sendCommand(output: LightingOutput, command: "ON" | "OFF" | "BRIGHTNESS" | "SHUTTER_UP" | "SHUTTER_DOWN" | "SHUTTER_STOP" | "SHUTTER_POSITION", brightness?: number, position?: number) {
     setBusyOutputId(output.id);
     setError("");
     try {
@@ -94,7 +125,7 @@ export default function LightingPreparationClient() {
         method: "POST",
         credentials: "same-origin",
         headers: waiterSessionHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ outputId: output.id, command, idempotencyKey: createClientRequestId() }),
+        body: JSON.stringify({ outputId: output.id, command, brightness, position, idempotencyKey: createClientRequestId() }),
       });
       const body = await response.json().catch(() => ({})) as { error?: string };
       if (response.status === 401) {
@@ -102,13 +133,89 @@ export default function LightingPreparationClient() {
         window.location.replace("/kelner");
         return;
       }
-      if (!response.ok) setError(body.error ?? "Nie udało się wysłać polecenia.");
-      else window.setTimeout(() => void load(), 1_000);
+      if (!response.ok) {
+        setError(body.error ?? "Nie udało się wysłać polecenia.");
+        if (command === "BRIGHTNESS") clearBrightnessDraft(output.id);
+      } else if (command === "BRIGHTNESS") {
+        window.setTimeout(() => { void load().finally(() => clearBrightnessDraft(output.id)); }, 2_500);
+      } else window.setTimeout(() => void load(), 1_000);
     } catch {
       setError("Tablet nie zdołał wysłać polecenia. Sprawdź połączenie z siecią i spróbuj ponownie.");
+      if (command === "BRIGHTNESS") clearBrightnessDraft(output.id);
     } finally {
       setBusyOutputId(null);
     }
+  }
+
+  async function savePreferredPosition(output: LightingOutput) {
+    setBusyOutputId(output.id);
+    setError("");
+    try {
+      const response = await fetch("/api/waiter/lighting/preferred-position", {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: waiterSessionHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ outputId: output.id }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (response.status === 401) {
+        clearWaiterSessionToken();
+        window.location.replace("/kelner");
+        return;
+      }
+      if (!response.ok) setError(body.error ?? "Nie udało się zapamiętać pozycji ekranu.");
+      else await load();
+    } catch {
+      setError("Tablet nie zdołał zapamiętać pozycji ekranu. Spróbuj ponownie.");
+    } finally {
+      setBusyOutputId(null);
+    }
+  }
+
+  async function runScene(scene: LightingScene) {
+    const delaySeconds = Math.min(3600, Math.max(0, Math.round(delayValue * (delayUnit === "MINUTES" ? 60 : 1))));
+    setBusySceneId(scene.id);
+    setError("");
+    setSceneMessage("");
+    try {
+      const response = await fetch("/api/waiter/lighting/scenes", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: waiterSessionHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ sceneId: scene.id, delaySeconds, idempotencyKey: createClientRequestId() }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string; completesAt?: string };
+      if (response.status === 401) {
+        clearWaiterSessionToken();
+        window.location.replace("/kelner");
+        return;
+      }
+      if (!response.ok) setError(body.error ?? "Nie udało się uruchomić sceny.");
+      else {
+        const delayLabel = delaySeconds >= 60 && delaySeconds % 60 === 0 ? `${delaySeconds / 60} min` : `${delaySeconds} s`;
+        const timing = delaySeconds === 0 ? "uruchamia się teraz" : `uruchomi się za ${delayLabel}`;
+        const fade = scene.maxFadeSeconds > 0 ? ` Ściemniacze osiągną ustawienie w maks. ${scene.maxFadeSeconds} s.` : "";
+        setSceneMessage(`Scena „${scene.name}” ${timing}.${fade}`);
+        window.setTimeout(() => void load(), Math.min(10_000, delaySeconds * 1000 + 2_000));
+      }
+    } catch {
+      setError("Tablet nie zdołał zaplanować sceny. Sprawdź połączenie i spróbuj ponownie.");
+    } finally {
+      setBusySceneId(null);
+    }
+  }
+
+  function scheduleBrightness(output: LightingOutput, requestedValue: number) {
+    const rounded = Math.round(requestedValue);
+    const brightness = rounded === 0 ? 0 : Math.min(output.maxBrightness, Math.max(output.minBrightness, rounded));
+    setBrightnessDrafts((current) => ({ ...current, [output.id]: brightness }));
+    const previousTimer = brightnessTimers.current.get(output.id);
+    if (previousTimer !== undefined) window.clearTimeout(previousTimer);
+    const timer = window.setTimeout(() => {
+      brightnessTimers.current.delete(output.id);
+      void sendCommand(output, "BRIGHTNESS", brightness);
+    }, 450);
+    brightnessTimers.current.set(output.id, timer);
   }
 
   return <main className="waiter-lighting-page">
@@ -118,32 +225,50 @@ export default function LightingPreparationClient() {
       <small>{data?.bridge.lastHeartbeatAt ? `Ostatni kontakt: ${freshness(data.bridge.lastHeartbeatAt)}` : "Oczekiwanie na pierwszy kontakt"}</small>
     </section>
     {error && <div className="waiter-lighting-message is-error">{error}</div>}
+    {sceneMessage && <div className="waiter-lighting-message is-success">{sceneMessage}</div>}
     {forbidden ? <section className="waiter-lighting-empty"><strong>Brak uprawnienia</strong><p>Administrator musi włączyć dla Twojego konta uprawnienie „Sterowanie oświetleniem”.</p></section> : null}
+    {!forbidden && data?.scenes.length ? <section className="waiter-lighting-scenes">
+      <header><div><span>GOTOWE USTAWIENIA</span><h2>Sceny oświetlenia</h2><p>Wybierz scenę i zdecyduj, czy ma uruchomić się teraz, czy po krótkim czasie.</p></div><div className="waiter-lighting-delay"><label>Uruchom za<input type="number" min="0" max={delayUnit === "MINUTES" ? 60 : 3600} step="1" value={delayValue} onChange={(event) => setDelayValue(Math.min(delayUnit === "MINUTES" ? 60 : 3600, Math.max(0, Number(event.target.value) || 0)))}/></label><select aria-label="Jednostka opóźnienia" value={delayUnit} onChange={(event) => { const unit = event.target.value as "SECONDS" | "MINUTES"; setDelayUnit(unit); if (unit === "MINUTES") setDelayValue((value) => Math.min(60, value)); }}><option value="SECONDS">sekund</option><option value="MINUTES">minut</option></select></div></header>
+      <div className="waiter-lighting-scene-buttons">{data.scenes.map((scene) => <button type="button" key={scene.id} disabled={!data.bridge.online || busySceneId !== null} onClick={() => void runScene(scene)}><span>{busySceneId === scene.id ? "Uruchamiam…" : scene.name}</span><small>{scene.actionCount} {scene.actionCount === 1 ? "ustawienie" : "ustawień"}{scene.maxFadeSeconds > 0 ? ` · przejście ${scene.maxFadeSeconds} s` : ""}</small></button>)}</div>
+    </section> : null}
     {!forbidden && data && !data.outputs.length ? <section className="waiter-lighting-empty"><strong>Nie skonfigurowano jeszcze punktów światła</strong><p>Administrator powinien zatwierdzić właściwe wyjścia BleBox i przypisać im nazwy oraz pomieszczenia.</p></section> : null}
     {!forbidden && groups.map(([room, outputs]) => {
       const desktopColumns = Math.min(outputs.length, 4);
       const tabletColumns = Math.min(outputs.length, 2);
+      const cardWidth = outputs.some((output) => output.dimmingAvailable || output.shutterAvailable) ? 286 : 232;
       const roomStyle = {
         "--lighting-room-columns": desktopColumns,
         "--lighting-room-tablet-columns": tabletColumns,
-        "--lighting-room-width": `${desktopColumns * 232 + Math.max(0, desktopColumns - 1) * 12}px`,
-        "--lighting-room-tablet-width": `${tabletColumns * 232 + Math.max(0, tabletColumns - 1) * 12}px`,
+        "--lighting-room-width": `${desktopColumns * cardWidth + Math.max(0, desktopColumns - 1) * 12}px`,
+        "--lighting-room-tablet-width": `${tabletColumns * cardWidth + Math.max(0, tabletColumns - 1) * 12}px`,
       } as CSSProperties;
       return <section className="waiter-lighting-room" key={room} style={roomStyle}>
       <header><span>STREFA</span><h2>{room}</h2></header>
       <div className="waiter-lighting-grid">{outputs.map((output) => {
         const unavailable = !data?.bridge.online || output.stale || busyOutputId === output.id;
-        return <article className={output.isOn ? "waiter-lighting-card is-on" : "waiter-lighting-card"} key={output.id}>
+        const brightness = brightnessDrafts[output.id] ?? output.brightness ?? 0;
+        const cardClassName = `waiter-lighting-card${output.isOn && !output.shutterAvailable ? " is-on" : ""}${output.dimmingAvailable ? " is-dimmer" : ""}${output.shutterAvailable ? " is-shutter" : ""}`;
+        return <article className={cardClassName} key={output.id}>
           <div className="waiter-lighting-card-top"><span className="waiter-lighting-bulb" aria-hidden="true"/><span className={output.stale ? "waiter-lighting-reading is-stale" : "waiter-lighting-reading"}>{output.stale ? "Stan nieaktualny" : freshness(output.observedAt)}</span></div>
           <h3>{output.label}</h3>
           <p>{output.deviceName}</p>
-          <strong className="waiter-lighting-state">{output.isOn === null ? "Brak stanu" : output.isOn ? "Włączone" : "Wyłączone"}</strong>
-          {output.brightness !== null && !output.controlAvailable ? <span className="waiter-lighting-brightness">Jasność {output.brightness}% · regulacja po teście pilotażowym</span> : null}
+          <strong className="waiter-lighting-state">{output.shutterAvailable ? output.motion === "UP" ? "Jedzie w górę" : output.motion === "DOWN" ? "Jedzie w dół" : output.motion === "STOPPED" ? "Zatrzymany" : "Stan nieznany" : output.isOn === null ? "Brak stanu" : output.isOn ? "Włączone" : "Wyłączone"}</strong>
+          {output.shutterAvailable ? <div className="waiter-lighting-shutter">
+            <div className="waiter-lighting-screen-position"><span style={{ height: `${output.position ?? 0}%` }}/><b>{output.position === null ? "—" : `${output.position}%`}</b><small>opuszczenia</small></div>
+            <div className="waiter-lighting-shutter-controls"><button type="button" disabled={unavailable} onClick={() => void sendCommand(output, "SHUTTER_UP")}>↑ Góra</button><button type="button" className="is-stop" disabled={!data?.bridge.online || busyOutputId === output.id} onClick={() => void sendCommand(output, "SHUTTER_STOP")}>Stop</button><button type="button" disabled={unavailable} onClick={() => void sendCommand(output, "SHUTTER_DOWN")}>↓ Dół</button></div>
+            <button type="button" className="waiter-lighting-work-position" disabled={unavailable || output.calibrated !== true} onClick={() => void sendCommand(output, "SHUTTER_POSITION", undefined, output.preferredPosition)}>Pozycja robocza · {output.preferredPosition}%</button>
+            <button type="button" className="waiter-lighting-save-position" disabled={unavailable || output.calibrated !== true || output.motion !== "STOPPED" || output.position === null || output.position === output.preferredPosition} onClick={() => void savePreferredPosition(output)}>Zapamiętaj obecną pozycję</button>
+            {output.calibrated !== true ? <small className="waiter-lighting-calibration-note">Pozycja procentowa wymaga jednorazowej kalibracji ekranu w aplikacji wBox.</small> : null}
+          </div> : output.dimmingAvailable ? <div className="waiter-lighting-dimmer">
+            <div><span>Natężenie światła</span><strong>{brightness}%</strong></div>
+            <input type="range" min="0" max={output.maxBrightness} step="1" value={brightness} disabled={unavailable} aria-label={`Jasność: ${output.label}`} style={{ "--lighting-level": `${brightness}%` } as CSSProperties} onChange={(event) => scheduleBrightness(output, Number(event.currentTarget.value))}/>
+            <footer><button type="button" disabled={unavailable || brightness === 0} onClick={() => scheduleBrightness(output, 0)}>Wyłącz</button><button type="button" disabled={unavailable || brightness === output.maxBrightness} onClick={() => scheduleBrightness(output, output.maxBrightness)}>Pełna moc</button></footer>
+          </div> : output.brightness !== null && !output.controlAvailable ? <span className="waiter-lighting-brightness">Jasność {output.brightness}%</span> : null}
           {output.lastError ? <small className="waiter-lighting-device-error">{output.lastError}</small> : null}
-          <div className="waiter-lighting-actions">
+          {output.controlAvailable ? <div className="waiter-lighting-actions">
             <button type="button" disabled={unavailable || !output.controlAvailable || output.isOn === true} onClick={() => void sendCommand(output, "ON")}>Włącz</button>
             <button type="button" disabled={unavailable || !output.controlAvailable || output.isOn === false} onClick={() => void sendCommand(output, "OFF")}>Wyłącz</button>
-          </div>
+          </div> : null}
         </article>;
       })}</div>
     </section>})}

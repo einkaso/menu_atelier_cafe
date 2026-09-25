@@ -1,5 +1,6 @@
 export type SettlementCorrectionInput = { direction: "CARD_TO_CASH" | "CASH_TO_CARD"; amount: string; reason: string };
 export type SettlementExpenseInput = { description: string; amount: string; receiptNumber?: string; receiptIncluded: boolean };
+export type SettlementDepositInput = { contributor: string; amount: string; note?: string };
 export type SettlementTipInput = {
   key: string;
   paymentMethod: "CASH" | "CARD";
@@ -30,20 +31,23 @@ export function settlementTotals(input: {
   envelopeCash: number;
   corrections: Array<{ direction: "CARD_TO_CASH" | "CASH_TO_CARD"; amount: number }>;
   expenses: Array<{ amount: number }>;
+  deposits?: Array<{ amount: number }>;
   tips: Array<{ paymentMethod: "CASH" | "CARD"; amount: number }>;
 }) {
   const cardToCash = input.corrections.filter((item) => item.direction === "CARD_TO_CASH").reduce((sum, item) => sum + item.amount, 0);
   const cashToCard = input.corrections.filter((item) => item.direction === "CASH_TO_CARD").reduce((sum, item) => sum + item.amount, 0);
   const expensesTotal = input.expenses.reduce((sum, item) => sum + item.amount, 0);
+  const depositsTotal = (input.deposits ?? []).reduce((sum, item) => sum + item.amount, 0);
   const cashTips = input.tips.filter((item) => item.paymentMethod === "CASH").reduce((sum, item) => sum + item.amount, 0);
   const cardTips = input.tips.filter((item) => item.paymentMethod === "CARD").reduce((sum, item) => sum + item.amount, 0);
   const tipsTotal = cashTips + cardTips;
-  const expectedCash = input.openingCash + input.posCash + cardToCash - cashToCard + cashTips - expensesTotal;
+  const expectedCash = input.openingCash + input.posCash + cardToCash - cashToCard + cashTips - expensesTotal + depositsTotal;
   const expectedTerminal = input.posCard - cardToCash + cashToCard + cardTips;
   return {
     cardToCash,
     cashToCard,
     expensesTotal,
+    depositsTotal,
     cashTips,
     cardTips,
     tipsTotal,

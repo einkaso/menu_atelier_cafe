@@ -491,6 +491,27 @@
       "when": 1790260200000,
       "tag": "0069_room_lock_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1790263800000,
+      "tag": "0070_cash_deposits",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1790350200000,
+      "tag": "0071_shutter_screen_control",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790353800000,
+      "tag": "0072_lighting_scenes",
+      "breakpoints": true
     }
   ]
 }

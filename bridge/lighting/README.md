@@ -1,6 +1,6 @@
 # Lokalny agent oświetlenia
 
-Ten katalog zawiera lokalnego agenta urządzeń BleBox w sieci Atelier. Inwentaryzacja działa wyłącznie w prywatnej podsieci IPv4, używa tylko żądań `GET`, nie podąża za przekierowaniami i odczytuje wyłącznie zamkniętą listę endpointów BleBox. Sterowanie jest osobnym przepływem: agent pobiera krótkotrwałe polecenia dla zatwierdzonych kanałów przekaźnikowych, wysyła jawny stan `ON` albo `OFF` i potwierdza efekt ponownym odczytem.
+Ten katalog zawiera lokalnego agenta urządzeń BleBox w sieci Atelier. Inwentaryzacja działa wyłącznie w prywatnej podsieci IPv4, używa tylko żądań `GET`, nie podąża za przekierowaniami i odczytuje wyłącznie zamkniętą listę endpointów BleBox. Sterowanie jest osobnym przepływem: agent pobiera krótkotrwałe polecenia dla zatwierdzonych kanałów, wysyła jawny stan `ON` albo `OFF` dla przekaźników, bezwzględną jasność dla `dimmerBox` albo ruch i pozycję dla `shutterBox`, a następnie potwierdza efekt ponownym odczytem.
 
 ## Inwentaryzacja
 

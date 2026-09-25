@@ -80,10 +80,11 @@ export async function GET(request: Request) {
     cashLeft: result.cashLeft + (["CLOSE", "LEGACY"].includes(item.checkpointType) ? amount(item.cashLeft) : 0),
     envelopeCash: result.envelopeCash + amount(item.envelopeCash),
     expenses: result.expenses + amount(item.expensesTotal),
+    deposits: result.deposits + amount(item.depositsTotal),
     tips: result.tips + amount(item.tipsTotal),
     cashDifference: result.cashDifference + (latestCheckpointIds.has(item.id) ? amount(item.cashDifference) : 0),
     terminalDifference: result.terminalDifference + amount(item.terminalDifference),
-  }), { count: 0, openingCash: 0, posCash: 0, posCard: 0, terminalCard: 0, countedCash: 0, cashLeft: 0, envelopeCash: 0, expenses: 0, tips: 0, cashDifference: 0, terminalDifference: 0 });
+  }), { count: 0, openingCash: 0, posCash: 0, posCard: 0, terminalCard: 0, countedCash: 0, cashLeft: 0, envelopeCash: 0, expenses: 0, deposits: 0, tips: 0, cashDifference: 0, terminalDifference: 0 });
   summary.tips += tipAdjustments.filter((item) => !item.voidedAt).reduce((sum, item) => sum + amount(item.amount), 0);
   return Response.json({ from, to, cashDays, settlements, ledgerSettlements, allocations, tipAdjustments, employees, tipsByEmployee: [...tipsByEmployee.values()], summary });
 }

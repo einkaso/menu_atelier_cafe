@@ -11,6 +11,10 @@ const resultInput = z.object({
   outputId: z.number().int().positive(),
   isOn: z.boolean().nullable(),
   brightness: z.number().int().min(0).max(100).nullable(),
+  position: z.number().int().min(0).max(100).nullable().optional(),
+  desiredPosition: z.number().int().min(0).max(100).nullable().optional(),
+  motion: z.enum(["UP", "DOWN", "STOPPED", "UNKNOWN"]).nullable().optional(),
+  calibrated: z.boolean().nullable().optional(),
   observedAt: z.coerce.date(),
   error: z.string().max(500).nullable(),
 });
@@ -37,13 +41,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       outputId: input.data.outputId,
       isOn: input.data.isOn,
       brightness: input.data.brightness,
+      position: input.data.position ?? null,
+      desiredPosition: input.data.desiredPosition ?? null,
+      motion: input.data.motion ?? null,
+      calibrated: input.data.calibrated ?? null,
       observedAt: input.data.observedAt,
       quality: input.data.success ? "CONFIRMED" : "ERROR",
       lastError: input.data.error,
       updatedAt: now,
     }).onConflictDoUpdate({
       target: lightingOutputStates.outputId,
-      set: { isOn: input.data.isOn, brightness: input.data.brightness, observedAt: input.data.observedAt, quality: input.data.success ? "CONFIRMED" : "ERROR", lastError: input.data.error, updatedAt: now },
+      set: { isOn: input.data.isOn, brightness: input.data.brightness, position: input.data.position ?? null, desiredPosition: input.data.desiredPosition ?? null, motion: input.data.motion ?? null, calibrated: input.data.calibrated ?? null, observedAt: input.data.observedAt, quality: input.data.success ? "CONFIRMED" : "ERROR", lastError: input.data.error, updatedAt: now },
     });
     await tx.update(lightingCommands).set({ status: input.data.success ? "SUCCEEDED" : "FAILED", finishedAt: now, error: input.data.error }).where(eq(lightingCommands.id, id));
   });

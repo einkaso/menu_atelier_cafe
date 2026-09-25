@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { waiterCashDays, waiterCashExpenses, waiterEmployees, waiterSettlementEvents, waiterSettlements, waiterTipAllocations } from "../../../../db/schema";
+import { waiterCashDays, waiterCashDeposits, waiterCashExpenses, waiterEmployees, waiterSettlementEvents, waiterSettlements, waiterTipAllocations } from "../../../../db/schema";
 import { CASH_DESK_NAME, currentBusinessDate, snapshotDelta, type CashSnapshot } from "../../../../lib/cash-day";
 import { fetchCashSnapshot } from "../../../../lib/dotykacka/cash-snapshot";
-import { currentWaiter, waiterCookie } from "../../../../lib/waiter-auth";
-import { centsToMoney, moneyToCents, settlementTotals, type SettlementCorrectionInput, type SettlementExpenseInput, type SettlementTipInput } from "../../../../lib/waiter-settlement";
+import { currentWaiter } from "../../../../lib/waiter-auth";
+import { centsToMoney, moneyToCents, settlementTotals, type SettlementCorrectionInput, type SettlementDepositInput, type SettlementExpenseInput, type SettlementTipInput } from "../../../../lib/waiter-settlement";
 
 export const dynamic = "force-dynamic";
 
@@ -14,15 +14,19 @@ type SettlementInput = {
   action?: unknown;
   expenseId?: unknown;
   expense?: unknown;
+  depositId?: unknown;
+  deposit?: unknown;
   countedCash?: unknown;
   cashLeft?: unknown;
   envelopeCash?: unknown;
   envelopeNumber?: unknown;
   corrections?: unknown;
   expenses?: unknown;
+  deposits?: unknown;
   tips?: unknown;
   discrepancyNote?: unknown;
   employeeNote?: unknown;
+  idempotencyKey?: unknown;
   snapshotCashCents?: unknown;
   snapshotCardCents?: unknown;
 };
@@ -34,6 +38,12 @@ function normalizedExpense(value: unknown) {
   const expense = { description: textValue(item.description, 300), amount: moneyToCents(item.amount), receiptNumber: textValue(item.receiptNumber, 100), receiptIncluded: item.receiptIncluded === true };
   if (!expense.description || !expense.amount || !expense.receiptIncluded) throw new Error("Wydatek wymaga opisu, dodatniej kwoty i potwierdzenia zabezpieczenia paragonu.");
   return expense;
+}
+function normalizedDeposit(value: unknown) {
+  const item = value && typeof value === "object" ? value as SettlementDepositInput : {} as SettlementDepositInput;
+  const deposit = { contributor: textValue(item.contributor, 160), amount: moneyToCents(item.amount), note: textValue(item.note, 300) };
+  if (!deposit.contributor || !deposit.amount) throw new Error("Wpłata do kasy wymaga osoby przekazującej środki i dodatniej kwoty.");
+  return deposit;
 }
 const snapshotFromDay = (day: typeof waiterCashDays.$inferSelect): CashSnapshot => ({
   cash: numeric(day.openingPosCash),
@@ -51,11 +61,6 @@ const snapshotFromSettlement = (item: typeof waiterSettlements.$inferSelect): Ca
   periodTo: item.posSnapshotAt?.toISOString() ?? item.submittedAt.toISOString(),
   payments: item.posSnapshotDetails,
 });
-function clearCookie(response: Response) {
-  response.headers.append("Set-Cookie", `${waiterCookie.name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
-  return response;
-}
-
 async function safeSnapshot(businessDate: string) {
   try { return { snapshot: await fetchCashSnapshot(businessDate), snapshotError: null }; }
   catch (error) { return { snapshot: null, snapshotError: error instanceof Error ? error.message : "Nie udało się pobrać raportu Dotykački." }; }
@@ -83,10 +88,11 @@ export async function GET(request: Request) {
       .orderBy(desc(waiterSettlements.submittedAt)).limit(10),
   ]);
   const day = openDays[0] ?? todayDays[0] ?? null;
-  const [checkpoints, pendingExpenses] = day ? await Promise.all([
+  const [checkpoints, pendingExpenses, pendingDeposits] = day ? await Promise.all([
     db.select().from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id)).orderBy(waiterSettlements.submittedAt),
     db.select().from(waiterCashExpenses).where(and(eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).orderBy(waiterCashExpenses.createdAt, waiterCashExpenses.id),
-  ]) : [[], []];
+    db.select().from(waiterCashDeposits).where(and(eq(waiterCashDeposits.cashDayId, day.id), eq(waiterCashDeposits.status, "PENDING"))).orderBy(waiterCashDeposits.createdAt, waiterCashDeposits.id),
+  ]) : [[], [], []];
   const latest = checkpoints.at(-1) ?? null;
   const report = day?.status === "CLOSED" ? { snapshot: null, snapshotError: null } : await safeSnapshot(day?.businessDate ?? businessDate);
   const baselineSnapshot = day ? (latest ? snapshotFromSettlement(latest) : snapshotFromDay(day)) : null;
@@ -100,7 +106,7 @@ export async function GET(request: Request) {
   return Response.json({
     employee, employees, recent, businessDate, cashDesk: CASH_DESK_NAME,
     day, checkpoints, latest, previousClose: previousClose[0] ?? null,
-    pendingExpenses,
+    pendingExpenses, pendingDeposits,
     snapshot: report.snapshot, snapshotError: report.snapshotError,
     baseline: { cash: centsToMoney(baselineCash), snapshot: baselineSnapshot },
     interval: { posCash: centsToMoney(delta.cash), posCard: centsToMoney(delta.card), expectedCash: centsToMoney(baselineCash + delta.cash) },
@@ -122,6 +128,10 @@ async function normalizedDetails(body: SettlementInput) {
   const expenses = rawExpenses.slice(0, 50).map((item) => ({ description: textValue(item?.description, 300), amount: moneyToCents(item?.amount), receiptNumber: textValue(item?.receiptNumber, 100), receiptIncluded: item?.receiptIncluded === true }));
   if (expenses.length !== rawExpenses.length || expenses.some((item) => !item.description || !item.amount || !item.receiptIncluded)) throw new Error("Każdy wydatek wymaga opisu, dodatniej kwoty i potwierdzenia dokumentu.");
 
+  const rawDeposits = Array.isArray(body.deposits) ? body.deposits as SettlementDepositInput[] : [];
+  const deposits = rawDeposits.slice(0, 50).map((item) => ({ contributor: textValue(item?.contributor, 160), amount: moneyToCents(item?.amount), note: textValue(item?.note, 300) }));
+  if (deposits.length !== rawDeposits.length || deposits.some((item) => !item.contributor || !item.amount)) throw new Error("Każda wpłata do kasy wymaga osoby przekazującej środki i dodatniej kwoty.");
+
   const rawTips = Array.isArray(body.tips) ? body.tips as SettlementTipInput[] : [];
   if (rawTips.length > 50) throw new Error("Rozliczenie zawiera zbyt wiele wpisów napiwków.");
   const db = getDb();
@@ -135,7 +145,7 @@ async function normalizedDetails(body: SettlementInput) {
     return { key: textValue(item?.key, 80) || randomUUID(), paymentMethod: item?.paymentMethod, amount, note: textValue(item?.note, 300), allocations };
   });
   if (tips.some((tip) => !["CASH", "CARD"].includes(tip.paymentMethod) || !tip.amount || !tip.allocations.length || tip.allocations.some((allocation) => !allocation.employeeName || !allocation.amount) || new Set(tip.allocations.map((allocation) => allocation.employeeDotykackaId)).size !== tip.allocations.length || tip.allocations.reduce((sum, allocation) => sum + (allocation.amount ?? 0), 0) !== tip.amount)) throw new Error("Każdy napiwek musi mieć prawidłowy sposób płatności i pełny podział kwoty pomiędzy aktywnych pracowników.");
-  return { corrections, expenses, tips };
+  return { corrections, expenses, deposits, tips };
 }
 
 export async function POST(request: Request) {
@@ -168,8 +178,53 @@ export async function POST(request: Request) {
     const [saved] = await db.insert(waiterCashExpenses).values({ cashDayId: day.id, ...values, createdByDotykackaId: employee.dotykackaId, createdByName: employee.name }).returning();
     return Response.json({ ok: true, expense: saved }, { status: 201 });
   }
+  if (["SAVE_DEPOSIT", "DELETE_DEPOSIT"].includes(requestedAction)) {
+    const [day] = await db.select({ id: waiterCashDays.id }).from(waiterCashDays).where(and(eq(waiterCashDays.businessDate, businessDate), eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).limit(1);
+    if (!day) return Response.json({ error: "Najpierw otwórz dzisiejszy dzień kasowy." }, { status: 409 });
+    const depositId = Number(body.depositId);
+    if (requestedAction === "DELETE_DEPOSIT") {
+      if (!Number.isInteger(depositId) || depositId < 1) return Response.json({ error: "Nieprawidłowa wpłata." }, { status: 400 });
+      const removed = await db.delete(waiterCashDeposits).where(and(eq(waiterCashDeposits.id, depositId), eq(waiterCashDeposits.cashDayId, day.id), eq(waiterCashDeposits.status, "PENDING"))).returning({ id: waiterCashDeposits.id });
+      if (!removed.length) return Response.json({ error: "Wpłata została już rozliczona albo usunięta." }, { status: 409 });
+      return Response.json({ ok: true, depositId });
+    }
+    let deposit: ReturnType<typeof normalizedDeposit>;
+    try { deposit = normalizedDeposit(body.deposit); }
+    catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Nieprawidłowa wpłata." }, { status: 400 }); }
+    const now = new Date();
+    const values = { contributor: deposit.contributor, amount: centsToMoney(deposit.amount!), note: deposit.note || null, updatedByDotykackaId: employee.dotykackaId, updatedByName: employee.name, updatedAt: now };
+    if (Number.isInteger(depositId) && depositId > 0) {
+      const [saved] = await db.update(waiterCashDeposits).set(values).where(and(eq(waiterCashDeposits.id, depositId), eq(waiterCashDeposits.cashDayId, day.id), eq(waiterCashDeposits.status, "PENDING"))).returning();
+      if (!saved) return Response.json({ error: "Wpłata została już rozliczona albo usunięta." }, { status: 409 });
+      return Response.json({ ok: true, deposit: saved });
+    }
+    const [saved] = await db.insert(waiterCashDeposits).values({ cashDayId: day.id, ...values, createdByDotykackaId: employee.dotykackaId, createdByName: employee.name }).returning();
+    return Response.json({ ok: true, deposit: saved }, { status: 201 });
+  }
   const action = requestedAction as CashAction;
   if (!["OPEN", "HANDOVER", "CLOSE"].includes(action)) return Response.json({ error: "Wybierz otwarcie, przekazanie albo zamknięcie dnia." }, { status: 400 });
+  const idempotencyKey = textValue(body.idempotencyKey, 80);
+  if (action !== "OPEN" && !/^[a-zA-Z0-9-]{16,80}$/.test(idempotencyKey)) return Response.json({ error: "Brak bezpiecznego identyfikatora operacji. Odśwież ekran i spróbuj ponownie." }, { status: 400 });
+  if (action !== "OPEN") {
+    const [existing] = await db.select({
+      id: waiterSettlements.id,
+      checkpointType: waiterSettlements.checkpointType,
+      posSnapshotCash: waiterSettlements.posSnapshotCash,
+      posSnapshotCard: waiterSettlements.posSnapshotCard,
+      posSnapshotAt: waiterSettlements.posSnapshotAt,
+    }).from(waiterSettlements).where(and(eq(waiterSettlements.externalId, idempotencyKey), eq(waiterSettlements.employeeDotykackaId, employee.dotykackaId))).limit(1);
+    if (existing) return Response.json({
+      status: "ok",
+      action: existing.checkpointType,
+      settlementId: existing.id,
+      externalId: idempotencyKey,
+      sessionClosed: false,
+      replayed: true,
+      snapshotAt: existing.posSnapshotAt?.toISOString(),
+      posCash: existing.posSnapshotCash,
+      posCard: existing.posSnapshotCard,
+    });
+  }
   const countedCash = moneyToCents(body.countedCash);
   if (countedCash == null) return Response.json({ error: "Podaj fizycznie policzoną gotówkę." }, { status: 400 });
   const discrepancyNote = textValue(body.discrepancyNote, 1000);
@@ -222,10 +277,20 @@ export async function POST(request: Request) {
   if (!day) return Response.json({ error: "Najpierw otwórz dzisiejszy dzień kasowy." }, { status: 409 });
   const checkpoints = await db.select().from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id)).orderBy(waiterSettlements.submittedAt, waiterSettlements.id);
   const latest = checkpoints.at(-1);
-  const pendingExpenseRows = await db.select().from(waiterCashExpenses).where(and(eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).orderBy(waiterCashExpenses.createdAt, waiterCashExpenses.id);
+  const [pendingExpenseRows, pendingDepositRows] = await Promise.all([
+    db.select().from(waiterCashExpenses).where(and(eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).orderBy(waiterCashExpenses.createdAt, waiterCashExpenses.id),
+    db.select().from(waiterCashDeposits).where(and(eq(waiterCashDeposits.cashDayId, day.id), eq(waiterCashDeposits.status, "PENDING"))).orderBy(waiterCashDeposits.createdAt, waiterCashDeposits.id),
+  ]);
   const expenseFingerprint = pendingExpenseRows.map((item) => `${item.id}:${item.updatedAt.getTime()}`).join("|");
+  const depositFingerprint = pendingDepositRows.map((item) => `${item.id}:${item.updatedAt.getTime()}`).join("|");
   let details: Awaited<ReturnType<typeof normalizedDetails>>;
-  try { details = await normalizedDetails({ ...body, expenses: pendingExpenseRows.map((item) => ({ description: item.description, amount: item.amount, receiptNumber: item.receiptNumber ?? undefined, receiptIncluded: item.receiptIncluded })) }); }
+  try { details = await normalizedDetails({
+    ...body,
+    corrections: action === "HANDOVER" ? [] : body.corrections,
+    expenses: pendingExpenseRows.map((item) => ({ description: item.description, amount: item.amount, receiptNumber: item.receiptNumber ?? undefined, receiptIncluded: item.receiptIncluded })),
+    deposits: pendingDepositRows.map((item) => ({ contributor: item.contributor, amount: item.amount, note: item.note ?? undefined })),
+    tips: action === "HANDOVER" ? [] : body.tips,
+  }); }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Nieprawidłowe dane rozliczenia." }, { status: 400 }); }
   const baselineCash = numeric(latest?.countedCash ?? day.countedOpeningCash);
   const baselineSnapshot = latest ? snapshotFromSettlement(latest) : snapshotFromDay(day);
@@ -238,6 +303,7 @@ export async function POST(request: Request) {
     countedCash, cashLeft: closeCashLeft, envelopeCash,
     corrections: details.corrections.map((item) => ({ direction: item.direction as "CARD_TO_CASH" | "CASH_TO_CARD", amount: item.amount! })),
     expenses: details.expenses.map((item) => ({ amount: item.amount! })),
+    deposits: details.deposits.map((item) => ({ amount: item.amount! })),
     tips: details.tips.map((item) => ({ paymentMethod: item.paymentMethod as "CASH" | "CARD", amount: item.amount! })),
   });
   const terminalCard = intervalTotals.expectedTerminal;
@@ -249,8 +315,9 @@ export async function POST(request: Request) {
 
   const normalizedCorrections = details.corrections.map((item) => ({ direction: item.direction as "CARD_TO_CASH" | "CASH_TO_CARD", amount: centsToMoney(item.amount!), reason: item.reason }));
   const normalizedExpenses = details.expenses.map((item) => ({ description: item.description, amount: centsToMoney(item.amount!), receiptNumber: item.receiptNumber || undefined, receiptIncluded: true }));
+  const normalizedDeposits = details.deposits.map((item) => ({ contributor: item.contributor, amount: centsToMoney(item.amount!), note: item.note || undefined }));
   const normalizedTips = details.tips.map((tip) => ({ key: tip.key, paymentMethod: tip.paymentMethod as "CASH" | "CARD", amount: centsToMoney(tip.amount!), note: tip.note || undefined, allocations: tip.allocations.map((allocation) => ({ employeeDotykackaId: allocation.employeeDotykackaId, employeeName: allocation.employeeName, amount: centsToMoney(allocation.amount!) })) }));
-  const externalId = randomUUID();
+  const externalId = idempotencyKey;
   try {
     const settlementId = await db.transaction(async (tx) => {
       await tx.execute(sql`select id from waiter_cash_days where id = ${day.id} for update`);
@@ -260,6 +327,8 @@ export async function POST(request: Request) {
       if ((currentLatest?.id ?? null) !== (latest?.id ?? null)) throw new Error("STALE_CASH_DAY");
       const currentExpenseRows = await tx.select({ id: waiterCashExpenses.id, updatedAt: waiterCashExpenses.updatedAt }).from(waiterCashExpenses).where(and(eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).orderBy(waiterCashExpenses.createdAt, waiterCashExpenses.id);
       if (currentExpenseRows.map((item) => `${item.id}:${item.updatedAt.getTime()}`).join("|") !== expenseFingerprint) throw new Error("STALE_CASH_DAY");
+      const currentDepositRows = await tx.select({ id: waiterCashDeposits.id, updatedAt: waiterCashDeposits.updatedAt }).from(waiterCashDeposits).where(and(eq(waiterCashDeposits.cashDayId, day.id), eq(waiterCashDeposits.status, "PENDING"))).orderBy(waiterCashDeposits.createdAt, waiterCashDeposits.id);
+      if (currentDepositRows.map((item) => `${item.id}:${item.updatedAt.getTime()}`).join("|") !== depositFingerprint) throw new Error("STALE_CASH_DAY");
       const checkpointNumber = (await tx.select({ id: waiterSettlements.id }).from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id))).length + 1;
       const shiftName = action === "HANDOVER" ? `Przekazanie zmiany #${checkpointNumber}` : "Zamknięcie dnia";
       const [saved] = await tx.insert(waiterSettlements).values({
@@ -267,30 +336,31 @@ export async function POST(request: Request) {
         employeeDotykackaId: employee.dotykackaId, employeeName: employee.name,
         openingCash: centsToMoney(baselineCash), posCash: centsToMoney(posDelta.cash), posCard: centsToMoney(posDelta.card), terminalCard: centsToMoney(terminalCard),
         countedCash: centsToMoney(countedCash), cashLeft: centsToMoney(closeCashLeft), envelopeCash: centsToMoney(envelopeCash), envelopeNumber: envelopeNumber || null,
-        corrections: normalizedCorrections, expenses: normalizedExpenses, tips: normalizedTips,
+        corrections: normalizedCorrections, expenses: normalizedExpenses, deposits: normalizedDeposits, tips: normalizedTips,
         expectedCash: centsToMoney(totals.expectedCash), cashDifference: centsToMoney(totals.cashDifference), expectedTerminal: centsToMoney(totals.expectedTerminal), terminalDifference: "0.00",
-        expensesTotal: centsToMoney(totals.expensesTotal), tipsTotal: centsToMoney(totals.tipsTotal),
+        expensesTotal: centsToMoney(totals.expensesTotal), depositsTotal: centsToMoney(totals.depositsTotal), tipsTotal: centsToMoney(totals.tipsTotal),
         posSnapshotCash: centsToMoney(snapshot.cash), posSnapshotCard: centsToMoney(snapshot.card), posSnapshotAt: new Date(snapshot.capturedAt), posSnapshotFrom: new Date(snapshot.periodFrom), posSnapshotDetails: snapshot.payments,
         discrepancyNote: discrepancyNote || null, employeeNote: employeeNote || null, status: "SUBMITTED",
       }).returning({ id: waiterSettlements.id });
       const allocationRows = normalizedTips.flatMap((tip) => tip.allocations.map((allocation) => ({ settlementId: saved.id, tipKey: tip.key, employeeDotykackaId: allocation.employeeDotykackaId, employeeName: allocation.employeeName, paymentMethod: tip.paymentMethod, amount: allocation.amount })));
       if (allocationRows.length) await tx.insert(waiterTipAllocations).values(allocationRows);
       if (pendingExpenseRows.length) await tx.update(waiterCashExpenses).set({ settlementId: saved.id, status: "SETTLED", settledAt: new Date(), updatedAt: new Date() }).where(inArray(waiterCashExpenses.id, pendingExpenseRows.map((item) => item.id)));
+      if (pendingDepositRows.length) await tx.update(waiterCashDeposits).set({ settlementId: saved.id, status: "SETTLED", settledAt: new Date(), updatedAt: new Date() }).where(inArray(waiterCashDeposits.id, pendingDepositRows.map((item) => item.id)));
       await tx.insert(waiterSettlementEvents).values({ settlementId: saved.id, actorType: "EMPLOYEE", actorId: employee.dotykackaId, action: action === "HANDOVER" ? "HANDOVER_SUBMITTED" : "CLOSING_SUBMITTED", details: { externalId, cashDayId: day.id, snapshotAt: snapshot.capturedAt } });
       if (action === "CLOSE") await tx.update(waiterCashDays).set({ status: "CLOSED", finalCashLeft: centsToMoney(closeCashLeft), closedByDotykackaId: employee.dotykackaId, closedByName: employee.name, closedAt: new Date(), updatedAt: new Date() }).where(eq(waiterCashDays.id, day.id));
       return saved.id;
     });
-    return clearCookie(Response.json({
+    return Response.json({
       status: "ok",
       action,
       settlementId,
       externalId,
-      sessionClosed: true,
+      sessionClosed: false,
       snapshotAt: snapshot.capturedAt,
       posCash: centsToMoney(snapshot.cash),
       posCard: centsToMoney(snapshot.card),
       totals: Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, centsToMoney(value)])),
-    }));
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "STALE_CASH_DAY") return Response.json({ error: "Stan dnia zmienił się w międzyczasie. Zaloguj się ponownie i pobierz aktualne dane." }, { status: 409 });
     throw error;

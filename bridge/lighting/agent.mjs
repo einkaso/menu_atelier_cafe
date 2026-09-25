@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { discoverBleboxNetwork, inspectBleboxHost, isPrivateIpv4 } from "./discovery.mjs";
 import { reportTemperatures } from "./temperature-monitor.mjs";
 
-const AGENT_VERSION = "1.0.1";
+const AGENT_VERSION = "1.2.0";
 
 function configuration() {
   const baseUrl = process.env.LIGHTING_BRIDGE_SERVER_URL ?? "";
@@ -64,6 +64,61 @@ export function writeRelayState(host, channel, command, { timeoutMs = 1800 } = {
   return post("/state").then(async (success) => success || post("/api/relay/set"));
 }
 
+export function dimmerBrightnessPath(channel, brightness) {
+  if (channel !== "dimmer:0" || !Number.isInteger(brightness) || brightness < 0 || brightness > 100) {
+    throw new Error("Agent odrzucił nieprawidłową wartość jasności.");
+  }
+  const rawBrightness = Math.round((brightness / 100) * 255);
+  return `/s/${rawBrightness.toString(16).padStart(2, "0").toUpperCase()}`;
+}
+
+export function writeDimmerBrightness(host, channel, brightness, { timeoutMs = 1800 } = {}) {
+  if (!isPrivateIpv4(host)) return Promise.reject(new Error("Sterowanie jest dozwolone wyłącznie pod prywatnym adresem IPv4."));
+  const path = dimmerBrightnessPath(channel, brightness);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      callback(value);
+    };
+    const request = http.get({ host, port: 80, path, agent: false, headers: { Connection: "close" } }, (response) => {
+      response.resume();
+      response.on("end", () => finish(resolve, response.statusCode === 200));
+    });
+    request.setTimeout(timeoutMs, () => { finish(reject, new Error("Przekroczono czas sterowania BleBox.")); request.destroy(); });
+    request.on("error", (error) => finish(reject, error));
+  });
+}
+
+export function shutterCommandPath(channel, command, position = null) {
+  if (channel !== "shutter:0") throw new Error("Agent odrzucił nieprawidłowy kanał ekranu.");
+  if (command === "SHUTTER_UP") return "/s/u";
+  if (command === "SHUTTER_DOWN") return "/s/d";
+  if (command === "SHUTTER_STOP") return "/s/s";
+  if (command === "SHUTTER_POSITION" && Number.isInteger(position) && position >= 0 && position <= 100) return `/s/p/${position}`;
+  throw new Error("Agent odrzucił nieprawidłowe polecenie ekranu.");
+}
+
+export function writeShutterCommand(host, channel, command, position, { timeoutMs = 1800 } = {}) {
+  if (!isPrivateIpv4(host)) return Promise.reject(new Error("Sterowanie jest dozwolone wyłącznie pod prywatnym adresem IPv4."));
+  const path = shutterCommandPath(channel, command, position);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      callback(value);
+    };
+    const request = http.get({ host, port: 80, path, agent: false, headers: { Connection: "close" } }, (response) => {
+      response.resume();
+      response.on("end", () => finish(resolve, response.statusCode === 200));
+    });
+    request.setTimeout(timeoutMs, () => { finish(reject, new Error("Przekroczono czas sterowania BleBox.")); request.destroy(); });
+    request.on("error", (error) => finish(reject, error));
+  });
+}
+
 export async function processNextCommand(config) {
   const response = await bridgeRequest(config, "/api/lighting/bridge/commands/claim", { method: "POST" });
   const command = response.command;
@@ -71,24 +126,49 @@ export async function processNextCommand(config) {
   let success = false;
   let isOn = null;
   let brightness = null;
+  let position = null;
+  let desiredPosition = null;
+  let motion = null;
+  let calibrated = null;
   let error = null;
   try {
-    if (command.adapter !== "relay") throw new Error("Sterowanie tego typu urządzeniem nie zostało uruchomione.");
-    const accepted = await writeRelayState(command.host, command.channel, command.kind);
+    const isRelayCommand = command.adapter === "relay" && (command.kind === "ON" || command.kind === "OFF");
+    const isDimmerCommand = command.adapter === "dimmer" && command.kind === "BRIGHTNESS" && Number.isInteger(command.requestedBrightness);
+    const isShutterCommand = command.adapter === "shutter" && ["SHUTTER_UP", "SHUTTER_DOWN", "SHUTTER_STOP", "SHUTTER_POSITION"].includes(command.kind);
+    if (!isRelayCommand && !isDimmerCommand && !isShutterCommand) throw new Error("Sterowanie tego typu urządzeniem nie zostało uruchomione.");
+    const accepted = isRelayCommand
+      ? await writeRelayState(command.host, command.channel, command.kind)
+      : isDimmerCommand
+        ? await writeDimmerBrightness(command.host, command.channel, command.requestedBrightness)
+        : await writeShutterCommand(command.host, command.channel, command.kind, command.requestedPosition);
     if (!accepted) throw new Error("Urządzenie BleBox odrzuciło polecenie.");
     const verified = await inspectBleboxHost(command.host, { timeoutMs: 1800 });
     const state = verified?.outputs.find((output) => output.channel === command.channel);
-    const requestedIsOn = command.kind === "ON";
-    if (!state || state.isOn !== requestedIsOn) throw new Error("Nie udało się potwierdzić nowego stanu urządzenia.");
+    const stateConfirmed = isRelayCommand
+      ? state?.isOn === (command.kind === "ON")
+      : isDimmerCommand
+        ? state?.brightness !== null && Math.abs(state.brightness - command.requestedBrightness) <= 1
+        : command.kind === "SHUTTER_STOP"
+          ? state?.motion === "STOPPED"
+          : command.kind === "SHUTTER_UP"
+            ? state?.desiredPosition === 0 || state?.motion === "UP"
+            : command.kind === "SHUTTER_DOWN"
+              ? state?.desiredPosition === 100 || state?.motion === "DOWN"
+              : state?.desiredPosition === command.requestedPosition || (state?.position !== null && Math.abs(state.position - command.requestedPosition) <= 1);
+    if (!state || !stateConfirmed) throw new Error("Nie udało się potwierdzić nowego stanu urządzenia.");
     success = true;
     isOn = state.isOn;
     brightness = state.brightness;
+    position = state.position ?? null;
+    desiredPosition = state.desiredPosition ?? null;
+    motion = state.motion ?? null;
+    calibrated = state.calibrated ?? null;
   } catch (caught) {
     error = caught instanceof Error ? caught.message : String(caught);
   }
   await bridgeRequest(config, `/api/lighting/bridge/commands/${encodeURIComponent(command.id)}/result`, {
     method: "POST",
-    body: JSON.stringify({ success, outputId: command.outputId, isOn, brightness, observedAt: new Date().toISOString(), error }),
+    body: JSON.stringify({ success, outputId: command.outputId, isOn, brightness, position, desiredPosition, motion, calibrated, observedAt: new Date().toISOString(), error }),
   });
   if (!success) throw new Error(error ?? "Polecenie BleBox nie powiodło się.");
   return true;
@@ -119,6 +199,10 @@ export async function reportApprovedStates(config) {
         outputId: configuredOutput.outputId,
         isOn: state?.isOn ?? null,
         brightness: state?.brightness ?? null,
+        position: state?.position ?? null,
+        desiredPosition: state?.desiredPosition ?? null,
+        motion: state?.motion ?? null,
+        calibrated: state?.calibrated ?? null,
         observedAt,
         error: state ? null : "Brak odpowiedzi zatwierdzonego kanału BleBox.",
       });
@@ -137,7 +221,8 @@ export async function main() {
   for (;;) {
     const now = Date.now();
     try {
-      await processNextCommand(config);
+      let processedCommands = 0;
+      while (processedCommands < 24 && await processNextCommand(config)) processedCommands += 1;
       if (now - lastInventoryAt >= 10 * 60_000) {
         const summary = await reportInventory(config);
         process.stdout.write(`${new Date().toISOString()} Inwentaryzacja BleBox: ${summary.total} urządzeń, ${summary.outputs} wyjść.\n`);

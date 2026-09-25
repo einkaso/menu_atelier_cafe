@@ -40,6 +40,7 @@ export async function POST(request: Request) {
           hardwareVersion: device.hardwareVersion,
           firmwareVersion: device.firmwareVersion,
           channels: device.outputs.map((output) => output.channel),
+          active: device.controllable,
           lastSeenAt: seenAt,
           lastError: null,
           updatedAt: seenAt,
@@ -68,13 +69,17 @@ export async function POST(request: Request) {
           outputId: storedOutput.id,
           isOn: output.isOn,
           brightness: output.brightness,
+          position: output.position ?? null,
+          desiredPosition: output.desiredPosition ?? null,
+          motion: output.motion ?? null,
+          calibrated: output.calibrated ?? null,
           observedAt: input.data.discoveredAt,
           quality: "CONFIRMED",
           lastError: null,
           updatedAt: seenAt,
         }).onConflictDoUpdate({
           target: lightingOutputStates.outputId,
-          set: { isOn: output.isOn, brightness: output.brightness, observedAt: input.data.discoveredAt, quality: "CONFIRMED", lastError: null, updatedAt: seenAt },
+          set: { isOn: output.isOn, brightness: output.brightness, position: output.position ?? null, desiredPosition: output.desiredPosition ?? null, motion: output.motion ?? null, calibrated: output.calibrated ?? null, observedAt: input.data.discoveredAt, quality: "CONFIRMED", lastError: null, updatedAt: seenAt },
         });
       }
     }

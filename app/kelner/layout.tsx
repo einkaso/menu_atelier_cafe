@@ -11,6 +11,7 @@ import "./rezerwacje/reservations-full-width.css";
 import "./grafik/workforce-header.css";
 import "./login-redesign.css";
 import "./oswietlenie/lighting-preparation.css";
+import "./chlodnie/cold-storage.css";
 import "./pomieszczenia/rooms.css";
 import WaiterStaffDock from "./staff-navigation";
 

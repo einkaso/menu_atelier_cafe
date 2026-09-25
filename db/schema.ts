@@ -656,6 +656,12 @@ export type WaiterSettlementExpense = {
   receiptIncluded: boolean;
 };
 
+export type WaiterSettlementDeposit = {
+  contributor: string;
+  amount: string;
+  note?: string;
+};
+
 export type WaiterSettlementTip = {
   key: string;
   paymentMethod: "CASH" | "CARD";
@@ -724,12 +730,14 @@ export const waiterSettlements = pgTable("waiter_settlements", {
   envelopeNumber: text("envelope_number"),
   corrections: jsonb("corrections").$type<WaiterSettlementCorrection[]>().notNull().default([]),
   expenses: jsonb("expenses").$type<WaiterSettlementExpense[]>().notNull().default([]),
+  deposits: jsonb("deposits").$type<WaiterSettlementDeposit[]>().notNull().default([]),
   tips: jsonb("tips").$type<WaiterSettlementTip[]>().notNull().default([]),
   expectedCash: numeric("expected_cash", { precision: 12, scale: 2 }).notNull(),
   cashDifference: numeric("cash_difference", { precision: 12, scale: 2 }).notNull(),
   expectedTerminal: numeric("expected_terminal", { precision: 12, scale: 2 }).notNull(),
   terminalDifference: numeric("terminal_difference", { precision: 12, scale: 2 }).notNull(),
   expensesTotal: numeric("expenses_total", { precision: 12, scale: 2 }).notNull(),
+  depositsTotal: numeric("deposits_total", { precision: 12, scale: 2 }).notNull().default("0"),
   tipsTotal: numeric("tips_total", { precision: 12, scale: 2 }).notNull(),
   posSnapshotCash: numeric("pos_snapshot_cash", { precision: 12, scale: 2 }),
   posSnapshotCard: numeric("pos_snapshot_card", { precision: 12, scale: 2 }),
@@ -770,6 +778,26 @@ export const waiterCashExpenses = pgTable("waiter_cash_expenses", {
 }, (table) => [
   index("waiter_cash_expenses_day_status_idx").on(table.cashDayId, table.status),
   index("waiter_cash_expenses_settlement_idx").on(table.settlementId),
+]);
+
+export const waiterCashDeposits = pgTable("waiter_cash_deposits", {
+  id: serial("id").primaryKey(),
+  cashDayId: integer("cash_day_id").notNull().references(() => waiterCashDays.id, { onDelete: "cascade" }),
+  settlementId: integer("settlement_id").references(() => waiterSettlements.id, { onDelete: "restrict" }),
+  contributor: text("contributor").notNull(),
+  amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  note: text("note"),
+  status: text("status").notNull().default("PENDING"),
+  createdByDotykackaId: text("created_by_dotykacka_id").notNull(),
+  createdByName: text("created_by_name").notNull(),
+  updatedByDotykackaId: text("updated_by_dotykacka_id").notNull(),
+  updatedByName: text("updated_by_name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  settledAt: timestamp("settled_at", { withTimezone: true }),
+}, (table) => [
+  index("waiter_cash_deposits_day_status_idx").on(table.cashDayId, table.status),
+  index("waiter_cash_deposits_settlement_idx").on(table.settlementId),
 ]);
 
 export const waiterTipAllocations = pgTable("waiter_tip_allocations", {
@@ -1044,11 +1072,12 @@ export const lightingOutputs = pgTable("lighting_outputs", {
   channel: text("channel").notNull(),
   label: text("label").notNull(),
   roomId: integer("room_id").references(() => lightingRooms.id, { onDelete: "set null" }),
-  capabilities: jsonb("capabilities").$type<{ onOff: boolean; dimming: boolean; rgbw?: boolean }>().notNull().default({ onOff: true, dimming: false }),
+  capabilities: jsonb("capabilities").$type<{ onOff: boolean; dimming: boolean; rgbw?: boolean; shutter?: boolean }>().notNull().default({ onOff: true, dimming: false }),
   mapX: numeric("map_x", { precision: 6, scale: 5 }),
   mapY: numeric("map_y", { precision: 6, scale: 5 }),
   minBrightness: integer("min_brightness").notNull().default(0),
   maxBrightness: integer("max_brightness").notNull().default(100),
+  preferredPosition: integer("preferred_position").notNull().default(75),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -1093,6 +1122,7 @@ export const lightingSceneActions = pgTable("lighting_scene_actions", {
   outputId: integer("output_id").notNull().references(() => lightingOutputs.id, { onDelete: "cascade" }),
   command: text("command").notNull(),
   brightness: integer("brightness"),
+  fadeDurationMs: integer("fade_duration_ms").notNull().default(0),
 }, (table) => [uniqueIndex("lighting_scene_actions_scene_output_uq").on(table.sceneId, table.outputId)]);
 
 export const lightingOutputStates = pgTable("lighting_output_states", {
@@ -1100,6 +1130,10 @@ export const lightingOutputStates = pgTable("lighting_output_states", {
   outputId: integer("output_id").notNull().references(() => lightingOutputs.id, { onDelete: "cascade" }),
   isOn: boolean("is_on"),
   brightness: integer("brightness"),
+  position: integer("position"),
+  desiredPosition: integer("desired_position"),
+  motion: text("motion"),
+  calibrated: boolean("calibrated"),
   observedAt: timestamp("observed_at", { withTimezone: true }),
   quality: text("quality").notNull().default("UNKNOWN"),
   lastError: text("last_error"),
@@ -1109,11 +1143,13 @@ export const lightingOutputStates = pgTable("lighting_output_states", {
 export const lightingCommands = pgTable("lighting_commands", {
   id: text("id").primaryKey(),
   bridgeId: integer("bridge_id").references(() => lightingBridges.id, { onDelete: "set null" }),
+  sceneId: integer("scene_id").references(() => lightingScenes.id, { onDelete: "set null" }),
   actorDotykackaId: text("actor_dotykacka_id").notNull(),
   actorName: text("actor_name").notNull(),
   kind: text("kind").notNull(),
   idempotencyKey: text("idempotency_key").notNull(),
   status: text("status").notNull().default("QUEUED"),
+  executeAt: timestamp("execute_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   claimedAt: timestamp("claimed_at", { withTimezone: true }),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -1122,6 +1158,7 @@ export const lightingCommands = pgTable("lighting_commands", {
 }, (table) => [
   uniqueIndex("lighting_commands_idempotency_uq").on(table.actorDotykackaId, table.idempotencyKey),
   index("lighting_commands_status_expiry_idx").on(table.status, table.expiresAt),
+  index("lighting_commands_status_execute_idx").on(table.status, table.executeAt),
 ]);
 
 export const lightingCommandItems = pgTable("lighting_command_items", {
@@ -1132,6 +1169,7 @@ export const lightingCommandItems = pgTable("lighting_command_items", {
   previousBrightness: integer("previous_brightness"),
   requestedCommand: text("requested_command").notNull(),
   requestedBrightness: integer("requested_brightness"),
+  requestedPosition: integer("requested_position"),
   result: text("result"),
   error: text("error"),
 }, (table) => [uniqueIndex("lighting_command_items_command_output_uq").on(table.commandId, table.outputId)]);

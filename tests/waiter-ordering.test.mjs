@@ -614,24 +614,29 @@ test("shows the guest tea-detail photos directly in the waiter tea list", async 
 });
 
 test("records an auditable cash day with opening, handover, closing, and live POS checkpoints", async () => {
-  const [schema, calculations, waiterRoute, adminRoute, form, admin, snapshot, waiterClient, tipsRoute] = await Promise.all([
+  const [schema, calculations, waiterRoute, adminRoute, form, admin, snapshot, waiterClient, tipsRoute, cashStyles] = await Promise.all([
     read("db/schema.ts"), read("lib/waiter-settlement.ts"), read("app/api/waiter/settlements/route.ts"),
     read("app/api/admin/waiter/settlements/route.ts"), read("app/kelner/settlement-form.tsx"), read("app/admin/settlements/settlements-admin-client.tsx"),
-    read("lib/dotykacka/cash-snapshot.ts"), read("app/kelner/waiter-client.tsx"), read("app/api/waiter/tips/route.ts"),
+    read("lib/dotykacka/cash-snapshot.ts"), read("app/kelner/waiter-client.tsx"), read("app/api/waiter/tips/route.ts"), read("app/kelner/cash-day.css"),
   ]);
   assert.match(schema, /waiterCashDays = pgTable\("waiter_cash_days"/);
   assert.match(schema, /waiterSettlements = pgTable\("waiter_settlements"/);
   assert.match(schema, /waiterCashExpenses = pgTable\("waiter_cash_expenses"/);
+  assert.match(schema, /waiterCashDeposits = pgTable\("waiter_cash_deposits"/);
   assert.match(schema, /waiterTipAllocations = pgTable\("waiter_tip_allocations"/);
   assert.match(schema, /waiterTipAdjustments = pgTable\("waiter_tip_adjustments"/);
   assert.match(schema, /waiterSettlementEvents = pgTable\("waiter_settlement_events"/);
-  assert.match(calculations, /openingCash \+ input\.posCash \+ cardToCash - cashToCard \+ cashTips - expensesTotal/);
+  assert.match(calculations, /openingCash \+ input\.posCash \+ cardToCash - cashToCard \+ cashTips - expensesTotal \+ depositsTotal/);
   assert.match(calculations, /input\.posCard - cardToCash \+ cashToCard \+ cardTips/);
   assert.match(waiterRoute, /splitDifference !== 0/);
   assert.match(waiterRoute, /action === "CLOSE" && !envelopeNumber/);
   assert.match(waiterRoute, /wydrukiem z kasy fiskalnej i terminala jest obowiązkowa także przy 0 zł/);
   assert.match(waiterRoute, /Każdy napiwek musi mieć prawidłowy sposób płatności i pełny podział kwoty/);
   assert.match(waiterRoute, /\["OPEN", "HANDOVER", "CLOSE"\]/);
+  assert.match(waiterRoute, /waiterSettlements\.externalId, idempotencyKey/);
+  assert.match(waiterRoute, /replayed: true/);
+  assert.match(waiterRoute, /sessionClosed: false/);
+  assert.doesNotMatch(waiterRoute, /function clearCookie/);
   assert.match(waiterRoute, /fetchCashSnapshot\(businessDate\)/);
   assert.match(waiterRoute, /for update/);
   assert.match(waiterRoute, /openedByDotykackaId: employee\.dotykackaId/);
@@ -651,13 +656,29 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(form, /Przekazanie zmiany/);
   assert.match(form, /Tożsamość potwierdzona PIN-em/);
   assert.match(form, /snapshotCashCents: workflow\?\.snapshot\?\.cash/);
+  assert.match(form, /const submissionKey = useRef<string \| null>\(null\)/);
+  assert.match(form, /idempotencyKey,/);
+  assert.match(form, /Number\.isInteger\(body\.settlementId\)/);
+  assert.match(form, /Przekazanie zapisane — zakończ i wyloguj/);
   assert.match(form, /2 \* 60 \* 1000/);
   assert.match(waiterRoute, /W Dotykačce pojawiła się nowa sprzedaż/);
   assert.match(waiterRoute, /openingCash: baselineCash, posCash: posDelta\.cash, posCard: posDelta\.card/);
+  assert.match(waiterRoute, /corrections: action === "HANDOVER" \? \[\] : body\.corrections/);
+  assert.match(waiterRoute, /tips: action === "HANDOVER" \? \[\] : body\.tips/);
   assert.match(waiterRoute, /const totals = \{ \.\.\.intervalTotals, terminalDifference: 0 \}/);
   assert.doesNotMatch(waiterRoute, /fullDayTotals/);
   assert.match(waiterRoute, /carryoverDeclaredByDotykackaId: previousClose\[0\]\?\.closedByDotykackaId/);
   assert.match(form, /Pełna kwota w kasie teraz/);
+  assert.match(form, /System oczekuje teraz/);
+  assert.match(form, /Wpisz wyłącznie pełną kwotę, którą fizycznie policzono w kasie/);
+  assert.match(form, /Sprzedaż gotówkowa całego dnia/);
+  assert.match(form, /function changeCashLeft\(value: string\)[^]*setEnvelopeCash\(moneyInput\(cents\(countedCash\) - cents\(value\)\)\)/);
+  assert.match(form, /function changeSafeCash\(value: string\)[^]*setCashLeft\(moneyInput\(cents\(countedCash\) - cents\(value\)\)\)/);
+  assert.match(form, /Do sejfu w bezpiecznej kopercie/);
+  assert.match(form, /Wyliczono automatycznie/);
+  assert.match(form, /corrections: action === "HANDOVER" \? \[\]/);
+  assert.match(form, /tips: action === "HANDOVER" \? \[\]/);
+  assert.match(form, /current\.filter\(\(item\) => !item\.saved && !item\.id\)/);
   assert.match(form, /Ostatnio policzona gotówka/);
   assert.match(form, /Dotykačka · gotówka od ostatniego przeliczenia/);
   assert.match(form, /Dotykačka · karta od ostatniego przeliczenia/);
@@ -668,13 +689,26 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(form, /type="button" className="cash-tip-add"/);
   assert.match(form, /<h3>Korekty płatności<\/h3>[^]*<button type="button" onClick=\{\(\) => setCorrections/);
   assert.match(form, /<h3>Wydatki z gotówki<\/h3>[^]*<button type="button" onClick=\{\(\) => setExpenses/);
+  assert.match(form, /<h3>Wpłata środków do kasy<\/h3>[^]*<button type="button" onClick=\{\(\) => setDeposits/);
   assert.match(form, /action: "SAVE_EXPENSE"/);
   assert.match(form, /action: "DELETE_EXPENSE"/);
   assert.match(form, /Zapisz wydatek/);
   assert.match(form, /item\.saved \? "✓ Zapisano w kasie" : "Niezapisany"/);
   assert.match(form, /expenses\.filter\(\(item\) => item\.saved\)/);
+  assert.match(form, /action: "SAVE_DEPOSIT"/);
+  assert.match(form, /action: "DELETE_DEPOSIT"/);
+  assert.match(form, /Wpłaty drobnych do kasy/);
+  assert.match(form, /cash-extras-step">KROK 2/);
+  assert.match(form, /openingMode \? "KROK 2" : "KROK 3"/);
+  assert.match(form, /<span>KROK 4<\/span>[\s\S]*<h2>Podziel gotówkę<\/h2>/);
+  assert.ok(form.indexOf('className="cash-extras"') < form.indexOf('className="cash-simple-card cash-count-card"'));
+  assert.match(cashStyles, /\.cash-extras > summary \{[\s\S]*background: var\(--w-navy\);[\s\S]*color: #fff;/);
+  assert.match(cashStyles, /\.cash-extras-body > section > header \{[\s\S]*background: #fdfbf6;/);
+  assert.match(cashStyles, /\.cash-extras-body header button,[\s\S]*min-width: 116px;[\s\S]*min-height: 42px;[\s\S]*padding: 0 18px;/);
   assert.match(waiterRoute, /\["SAVE_EXPENSE", "DELETE_EXPENSE"\]/);
   assert.match(waiterRoute, /pendingExpenseRows/);
+  assert.match(waiterRoute, /pendingDepositRows/);
+  assert.match(waiterRoute, /\["SAVE_DEPOSIT", "DELETE_DEPOSIT"\]/);
   assert.match(waiterRoute, /status: "SETTLED"/);
   assert.match(form, /Etap 1/);
   assert.match(form, /Etap 2/);
@@ -686,6 +720,7 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(admin, /Dopisz napiwek/);
   assert.match(admin, /Odejmij \/ skoryguj/);
   assert.match(admin, /Stan oczekiwany teraz/);
+  assert.match(admin, /Wpłaty drobnych/);
   assert.match(admin, /Migawka Dotykački/);
   assert.match(admin, /Pobierz CSV/);
   assert.match(waiterClient, /Zatwierdzone napiwki do wypłaty/);
@@ -787,14 +822,15 @@ test("calculates a mixed cash, card, correction, expense, envelope, and tip sett
     posCash: 50_000,
     posCard: 80_000,
     terminalCard: 78_500,
-    countedCash: 60_500,
+    countedCash: 63_700,
     cashLeft: 10_000,
-    envelopeCash: 50_500,
+    envelopeCash: 53_700,
     corrections: [
       { direction: "CARD_TO_CASH", amount: 5_000 },
       { direction: "CASH_TO_CARD", amount: 2_500 },
     ],
     expenses: [{ amount: 4_000 }],
+    deposits: [{ amount: 3_200 }],
     tips: [
       { paymentMethod: "CASH", amount: 2_000 },
       { paymentMethod: "CARD", amount: 1_000 },
@@ -805,10 +841,11 @@ test("calculates a mixed cash, card, correction, expense, envelope, and tip sett
     cardToCash: 5_000,
     cashToCard: 2_500,
     expensesTotal: 4_000,
+    depositsTotal: 3_200,
     cashTips: 2_000,
     cardTips: 1_000,
     tipsTotal: 3_000,
-    expectedCash: 60_500,
+    expectedCash: 63_700,
     expectedTerminal: 78_500,
     cashDifference: 0,
     terminalDifference: 0,
@@ -864,6 +901,8 @@ test("keeps the waiter header on one continuous dark bar with ordered controls",
   assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-ordering-tools\{[^}]*grid-column:1\/-1;grid-row:2/);
   assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-table-focus\{[^}]*z-index:2;[^}]*grid-column:1;grid-row:3;[^}]*width:100%;height:auto;min-height:0;aspect-ratio:1;align-self:start/);
   assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-context\{[^}]*grid-column:2;grid-row:3/);
+  assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-context\{height:clamp\(82px,7\.5vw,105px\);align-content:center;padding-block:5px\}/);
+  assert.match(waiterCss, /\.waiter-ordering-app>\.waiter-context label\{gap:3px\}/);
   assert.match(waiterCss, /\.waiter-search>span>button\{[^}]*min-width:112px;min-height:48px;padding:0 18px/);
 });
 

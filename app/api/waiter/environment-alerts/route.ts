@@ -20,6 +20,7 @@ export async function GET(request: Request) {
 
   const byKey = new Map(sensors.map((sensor) => [sensor.key, sensor]));
   return Response.json({
+    employeeName: employee.name,
     checkedAt: now.toISOString(),
     sensors: (Object.entries(COLD_STORAGE_SENSOR_NAMES) as Array<[ColdStorageSensorKey, string]>).map(([key, name]) => {
       const sensor = byKey.get(key);

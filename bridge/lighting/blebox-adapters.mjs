@@ -1,6 +1,7 @@
 const RELAY_PRODUCTS = new Set(["switchBox", "switchBoxLight", "switchBoxD", "switchBoxD_DIN", "switchBoxDC"]);
 const DIMMER_PRODUCTS = new Set(["dimmerBox", "dimmerBox_v2"]);
 const RGBW_PRODUCTS = new Set(["wLightBox", "wLightBox_v2"]);
+const SHUTTER_PRODUCTS = new Set(["shutterBox", "shutterBox_v2", "shutterBoxV2", "shutterBoxDC", "shutterBoxDC_v2", "shutterBoxDIN"]);
 
 function text(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -30,6 +31,9 @@ export function classifyBleboxDevice(device) {
   if (RGBW_PRODUCTS.has(product) || type === "wLightBox") {
     return { adapter: "rgbw", controllable: true, capabilities: { onOff: true, dimming: true, rgbw: true } };
   }
+  if (SHUTTER_PRODUCTS.has(product) || type === "shutterBox" || type === "shutterBoxDC") {
+    return { adapter: "shutter", controllable: true, capabilities: { onOff: false, dimming: false, shutter: true } };
+  }
   if (RELAY_PRODUCTS.has(product) || type === "switchBox" || type === "switchBoxD") {
     return { adapter: "relay", controllable: true, capabilities: { onOff: true, dimming: false } };
   }
@@ -43,6 +47,7 @@ export function stateReadPaths(adapter) {
   if (adapter === "relay") return ["/state/extended", "/api/relay/extended/state", "/state", "/api/relay/state"];
   if (adapter === "dimmer") return ["/state/extended", "/api/dimmer/extended/state", "/state", "/api/dimmer/state"];
   if (adapter === "rgbw") return ["/api/rgbw/state", "/state"];
+  if (adapter === "shutter") return ["/state/extended", "/api/shutter/extended/state", "/state", "/api/shutter/state"];
   if (adapter === "input") return ["/state/extended", "/api/buttonbox/state", "/state"];
   return [];
 }
@@ -105,10 +110,35 @@ function parseRgbwState(body) {
   }];
 }
 
+function parseShutterState(body) {
+  const shutter = body?.shutter;
+  if (!shutter) return null;
+  const position = integer(shutter?.currentPos?.position);
+  const desiredPosition = integer(shutter?.desiredPos?.position);
+  if (position !== null && (position < 0 || position > 100)) return null;
+  if (desiredPosition !== null && (desiredPosition < 0 || desiredPosition > 100)) return null;
+  const state = integer(shutter.state);
+  const motion = state === 0 ? "UP" : state === 1 ? "DOWN" : state === 2 ? "STOPPED" : "UNKNOWN";
+  return [{
+    channel: "shutter:0",
+    label: "Ekran",
+    isOn: motion === "UP" || motion === "DOWN",
+    brightness: 0,
+    position,
+    desiredPosition,
+    motion,
+    calibrated: Number(shutter?.calibrationParameters?.isCalibrated) === 1,
+    minBrightness: 0,
+    maxBrightness: 100,
+    capabilities: { onOff: false, dimming: false, shutter: true },
+  }];
+}
+
 export function parseBleboxState(adapter, body) {
   if (adapter === "relay") return parseRelayState(body);
   if (adapter === "dimmer") return parseDimmerState(body);
   if (adapter === "rgbw") return parseRgbwState(body);
+  if (adapter === "shutter") return parseShutterState(body);
   return null;
 }
 

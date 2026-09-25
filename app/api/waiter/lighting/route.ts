@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { lightingBridges, lightingDevices, lightingOutputs, lightingOutputStates, lightingRooms } from "../../../../db/schema";
+import { lightingBridges, lightingDevices, lightingOutputs, lightingOutputStates, lightingRooms, lightingSceneActions, lightingScenes } from "../../../../db/schema";
 import { currentWaiter } from "../../../../lib/waiter-auth";
 
 export const dynamic = "force-dynamic";
@@ -12,16 +12,23 @@ export async function GET(request: Request) {
   const db = getDb();
   const [bridge] = await db.select({ lastHeartbeatAt: lightingBridges.lastHeartbeatAt, lastError: lightingBridges.lastError })
     .from(lightingBridges).where(eq(lightingBridges.active, true)).orderBy(asc(lightingBridges.id)).limit(1);
-  const outputs = await db.select({
+  const [outputs, scenes, sceneActions] = await Promise.all([db.select({
     id: lightingOutputs.id,
     label: lightingOutputs.label,
     channel: lightingOutputs.channel,
     capabilities: lightingOutputs.capabilities,
+    minBrightness: lightingOutputs.minBrightness,
+    maxBrightness: lightingOutputs.maxBrightness,
+    preferredPosition: lightingOutputs.preferredPosition,
     roomId: lightingOutputs.roomId,
     roomName: lightingRooms.name,
     deviceName: lightingDevices.name,
     isOn: lightingOutputStates.isOn,
     brightness: lightingOutputStates.brightness,
+    position: lightingOutputStates.position,
+    desiredPosition: lightingOutputStates.desiredPosition,
+    motion: lightingOutputStates.motion,
+    calibrated: lightingOutputStates.calibrated,
     observedAt: lightingOutputStates.observedAt,
     quality: lightingOutputStates.quality,
     lastError: lightingOutputStates.lastError,
@@ -30,7 +37,10 @@ export async function GET(request: Request) {
     .leftJoin(lightingRooms, eq(lightingRooms.id, lightingOutputs.roomId))
     .leftJoin(lightingOutputStates, eq(lightingOutputStates.outputId, lightingOutputs.id))
     .where(and(eq(lightingOutputs.active, true), eq(lightingDevices.active, true)))
-    .orderBy(asc(lightingRooms.sortOrder), asc(lightingOutputs.label));
+    .orderBy(asc(lightingRooms.sortOrder), asc(lightingOutputs.label)),
+    db.select({ id: lightingScenes.id, name: lightingScenes.name }).from(lightingScenes).where(eq(lightingScenes.active, true)).orderBy(asc(lightingScenes.sortOrder), asc(lightingScenes.id)),
+    db.select({ sceneId: lightingSceneActions.sceneId, fadeDurationMs: lightingSceneActions.fadeDurationMs }).from(lightingSceneActions),
+  ]);
   const now = Date.now();
   return Response.json({
     bridge: {
@@ -38,10 +48,16 @@ export async function GET(request: Request) {
       lastHeartbeatAt: bridge?.lastHeartbeatAt ?? null,
       error: bridge?.lastError ?? null,
     },
+    scenes: scenes.map((scene) => {
+      const actions = sceneActions.filter((action) => action.sceneId === scene.id);
+      return { ...scene, actionCount: actions.length, maxFadeSeconds: Math.max(0, ...actions.map((action) => Math.round(action.fadeDurationMs / 1000))) };
+    }).filter((scene) => scene.actionCount > 0),
     outputs: outputs.map((output) => ({
       ...output,
       stale: !output.observedAt || now - output.observedAt.getTime() > 45_000,
       controlAvailable: output.channel.startsWith("relay:") && output.capabilities.onOff,
+      dimmingAvailable: output.channel === "dimmer:0" && output.capabilities.dimming,
+      shutterAvailable: output.channel === "shutter:0" && output.capabilities.shutter === true,
     })),
   });
 }

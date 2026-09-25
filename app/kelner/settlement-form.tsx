@@ -7,6 +7,7 @@ import { saveWaiterSessionToken, waiterSessionHeaders } from "./waiter-session-c
 type Employee = { dotykackaId: string; name: string };
 type Correction = { key: string; direction: "CARD_TO_CASH" | "CASH_TO_CARD"; amount: string; reason: string };
 type Expense = { id?: number; key: string; description: string; amount: string; receiptNumber: string; receiptIncluded: boolean; saved: boolean; saving?: boolean };
+type Deposit = { id?: number; key: string; contributor: string; amount: string; note: string; saved: boolean; saving?: boolean };
 type Allocation = { key: string; employeeDotykackaId: string; amount: string };
 type Tip = { key: string; paymentMethod: "CASH" | "CARD"; amount: string; note: string; allocations: Allocation[] };
 type Snapshot = { cash: number; card: number; capturedAt: string; periodFrom: string; periodTo: string };
@@ -50,6 +51,7 @@ type Workflow = {
   day: CashDay | null;
   checkpoints: Checkpoint[];
   pendingExpenses: Array<{ id: number; description: string; amount: string; receiptNumber: string | null; receiptIncluded: boolean }>;
+  pendingDeposits: Array<{ id: number; contributor: string; amount: string; note: string | null }>;
   latest: Checkpoint | null;
   previousClose: PreviousClose | null;
   snapshot: Snapshot | null;
@@ -78,6 +80,7 @@ const cents = (value: string | number | null | undefined) =>
 const money = (value: number | string | null | undefined) =>
   new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     .format(typeof value === "number" ? value / 100 : Number(value ?? 0));
+const moneyInput = (value: number) => (Math.max(0, value) / 100).toFixed(2);
 const time = (value: string | null | undefined) => value
   ? new Intl.DateTimeFormat("pl-PL", {
     dateStyle: "short",
@@ -200,9 +203,11 @@ export default function SettlementForm({
   const [countedCash, setCountedCash] = useState("");
   const [cashLeft, setCashLeft] = useState("");
   const [envelopeCash, setEnvelopeCash] = useState("");
+  const [splitAnchor, setSplitAnchor] = useState<"CASH_LEFT" | "SAFE" | null>(null);
   const [envelopeNumber, setEnvelopeNumber] = useState("");
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [tips, setTips] = useState<Tip[]>([]);
   const [discrepancyNote, setDiscrepancyNote] = useState("");
   const [employeeNote, setEmployeeNote] = useState("");
@@ -217,7 +222,7 @@ export default function SettlementForm({
     posCash?: string;
     posCard?: string;
   } | null>(null);
-  const hydratedExpenseDay = useRef<number | null>(null);
+  const submissionKey = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -229,10 +234,8 @@ export default function SettlementForm({
       else {
         setWorkflow(body);
         setEmployees(body.employees ?? [employee]);
-        const dayId = body.day?.id ?? null;
-        if (dayId !== hydratedExpenseDay.current) {
-          hydratedExpenseDay.current = dayId;
-          setExpenses((body.pendingExpenses ?? []).map((item) => ({
+        setExpenses((current) => [
+          ...(body.pendingExpenses ?? []).map((item) => ({
             id: item.id,
             key: `cash-expense-${item.id}`,
             description: item.description,
@@ -240,8 +243,20 @@ export default function SettlementForm({
             receiptNumber: item.receiptNumber ?? "",
             receiptIncluded: item.receiptIncluded,
             saved: true,
-          })));
-        }
+          })),
+          ...current.filter((item) => !item.saved && !item.id),
+        ]);
+        setDeposits((current) => [
+          ...(body.pendingDeposits ?? []).map((item) => ({
+            id: item.id,
+            key: `cash-deposit-${item.id}`,
+            contributor: item.contributor,
+            amount: item.amount,
+            note: item.note ?? "",
+            saved: true,
+          })),
+          ...current.filter((item) => !item.saved && !item.id),
+        ]);
       }
     } catch {
       setError("Nie udało się połączyć z modułem rozliczeń.");
@@ -281,10 +296,11 @@ export default function SettlementForm({
     countedCash: cents(countedCash),
     cashLeft: action === "CLOSE" ? cents(cashLeft) : cents(countedCash),
     envelopeCash: action === "CLOSE" ? cents(envelopeCash) : 0,
-    corrections: corrections.map((item) => ({ direction: item.direction, amount: cents(item.amount) })),
+    corrections: action === "HANDOVER" ? [] : corrections.map((item) => ({ direction: item.direction, amount: cents(item.amount) })),
     expenses: expenses.filter((item) => item.saved).map((item) => ({ amount: cents(item.amount) })),
-    tips: tips.map((item) => ({ paymentMethod: item.paymentMethod, amount: cents(item.amount) })),
-  }), [baselineCash, posCash, posCard, countedCash, cashLeft, envelopeCash, action, corrections, expenses, tips]);
+    deposits: deposits.filter((item) => item.saved).map((item) => ({ amount: cents(item.amount) })),
+    tips: action === "HANDOVER" ? [] : tips.map((item) => ({ paymentMethod: item.paymentMethod, amount: cents(item.amount) })),
+  }), [baselineCash, posCash, posCard, countedCash, cashLeft, envelopeCash, action, corrections, expenses, deposits, tips]);
   const openingDifference = cents(countedCash) - previousCash;
   const difference = openingMode ? openingDifference : totals.cashDifference;
   const hasCount = countedCash !== "";
@@ -296,6 +312,7 @@ export default function SettlementForm({
   const detailsComplete =
     corrections.every((item) => cents(item.amount) > 0 && item.reason.trim()) &&
     expenses.every((item) => item.saved && cents(item.amount) > 0 && item.description.trim() && item.receiptIncluded) &&
+    deposits.every((item) => item.saved && cents(item.amount) > 0 && item.contributor.trim()) &&
     tipsComplete;
   const openReady =
     openingMode &&
@@ -317,12 +334,14 @@ export default function SettlementForm({
     (totals.cashDifference === 0 || Boolean(discrepancyNote.trim())) &&
     closeReady;
   const canSubmit = !loading && !sending && Boolean(openReady || checkpointReady);
-  const extrasCount = corrections.length + expenses.length + (employeeNote.trim() ? 1 : 0);
+  const extrasCount = expenses.length + deposits.length + (action === "CLOSE" ? corrections.length + (employeeNote.trim() ? 1 : 0) : 0);
 
   const updateCorrection = (rowKey: string, change: Partial<Correction>) =>
     setCorrections((rows) => rows.map((row) => row.key === rowKey ? { ...row, ...change } : row));
   const updateExpense = (rowKey: string, change: Partial<Expense>) =>
     setExpenses((rows) => rows.map((row) => row.key === rowKey ? { ...row, ...change, saved: change.saved ?? false } : row));
+  const updateDeposit = (rowKey: string, change: Partial<Deposit>) =>
+    setDeposits((rows) => rows.map((row) => row.key === rowKey ? { ...row, ...change, saved: change.saved ?? false } : row));
   const updateTip = (rowKey: string, change: Partial<Tip>) =>
     setTips((rows) => rows.map((row) => row.key === rowKey ? { ...row, ...change } : row));
   const updateAllocation = (tipKey: string, allocationKey: string, change: Partial<Allocation>) =>
@@ -363,8 +382,46 @@ export default function SettlementForm({
   function useOpeningFloat() {
     const counted = cents(countedCash);
     const preferred = Math.min(counted, cents(workflow?.day?.countedOpeningCash));
-    setCashLeft((preferred / 100).toFixed(2));
-    setEnvelopeCash(((counted - preferred) / 100).toFixed(2));
+    setSplitAnchor("CASH_LEFT");
+    setCashLeft(moneyInput(preferred));
+    setEnvelopeCash(moneyInput(counted - preferred));
+  }
+
+  function changeCountedCash(value: string) {
+    setCountedCash(value);
+    if (action !== "CLOSE") return;
+    if (!value) {
+      if (splitAnchor === "CASH_LEFT") setEnvelopeCash("");
+      if (splitAnchor === "SAFE") setCashLeft("");
+      return;
+    }
+    const total = cents(value);
+    if (splitAnchor === "CASH_LEFT" && cashLeft !== "") {
+      setEnvelopeCash(total >= cents(cashLeft) ? moneyInput(total - cents(cashLeft)) : "");
+    }
+    if (splitAnchor === "SAFE" && envelopeCash !== "") {
+      setCashLeft(total >= cents(envelopeCash) ? moneyInput(total - cents(envelopeCash)) : "");
+    }
+  }
+
+  function changeCashLeft(value: string) {
+    setSplitAnchor("CASH_LEFT");
+    setCashLeft(value);
+    if (!value || countedCash === "" || cents(value) > cents(countedCash)) {
+      setEnvelopeCash("");
+      return;
+    }
+    setEnvelopeCash(moneyInput(cents(countedCash) - cents(value)));
+  }
+
+  function changeSafeCash(value: string) {
+    setSplitAnchor("SAFE");
+    setEnvelopeCash(value);
+    if (!value || countedCash === "" || cents(value) > cents(countedCash)) {
+      setCashLeft("");
+      return;
+    }
+    setCashLeft(moneyInput(cents(countedCash) - cents(value)));
   }
 
   async function saveExpense(item: Expense) {
@@ -407,9 +464,51 @@ export default function SettlementForm({
     }
   }
 
+  async function saveDeposit(item: Deposit) {
+    if (!item.contributor.trim() || cents(item.amount) <= 0 || item.saving) return;
+    updateDeposit(item.key, { saving: true, saved: item.saved });
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/waiter/settlements", {
+        method: "POST",
+        headers: waiterSessionHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ action: "SAVE_DEPOSIT", depositId: item.id, deposit: { contributor: item.contributor, amount: item.amount, note: item.note } }),
+      });
+      const body = await response.json().catch(() => ({})) as { deposit?: { id: number; contributor: string; amount: string; note: string | null }; error?: string };
+      if (!response.ok || !body.deposit) setError(body.error ?? "Nie udało się zapisać wpłaty do kasy.");
+      else {
+        setDeposits((rows) => rows.map((row) => row.key === item.key ? { id: body.deposit!.id, key: `cash-deposit-${body.deposit!.id}`, contributor: body.deposit!.contributor, amount: body.deposit!.amount, note: body.deposit!.note ?? "", saved: true, saving: false } : row));
+        setMessage("Wpłata drobnych została dodana do bieżącego dnia kasowego.");
+      }
+    } catch {
+      setError("Nie udało się połączyć z modułem rozliczeń.");
+    } finally {
+      setDeposits((rows) => rows.map((row) => row.key === item.key ? { ...row, saving: false } : row));
+    }
+  }
+
+  async function removeDeposit(item: Deposit) {
+    if (!item.id) { setDeposits((rows) => rows.filter((row) => row.key !== item.key)); return; }
+    updateDeposit(item.key, { saving: true, saved: item.saved });
+    setError("");
+    try {
+      const response = await fetch("/api/waiter/settlements", { method: "POST", headers: waiterSessionHeaders({ "content-type": "application/json" }), body: JSON.stringify({ action: "DELETE_DEPOSIT", depositId: item.id }) });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) setError(body.error ?? "Nie udało się usunąć wpłaty.");
+      else { setDeposits((rows) => rows.filter((row) => row.key !== item.key)); setMessage("Wpłata została usunięta."); }
+    } catch {
+      setError("Nie udało się połączyć z modułem rozliczeń.");
+    } finally {
+      setDeposits((rows) => rows.map((row) => row.key === item.key ? { ...row, saving: false } : row));
+    }
+  }
+
   async function submit() {
     if (!canSubmit) return;
     const requestedAction = openingMode ? "OPEN" : action;
+    const idempotencyKey = submissionKey.current ?? newKey();
+    submissionKey.current = idempotencyKey;
     setSending(true);
     setError("");
     setMessage("");
@@ -423,14 +522,15 @@ export default function SettlementForm({
           cashLeft,
           envelopeCash,
           envelopeNumber,
-          corrections: corrections.map(({ direction, amount, reason }) => ({ direction, amount, reason })),
+          corrections: requestedAction === "HANDOVER" ? [] : corrections.map(({ direction, amount, reason }) => ({ direction, amount, reason })),
           expenses: expenses.filter((item) => item.saved).map(({ description, amount, receiptNumber, receiptIncluded }) => ({
             description,
             amount,
             receiptNumber,
             receiptIncluded,
           })),
-          tips: tips.map((tip) => ({
+          deposits: deposits.filter((item) => item.saved).map(({ contributor, amount, note }) => ({ contributor, amount, note })),
+          tips: requestedAction === "HANDOVER" ? [] : tips.map((tip) => ({
             key: tip.key,
             paymentMethod: tip.paymentMethod,
             amount: tip.amount,
@@ -442,6 +542,7 @@ export default function SettlementForm({
           })),
           discrepancyNote,
           employeeNote,
+          idempotencyKey,
           snapshotCashCents: workflow?.snapshot?.cash,
           snapshotCardCents: workflow?.snapshot?.card,
         }),
@@ -462,7 +563,7 @@ export default function SettlementForm({
         setDiscrepancyNote("");
         setMessage("Dzień został otwarty. Możesz rozpocząć pracę.");
         await load();
-      } else {
+      } else if (Number.isInteger(body.settlementId)) {
         setSubmitted({
           id: body.settlementId,
           action: requestedAction,
@@ -470,6 +571,8 @@ export default function SettlementForm({
           posCash: body.posCash,
           posCard: body.posCard,
         });
+      } else {
+        setError("Serwer nie potwierdził numeru protokołu. Nie wylogowano pracownika — spróbuj ponownie tym samym przyciskiem.");
       }
     } catch {
       setError("Nie udało się połączyć z modułem rozliczeń.");
@@ -497,7 +600,7 @@ export default function SettlementForm({
             {submitted.action === "CLOSE" && <SummaryAmount label="Pozostaje na jutro" value={cents(cashLeft)} />}
           </div>
           <p className="cash-final-snapshot">Dane z Dotykački pobrano o {clock(submitted.snapshotAt)}.</p>
-          <button onClick={onLogout}>Zakończ i wyloguj</button>
+          <button onClick={onLogout}>{submitted.action === "HANDOVER" ? "Przekazanie zapisane — zakończ i wyloguj" : "Zamknięcie zapisane — zakończ i wyloguj"}</button>
         </section>
       </main>
     );
@@ -572,7 +675,7 @@ export default function SettlementForm({
                 </button>
               </section>
 
-            {!openingMode && (
+            {!openingMode && action === "CLOSE" && (
               <section className="cash-simple-card cash-tips-card">
                 <header>
                   <span>WAŻNE</span>
@@ -662,6 +765,7 @@ export default function SettlementForm({
               </section>
             )}
 
+            {(openingMode || action === "CLOSE") && (
             <section className="cash-simple-card">
               <header>
                 <span>KROK 1</span>
@@ -694,6 +798,7 @@ export default function SettlementForm({
                     {totals.cardToCash > 0 && <SummaryAmount label="Korekta karta → gotówka" value={totals.cardToCash} sign="+" />}
                     {totals.cashToCard > 0 && <SummaryAmount label="Korekta gotówka → karta" value={totals.cashToCard} sign="−" />}
                     {totals.expensesTotal > 0 && <SummaryAmount label="Wydatki z kasy" value={totals.expensesTotal} sign="−" />}
+                    {totals.depositsTotal > 0 && <SummaryAmount label="Wpłaty drobnych do kasy" value={totals.depositsTotal} sign="+" />}
                     <SummaryAmount label="Stan oczekiwany teraz" value={totals.expectedCash} highlight />
                   </div>
                   <div className="cash-card-info">
@@ -717,61 +822,20 @@ export default function SettlementForm({
                 </p>
               )}
             </section>
-
-            <section className="cash-simple-card cash-count-card">
-              <header>
-                <span>KROK 2</span>
-                <div>
-                  <h2>Podaj pełny stan kasy</h2>
-                  <p>Wpisz całą policzoną kwotę — nie tylko utarg od poprzedniej zmiany.</p>
-                </div>
-              </header>
-              <div className="cash-count-entry">
-                <label>
-                  Pełna kwota w kasie teraz
-                  <div>
-                    <input
-                      autoFocus
-                      type="number"
-                      {...amountProps}
-                      value={countedCash}
-                      placeholder="0,00"
-                      onChange={(event) => setCountedCash(event.target.value)}
-                    />
-                    <b>zł</b>
-                  </div>
-                </label>
-                <div className={hasCount && difference !== 0 ? "cash-difference is-warning" : "cash-difference"}>
-                  <span>Różnica</span>
-                  <strong>{hasCount ? money(difference) : "—"} zł</strong>
-                  <small>{difference === 0 && hasCount ? "Wszystko się zgadza" : "stan fizyczny minus wyliczenie"}</small>
-                </div>
-              </div>
-
-              {hasCount && difference !== 0 && (
-                <label className="cash-required-note">
-                  Wyjaśnij różnicę
-                  <textarea
-                    value={discrepancyNote}
-                    maxLength={1000}
-                    onChange={(event) => setDiscrepancyNote(event.target.value)}
-                    placeholder="Np. pomyłka przy wydawaniu reszty albo inny stan pozostawiony po nocy"
-                  />
-                  <small>Bez wyjaśnienia nie można zapisać różnicy.</small>
-                </label>
-              )}
-            </section>
+            )}
 
             {!openingMode && (
               <details className="cash-extras">
                 <summary>
+                  <span className="cash-extras-step">KROK 2</span>
                   <div>
                     <b>Opcje dodatkowe</b>
-                    <span>Korekty płatności, wydatki z kasy i uwagi</span>
+                    <span>{action === "HANDOVER" ? "Wydatki i wpłaty prowadzone na bieżąco" : "Korekty płatności, wydatki, wpłaty drobnych i uwagi"}</span>
                   </div>
                   <em>{extrasCount ? String(extrasCount) + " wpisów" : "Rozwiń tylko w razie potrzeby"}</em>
                 </summary>
                 <div className="cash-extras-body">
+                  {action === "CLOSE" && (
                   <section>
                     <header>
                       <div><h3>Korekty płatności</h3><p>Gdy sposób płatności w POS różni się od faktycznego.</p></div>
@@ -803,6 +867,7 @@ export default function SettlementForm({
                       </article>
                     ))}
                   </section>
+                  )}
 
                   <section>
                     <header>
@@ -833,29 +898,114 @@ export default function SettlementForm({
                     ))}
                   </section>
 
-                  <label className="cash-employee-note">
+                  <section>
+                    <header>
+                      <div><h3>Wpłata środków do kasy</h3><p>Uzupełnienie drobnych z kasy głównej — dopłata bez wymiany banknotów i monet.</p></div>
+                      <button type="button" onClick={() => setDeposits((rows) => [
+                        ...rows,
+                        { key: newKey(), contributor: "", amount: "", note: "", saved: false },
+                      ])}>+ Dodaj</button>
+                    </header>
+                    {deposits.map((item) => (
+                      <article className="waiter-settlement-row cash-deposit-row" key={item.key}>
+                        <label className="is-wide">
+                          Osoba przekazująca środki
+                          <input value={item.contributor} maxLength={160} onChange={(event) => updateDeposit(item.key, { contributor: event.target.value })} placeholder="np. manager" />
+                        </label>
+                        <MoneyField label="Kwota dopłaty" value={item.amount} onChange={(value) => updateDeposit(item.key, { amount: value })} />
+                        <label className="is-wide">
+                          Informacja
+                          <input value={item.note} maxLength={300} onChange={(event) => updateDeposit(item.key, { note: event.target.value })} placeholder="np. drobne do wydawania reszty" />
+                        </label>
+                        <button type="button" disabled={item.saving} className="waiter-remove-row" onClick={() => void removeDeposit(item)}>Usuń</button>
+                        <div className={`cash-expense-save cash-deposit-save${item.saved ? " is-saved" : ""}`}><span>{item.saved ? "✓ Wpłata zapisana" : "Niezapisana"}</span><button type="button" disabled={item.saving || item.saved || !item.contributor.trim() || cents(item.amount) <= 0} onClick={() => void saveDeposit(item)}>{item.saving ? "Zapisuję…" : item.saved ? "Zapisano" : "Zapisz wpłatę"}</button></div>
+                      </article>
+                    ))}
+                  </section>
+
+                  {action === "CLOSE" && <label className="cash-employee-note">
                     Inna uwaga
                     <textarea value={employeeNote} maxLength={1000} onChange={(event) => setEmployeeNote(event.target.value)} />
-                  </label>
+                  </label>}
                 </div>
               </details>
             )}
 
+            <section className="cash-simple-card cash-count-card">
+              <header>
+                <span>{openingMode ? "KROK 2" : "KROK 3"}</span>
+                <div>
+                  <h2>{action === "HANDOVER" && !openingMode ? "Przelicz gotówkę i przekaż zmianę" : "Podaj pełny stan kasy"}</h2>
+                  <p>{action === "HANDOVER" && !openingMode ? "Wpisz wyłącznie pełną kwotę, którą fizycznie policzono w kasie." : "Wpisz całą policzoną kwotę — nie tylko utarg od poprzedniej zmiany."}</p>
+                </div>
+              </header>
+              <div className={`cash-count-entry${!openingMode ? " is-checkpoint" : ""}`}>
+                {!openingMode && (
+                  <div className="cash-expected-inline">
+                    <span>System oczekuje teraz</span>
+                    <strong>{money(totals.expectedCash)} zł</strong>
+                    <small>
+                      {money(baselineCash)} zł ostatniego stanu + {money(posCash)} zł sprzedaży gotówkowej
+                      {totals.cashTips > 0 ? ` + ${money(totals.cashTips)} zł napiwków gotówkowych` : ""}
+                      {totals.cardToCash > 0 ? ` + ${money(totals.cardToCash)} zł korekt na gotówkę` : ""}
+                      {totals.cashToCard > 0 ? ` − ${money(totals.cashToCard)} zł korekt na kartę` : ""}
+                      {totals.expensesTotal > 0 ? ` − ${money(totals.expensesTotal)} zł wypłat` : ""}
+                      {totals.depositsTotal > 0 ? ` + ${money(totals.depositsTotal)} zł wpłat` : ""}
+                      {action === "CLOSE" ? ` · Sprzedaż gotówkowa całego dnia: ${money(cents(workflow?.fullDay.posCash))} zł` : ""}
+                    </small>
+                    <button type="button" className="cash-refresh cash-expected-refresh" onClick={() => void load()}>↻ Odśwież</button>
+                  </div>
+                )}
+                <label>
+                  Pełna kwota w kasie teraz
+                  <div>
+                    <input
+                      autoFocus
+                      type="number"
+                      {...amountProps}
+                      value={countedCash}
+                      placeholder="0,00"
+                      onChange={(event) => changeCountedCash(event.target.value)}
+                    />
+                    <b>zł</b>
+                  </div>
+                </label>
+                <div className={hasCount && difference !== 0 ? "cash-difference is-warning" : "cash-difference"}>
+                  <span>Różnica</span>
+                  <strong>{hasCount ? money(difference) : "—"} zł</strong>
+                  <small>{difference === 0 && hasCount ? "Wszystko się zgadza" : "stan fizyczny minus wyliczenie"}</small>
+                </div>
+              </div>
+
+              {hasCount && difference !== 0 && (
+                <label className="cash-required-note">
+                  Wyjaśnij różnicę
+                  <textarea
+                    value={discrepancyNote}
+                    maxLength={1000}
+                    onChange={(event) => setDiscrepancyNote(event.target.value)}
+                    placeholder="Np. pomyłka przy wydawaniu reszty albo inny stan pozostawiony po nocy"
+                  />
+                  <small>Bez wyjaśnienia nie można zapisać różnicy.</small>
+                </label>
+              )}
+            </section>
+
             {!openingMode && action === "CLOSE" && (
               <section className="cash-simple-card">
                 <header>
-                  <span>KROK 3</span>
+                  <span>KROK 4</span>
                   <div>
                     <h2>Podziel gotówkę</h2>
-                    <p>Policzona kwota musi w całości trafić do kasy na jutro albo do koperty.</p>
+                    <p>Wpisz jedną kwotę. System automatycznie wyliczy drugą tak, aby cała gotówka została rozdzielona.</p>
                   </div>
                 </header>
                 <button className="cash-use-float" disabled={!hasCount} onClick={useOpeningFloat}>
                   Zostaw w kasie tyle, ile było przy otwarciu
                 </button>
                 <div className="cash-split-fields">
-                  <MoneyField label="Zostaje w kasie na jutro" value={cashLeft} onChange={setCashLeft} />
-                  <MoneyField label="Do koperty" value={envelopeCash} onChange={setEnvelopeCash} />
+                  <MoneyField label="Zostaje w kasie na jutro" value={cashLeft} onChange={changeCashLeft} hint={splitAnchor === "SAFE" && cashLeft !== "" ? "Wyliczono automatycznie" : undefined} />
+                  <MoneyField label="Do sejfu w bezpiecznej kopercie" value={envelopeCash} onChange={changeSafeCash} hint={splitAnchor === "CASH_LEFT" && envelopeCash !== "" ? "Wyliczono automatycznie" : undefined} />
                   <label>
                     Numer bezpiecznej koperty
                     <input required value={envelopeNumber} maxLength={80} onChange={(event) => setEnvelopeNumber(event.target.value)} />

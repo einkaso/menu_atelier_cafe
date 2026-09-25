@@ -24,13 +24,17 @@ export async function POST(request: Request) {
         outputId: state.outputId,
         isOn: state.isOn,
         brightness: state.brightness,
+        position: state.position ?? null,
+        desiredPosition: state.desiredPosition ?? null,
+        motion: state.motion ?? null,
+        calibrated: state.calibrated ?? null,
         observedAt: state.observedAt,
         quality: state.error ? "ERROR" : "CONFIRMED",
         lastError: state.error ?? null,
         updatedAt: now,
       }).onConflictDoUpdate({
         target: lightingOutputStates.outputId,
-        set: { isOn: state.isOn, brightness: state.brightness, observedAt: state.observedAt, quality: state.error ? "ERROR" : "CONFIRMED", lastError: state.error ?? null, updatedAt: now },
+        set: { isOn: state.isOn, brightness: state.brightness, position: state.position ?? null, desiredPosition: state.desiredPosition ?? null, motion: state.motion ?? null, calibrated: state.calibrated ?? null, observedAt: state.observedAt, quality: state.error ? "ERROR" : "CONFIRMED", lastError: state.error ?? null, updatedAt: now },
       });
     }
   });
