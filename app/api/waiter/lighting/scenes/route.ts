@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     maxBrightness: lightingOutputs.maxBrightness,
     command: lightingSceneActions.command,
     brightness: lightingSceneActions.brightness,
+    startDelayMs: lightingSceneActions.startDelayMs,
     fadeDurationMs: lightingSceneActions.fadeDurationMs,
     previousIsOn: lightingOutputStates.isOn,
     previousBrightness: lightingOutputStates.brightness,
@@ -58,14 +59,15 @@ export async function POST(request: Request) {
   const scheduledFor = new Date(Date.now() + delaySeconds * 1000);
   const pending: PendingCommand[] = [];
   for (const action of actions) {
+    const actionStartsAt = new Date(scheduledFor.getTime() + action.startDelayMs);
     if ((action.command === "ON" || action.command === "OFF") && action.channel.startsWith("relay:") && action.capabilities.onOff) {
-      pending.push({ id: randomUUID(), outputId: action.outputId, bridgeId: action.bridgeId, sceneId, kind: action.command, requestedBrightness: null, previousIsOn: action.previousIsOn, previousBrightness: action.previousBrightness, executeAt: scheduledFor, expiresAt: new Date(scheduledFor.getTime() + 45_000), idempotencyKey: `${baseKey}-${action.actionId}-0` });
+      pending.push({ id: randomUUID(), outputId: action.outputId, bridgeId: action.bridgeId, sceneId, kind: action.command, requestedBrightness: null, previousIsOn: action.previousIsOn, previousBrightness: action.previousBrightness, executeAt: actionStartsAt, expiresAt: new Date(actionStartsAt.getTime() + 45_000), idempotencyKey: `${baseKey}-${action.actionId}-0` });
       continue;
     }
     if (action.command !== "BRIGHTNESS" || action.adapter !== "dimmer" || action.channel !== "dimmer:0" || !action.capabilities.dimming || action.brightness == null) continue;
     const steps = buildBrightnessFadeSteps({ start: action.previousBrightness ?? (action.previousIsOn ? action.maxBrightness : 0), target: action.brightness, minimum: action.minBrightness, maximum: action.maxBrightness, durationMs: action.fadeDurationMs });
     for (let step = 0; step < steps.length; step += 1) {
-      const executeAt = new Date(scheduledFor.getTime() + steps[step].offsetMs);
+      const executeAt = new Date(actionStartsAt.getTime() + steps[step].offsetMs);
       pending.push({ id: randomUUID(), outputId: action.outputId, bridgeId: action.bridgeId, sceneId, kind: "BRIGHTNESS", requestedBrightness: steps[step].brightness, previousIsOn: action.previousIsOn, previousBrightness: action.previousBrightness, executeAt, expiresAt: new Date(executeAt.getTime() + 45_000), idempotencyKey: `${baseKey}-${action.actionId}-${step + 1}` });
     }
   }

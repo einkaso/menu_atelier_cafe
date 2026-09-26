@@ -120,7 +120,7 @@
 
 .lighting-scene-output-list article {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(150px, 210px) minmax(210px, 1fr) minmax(125px, 170px);
+  grid-template-columns: minmax(165px, 1fr) minmax(135px, 180px) minmax(125px, 155px) minmax(180px, 1fr) minmax(125px, 155px);
   align-items: end;
   gap: 14px;
   padding: 13px 15px;

@@ -5,7 +5,7 @@ import { clearWaiterSessionToken, createClientRequestId, waiterSessionHeaders } 
 import { WaiterSectionHeader } from "../staff-navigation";
 
 type Employee = { name: string };
-type LightingScene = { id: number; name: string; roomId: number | null; roomName: string | null; actionCount: number; maxFadeSeconds: number };
+type LightingScene = { id: number; name: string; roomId: number | null; roomName: string | null; actionCount: number; sequenceDurationSeconds: number };
 type LightingOutput = {
   id: number;
   label: string;
@@ -207,8 +207,8 @@ export default function LightingPreparationClient() {
       else {
         const delayLabel = delaySeconds >= 60 && delaySeconds % 60 === 0 ? `${delaySeconds / 60} min` : `${delaySeconds} s`;
         const timing = delaySeconds === 0 ? "uruchamia się teraz" : `uruchomi się za ${delayLabel}`;
-        const fade = scene.maxFadeSeconds > 0 ? ` Ściemniacze osiągną ustawienie w maks. ${scene.maxFadeSeconds} s.` : "";
-        setSceneMessage(`Scena „${scene.name}” ${timing}.${fade}`);
+        const sequence = scene.sequenceDurationSeconds > 0 ? ` Sekwencja zakończy się w ciągu maks. ${scene.sequenceDurationSeconds} s od startu sceny.` : "";
+        setSceneMessage(`Scena „${scene.name}” ${timing}.${sequence}`);
         window.setTimeout(() => void load(), Math.min(10_000, delaySeconds * 1000 + 2_000));
       }
     } catch {
@@ -242,7 +242,7 @@ export default function LightingPreparationClient() {
     {forbidden ? <section className="waiter-lighting-empty"><strong>Brak uprawnienia</strong><p>Administrator musi włączyć dla Twojego konta uprawnienie „Sterowanie oświetleniem”.</p></section> : null}
     {!forbidden && data?.scenes.length ? <section className="waiter-lighting-scenes">
       <header><div><span>GOTOWE USTAWIENIA</span><h2>Sceny oświetlenia</h2><p>Wybierz scenę i zdecyduj, czy ma uruchomić się teraz, czy po krótkim czasie.</p></div><div className="waiter-lighting-delay"><label>Uruchom za<input type="number" min="0" max={delayUnit === "MINUTES" ? 60 : 3600} step="1" value={delayValue} onChange={(event) => setDelayValue(Math.min(delayUnit === "MINUTES" ? 60 : 3600, Math.max(0, Number(event.target.value) || 0)))}/></label><select aria-label="Jednostka opóźnienia" value={delayUnit} onChange={(event) => { const unit = event.target.value as "SECONDS" | "MINUTES"; setDelayUnit(unit); if (unit === "MINUTES") setDelayValue((value) => Math.min(60, value)); }}><option value="SECONDS">sekund</option><option value="MINUTES">minut</option></select></div></header>
-      <div className="waiter-lighting-scene-groups">{sceneGroups.map((group) => <section className={group.global ? "waiter-lighting-scene-group is-global" : "waiter-lighting-scene-group"} key={group.key}><header><span>{group.global ? "CAŁY LOKAL" : "POMIESZCZENIE"}</span><strong>{group.name}</strong></header><div className="waiter-lighting-scene-buttons">{group.scenes.map((scene) => <button type="button" key={scene.id} disabled={!data.bridge.online || busySceneId !== null} onClick={() => void runScene(scene)}><em>SCENA</em><span>{busySceneId === scene.id ? "Uruchamiam…" : scene.name}</span><small>{scene.actionCount} {scene.actionCount === 1 ? "ustawienie" : "ustawień"}{scene.maxFadeSeconds > 0 ? ` · przejście ${scene.maxFadeSeconds} s` : ""}</small></button>)}</div></section>)}</div>
+      <div className="waiter-lighting-scene-groups">{sceneGroups.map((group) => <section className={group.global ? "waiter-lighting-scene-group is-global" : "waiter-lighting-scene-group"} key={group.key}><header><span>{group.global ? "CAŁY LOKAL" : "POMIESZCZENIE"}</span><strong>{group.name}</strong></header><div className="waiter-lighting-scene-buttons">{group.scenes.map((scene) => <button type="button" key={scene.id} disabled={!data.bridge.online || busySceneId !== null} onClick={() => void runScene(scene)}><em>SCENA</em><span>{busySceneId === scene.id ? "Uruchamiam…" : scene.name}</span><small>{scene.actionCount} {scene.actionCount === 1 ? "ustawienie" : "ustawień"}{scene.sequenceDurationSeconds > 0 ? ` · sekwencja ${scene.sequenceDurationSeconds} s` : ""}</small></button>)}</div></section>)}</div>
     </section> : null}
     {!forbidden && data && !data.outputs.length ? <section className="waiter-lighting-empty"><strong>Nie skonfigurowano jeszcze punktów światła</strong><p>Administrator powinien zatwierdzić właściwe wyjścia BleBox i przypisać im nazwy oraz pomieszczenia.</p></section> : null}
     {!forbidden && groups.map(([room, outputs]) => {

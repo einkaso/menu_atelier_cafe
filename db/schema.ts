@@ -1127,6 +1127,7 @@ export const lightingSceneActions = pgTable("lighting_scene_actions", {
   outputId: integer("output_id").notNull().references(() => lightingOutputs.id, { onDelete: "cascade" }),
   command: text("command").notNull(),
   brightness: integer("brightness"),
+  startDelayMs: integer("start_delay_ms").notNull().default(0),
   fadeDurationMs: integer("fade_duration_ms").notNull().default(0),
 }, (table) => [uniqueIndex("lighting_scene_actions_scene_output_uq").on(table.sceneId, table.outputId)]);
 

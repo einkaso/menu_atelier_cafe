@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       .leftJoin(lightingRooms, eq(lightingRooms.id, lightingScenes.roomId))
       .where(eq(lightingScenes.active, true))
       .orderBy(asc(lightingScenes.sortOrder), asc(lightingScenes.id)),
-    db.select({ sceneId: lightingSceneActions.sceneId, fadeDurationMs: lightingSceneActions.fadeDurationMs }).from(lightingSceneActions),
+    db.select({ sceneId: lightingSceneActions.sceneId, startDelayMs: lightingSceneActions.startDelayMs, fadeDurationMs: lightingSceneActions.fadeDurationMs }).from(lightingSceneActions),
   ]);
   const now = Date.now();
   return Response.json({
@@ -54,7 +54,11 @@ export async function GET(request: Request) {
     },
     scenes: scenes.map((scene) => {
       const actions = sceneActions.filter((action) => action.sceneId === scene.id);
-      return { ...scene, actionCount: actions.length, maxFadeSeconds: Math.max(0, ...actions.map((action) => Math.round(action.fadeDurationMs / 1000))) };
+      return {
+        ...scene,
+        actionCount: actions.length,
+        sequenceDurationSeconds: Math.max(0, ...actions.map((action) => Math.round((action.startDelayMs + action.fadeDurationMs) / 1000))),
+      };
     }).filter((scene) => scene.actionCount > 0),
     outputs: outputs.map((output) => ({
       ...output,

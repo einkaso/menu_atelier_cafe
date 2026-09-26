@@ -526,6 +526,13 @@
       "when": 1790442000000,
       "tag": "0074_lighting_scene_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790445600000,
+      "tag": "0075_lighting_scene_action_delay",
+      "breakpoints": true
     }
   ]
 }

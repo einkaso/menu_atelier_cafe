@@ -10,6 +10,7 @@ const sceneActionInput = z.object({
   outputId: z.number().int().positive(),
   command: z.enum(["ON", "OFF", "BRIGHTNESS"]),
   brightness: z.number().int().min(0).max(100).nullable().optional(),
+  startDelaySeconds: z.number().int().min(0).max(3600).default(0),
   fadeDurationSeconds: z.number().int().min(0).max(300).default(0),
 });
 
@@ -79,6 +80,7 @@ export async function GET() {
       roomName: lightingRooms.name,
       command: lightingSceneActions.command,
       brightness: lightingSceneActions.brightness,
+      startDelayMs: lightingSceneActions.startDelayMs,
       fadeDurationMs: lightingSceneActions.fadeDurationMs,
     }).from(lightingSceneActions)
       .innerJoin(lightingOutputs, eq(lightingOutputs.id, lightingSceneActions.outputId))
@@ -109,6 +111,7 @@ async function saveScene(request: Request, updating: boolean) {
       outputId: action.outputId,
       command: action.command,
       brightness: action.command === "BRIGHTNESS" ? action.brightness : null,
+      startDelayMs: action.startDelaySeconds * 1000,
       fadeDurationMs: action.command === "BRIGHTNESS" ? action.fadeDurationSeconds * 1000 : 0,
     })));
     return { id: sceneId!, name: input.data.name, roomId: input.data.roomId };

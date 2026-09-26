@@ -132,10 +132,11 @@ test("lighting administration keeps a compact centered desktop layout", async ()
 
 test("lighting scenes persist delayed execution and bounded dimmer fades", async () => {
   const { buildBrightnessFadeSteps } = await vite.ssrLoadModule("/lib/lighting/scenes.ts");
-  const [schema, migration, scopeMigration, adminApi, waiterApi, waiterLightingApi, claimApi, adminUi, waiterUi] = await Promise.all([
+  const [schema, migration, scopeMigration, delayMigration, adminApi, waiterApi, waiterLightingApi, claimApi, adminUi, waiterUi] = await Promise.all([
     read("db/schema.ts"),
     read("drizzle/0072_lighting_scenes.sql"),
     read("drizzle/0074_lighting_scene_scope.sql"),
+    read("drizzle/0075_lighting_scene_action_delay.sql"),
     read("app/api/admin/lighting/scenes/route.ts"),
     read("app/api/waiter/lighting/scenes/route.ts"),
     read("app/api/waiter/lighting/route.ts"),
@@ -149,20 +150,27 @@ test("lighting scenes persist delayed execution and bounded dimmer fades", async
   assert.ok(fade.every((step, index) => index === 0 || step.offsetMs > fade[index - 1].offsetMs));
   assert.equal(buildBrightnessFadeSteps({ start: 20, target: 80, minimum: 10, maximum: 100, durationMs: 0 })[0].offsetMs, 0);
   assert.match(schema, /fadeDurationMs: integer\("fade_duration_ms"\)/);
+  assert.match(schema, /startDelayMs: integer\("start_delay_ms"\)/);
   assert.match(schema, /executeAt: timestamp\("execute_at"/);
   assert.match(migration, /lighting_commands_status_execute_idx/);
   assert.match(adminApi, /fadeDurationSeconds/);
+  assert.match(adminApi, /startDelaySeconds/);
   assert.match(waiterApi, /delaySeconds > 3600/);
   assert.match(waiterApi, /buildBrightnessFadeSteps/);
+  assert.match(waiterApi, /scheduledFor\.getTime\(\) \+ action\.startDelayMs/);
   assert.match(claimApi, /lte\(lightingCommands\.executeAt, now\)/);
   assert.match(adminUi, /Zamknięty lokal/);
   assert.match(waiterUi, /Sceny oświetlenia/);
   assert.match(schema, /lightingScenes = pgTable\("lighting_scenes", \{[\s\S]*roomId: integer\("room_id"\)/);
   assert.match(scopeMigration, /lighting_scenes_room_id_lighting_rooms_id_fk/);
+  assert.match(delayMigration, /lighting_scene_actions_start_delay_check/);
   assert.match(adminApi, /roomId: z\.number\(\)\.int\(\)\.positive\(\)\.nullable\(\)\.default\(null\)/);
   assert.match(adminApi, /Scena pomieszczenia może sterować tylko punktami przypisanymi do tego pomieszczenia/);
   assert.match(waiterLightingApi, /roomName: lightingRooms\.name/);
+  assert.match(waiterLightingApi, /sequenceDurationSeconds/);
   assert.match(adminUi, /ATELIER CAFE · cały lokal/);
+  assert.match(adminUi, /Opóźnienie startu/);
   assert.match(waiterUi, /<em>SCENA<\/em>/);
   assert.match(waiterUi, /group\.global \? "CAŁY LOKAL" : "POMIESZCZENIE"/);
+  assert.match(waiterUi, /sekwencja/);
 });
