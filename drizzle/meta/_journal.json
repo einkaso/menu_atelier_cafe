@@ -533,6 +533,13 @@
       "when": 1790445600000,
       "tag": "0075_lighting_scene_action_delay",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1790449200000,
+      "tag": "0076_temperature_sensor_modes",
+      "breakpoints": true
     }
   ]
 }

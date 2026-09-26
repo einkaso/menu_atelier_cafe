@@ -1190,6 +1190,10 @@ export const coldStorageSensorStates = pgTable("cold_storage_sensor_states", {
   observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
   reportedAt: timestamp("reported_at", { withTimezone: true }).notNull().defaultNow(),
   active: boolean("active").notNull().default(true),
+  monitoringEnabled: boolean("monitoring_enabled").notNull().default(true),
+  monitoringUpdatedAt: timestamp("monitoring_updated_at", { withTimezone: true }),
+  monitoringUpdatedByDotykackaId: text("monitoring_updated_by_dotykacka_id"),
+  monitoringUpdatedByName: text("monitoring_updated_by_name"),
 }, (table) => [
   uniqueIndex("cold_storage_sensor_states_key_uq").on(table.sensorKey),
   index("cold_storage_sensor_states_observed_idx").on(table.observedAt),

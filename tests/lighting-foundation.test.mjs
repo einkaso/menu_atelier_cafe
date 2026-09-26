@@ -42,32 +42,53 @@ test("bridge secrets are stored as hashes and compared in constant time", async 
 });
 
 test("cold storage alert starts at minus eight degrees and detects stale readings", async () => {
-  const { coldStorageStatus, COLD_STORAGE_ALARM_THRESHOLD_C } = await vite.ssrLoadModule("/lib/lighting/cold-storage.ts");
+  const { coldStorageStatus, temperatureSensorStatus, COLD_STORAGE_ALARM_THRESHOLD_C, FRIDGE_ALARM_THRESHOLD_C } = await vite.ssrLoadModule("/lib/lighting/cold-storage.ts");
   const now = new Date("2026-09-23T12:00:00Z");
   assert.equal(COLD_STORAGE_ALARM_THRESHOLD_C, -8);
+  assert.equal(FRIDGE_ALARM_THRESHOLD_C, 10);
   assert.equal(coldStorageStatus(-8.01, new Date("2026-09-23T11:59:30Z"), now), "OK");
   assert.equal(coldStorageStatus(-8, new Date("2026-09-23T11:59:30Z"), now), "ALERT");
   assert.equal(coldStorageStatus(-7.99, new Date("2026-09-23T11:59:30Z"), now), "ALERT");
   assert.equal(coldStorageStatus(-20, new Date("2026-09-23T11:54:59Z"), now), "STALE");
+  assert.equal(temperatureSensorStatus("room-ambient", 25, new Date("2026-09-23T11:00:00Z"), false, now), "INFO");
+  assert.equal(temperatureSensorStatus("fridge-glass", 18, new Date("2026-09-23T11:59:30Z"), false, now), "OFF");
+  assert.equal(temperatureSensorStatus("fridge-glass", 10, new Date("2026-09-23T11:59:30Z"), true, now), "OK");
+  assert.equal(temperatureSensorStatus("fridge-glass", 10.01, new Date("2026-09-23T11:59:30Z"), true, now), "ALERT");
 });
 
 test("cold storage migration and waiter alert UI remain wired", async () => {
-  const [schema, migration, client, coldPage, coldCss] = await Promise.all([
+  const [schema, migration, sensorModeMigration, bridgeMonitor, validation, alertsApi, client, coldPage, coldCss] = await Promise.all([
     read("db/schema.ts"),
     read("drizzle/0064_cold_storage_temperature_alerts.sql"),
+    read("drizzle/0076_temperature_sensor_modes.sql"),
+    read("bridge/lighting/temperature-monitor.mjs"),
+    read("lib/lighting/validation.ts"),
+    read("app/api/waiter/environment-alerts/route.ts"),
     read("app/kelner/waiter-client.tsx"),
     read("app/kelner/chlodnie/cold-storage-client.tsx"),
     read("app/kelner/chlodnie/cold-storage.css"),
   ]);
   assert.match(schema, /coldStorageSensorStates/);
+  assert.match(schema, /monitoringEnabled: boolean\("monitoring_enabled"\)/);
   assert.match(migration, /cold_storage_sensor_states/);
+  assert.match(sensorModeMigration, /monitoring_updated_by_name/);
+  assert.match(bridgeMonitor, /\[0, "room-ambient"\]/);
+  assert.match(bridgeMonitor, /\[1, "fridge-glass"\]/);
+  assert.match(validation, /\.length\(4\)/);
+  assert.match(alertsApi, /coldStorageMonitoringInput/);
+  assert.match(alertsApi, /monitoringUpdatedByName: employee\.name/);
   assert.match(client, /ALARM TEMPERATURY/);
   assert.match(client, /environment-alerts/);
   assert.match(client, /href="\/kelner\/chlodnie"/);
   assert.match(coldPage, /window\.setInterval\(refresh, 15_000\)/);
   assert.match(coldPage, /Próg alarmu/);
   assert.match(coldPage, /Odczyt nieaktualny/);
+  assert.match(coldPage, /Uruchomiona/);
+  assert.match(coldPage, /Temperatura otoczenia/);
+  assert.match(coldPage, /po przekroczeniu 10,00°C/);
   assert.match(coldCss, /\.waiter-cold-grid/);
+  assert.match(coldCss, /\.waiter-cold-monitoring/);
+  assert.match(coldCss, /\.waiter-cold-information/);
 });
 
 test("lighting inventory, administration and employee controls are wired", async () => {

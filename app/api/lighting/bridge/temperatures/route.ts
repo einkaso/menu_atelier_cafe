@@ -1,8 +1,7 @@
-import { eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
 import { coldStorageSensorStates } from "../../../../../db/schema";
 import { currentLightingBridge } from "../../../../../lib/lighting/bridge-request-auth";
-import { COLD_STORAGE_ALARM_THRESHOLD_C, COLD_STORAGE_SENSOR_NAMES } from "../../../../../lib/lighting/cold-storage";
+import { TEMPERATURE_SENSOR_CONFIG } from "../../../../../lib/lighting/cold-storage";
 import { coldStorageTemperatureReport } from "../../../../../lib/lighting/validation";
 
 export const dynamic = "force-dynamic";
@@ -17,29 +16,29 @@ export async function POST(request: Request) {
   const reportedAt = new Date();
   await db.transaction(async (tx) => {
     for (const reading of input.data.readings) {
+      const config = TEMPERATURE_SENSOR_CONFIG[reading.key];
       await tx.insert(coldStorageSensorStates).values({
         bridgeId: bridge.id,
         sensorKey: reading.key,
-        name: COLD_STORAGE_SENSOR_NAMES[reading.key],
+        name: config.name,
         temperatureC: reading.temperatureC.toFixed(2),
-        alarmThresholdC: COLD_STORAGE_ALARM_THRESHOLD_C.toFixed(2),
+        alarmThresholdC: (config.alarmThresholdC ?? 0).toFixed(2),
         observedAt: reading.observedAt,
         reportedAt,
         active: true,
+        monitoringEnabled: config.defaultMonitoring,
       }).onConflictDoUpdate({
         target: coldStorageSensorStates.sensorKey,
         set: {
           bridgeId: bridge.id,
-          name: COLD_STORAGE_SENSOR_NAMES[reading.key],
+          name: config.name,
           temperatureC: reading.temperatureC.toFixed(2),
+          alarmThresholdC: (config.alarmThresholdC ?? 0).toFixed(2),
           observedAt: reading.observedAt,
           reportedAt,
         },
       });
     }
   });
-
-  await db.update(coldStorageSensorStates).set({ alarmThresholdC: COLD_STORAGE_ALARM_THRESHOLD_C.toFixed(2) })
-    .where(eq(coldStorageSensorStates.active, true));
   return Response.json({ status: "ok", reportedAt: reportedAt.toISOString() });
 }

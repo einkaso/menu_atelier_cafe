@@ -24,7 +24,7 @@ type Product = { id: number; dotykackaId: string; name: string; category: string
 type CartItem = { product: Product; quantity: number; note: string; customizations: Addon[]; temperature: ServingTemperature | null; takeaway: boolean };
 type SurveyQuestion = { id: number; prompt: string; kind: "YES_NO" | "SINGLE_CHOICE"; options: string[]; required: boolean };
 type DrinkFilters = { color: string; taste: string; sparkling: string; serving: string; country: string; vegan: boolean; zero: boolean; beerStyle: string; alcohol: string; spiritType: string; spiritStyle: string; spiritTaste: string; spiritOrigin: string; spiritAge: string; alcoType: string; alcoBase: string; alcoTaste: string; alcoServing: string };
-type ColdStorageSensor = { key: string; name: string; temperatureC: number | null; thresholdC: number; observedAt: string | null; status: "OK" | "ALERT" | "STALE" | "MISSING" };
+type ColdStorageSensor = { key: string; name: string; temperatureC: number | null; thresholdC: number | null; observedAt: string | null; status: "OK" | "ALERT" | "STALE" | "MISSING" | "INFO" | "OFF"; requiresAttention: boolean };
 
 const moneyFormatter = new Intl.NumberFormat("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const money = (value: number) => moneyFormatter.format(value);
@@ -159,14 +159,14 @@ function AlcoholSaleWarning({ product, onClose }: { product: Product; onClose: (
 }
 
 function ColdStorageAlert({ sensors }: { sensors: ColdStorageSensor[] }) {
-  const problems = sensors.filter((sensor) => sensor.status !== "OK");
+  const problems = sensors.filter((sensor) => sensor.requiresAttention);
   if (!problems.length) return null;
   const temperatureAlerts = problems.filter((sensor) => sensor.status === "ALERT");
   const unavailable = problems.filter((sensor) => sensor.status === "STALE" || sensor.status === "MISSING");
   return <aside className={`waiter-cold-storage-alert${temperatureAlerts.length ? " is-critical" : " is-unavailable"}`} role="alert" aria-live="assertive">
     <div className="waiter-cold-storage-icon" aria-hidden="true">!</div>
-    <div><span>{temperatureAlerts.length ? "ALARM TEMPERATURY" : "BRAK AKTUALNEGO ODCZYTU"}</span><h2>{temperatureAlerts.length ? "Temperatura zamrażarki jest za wysoka" : "Sprawdź zamrażarki i czujnik BleBox"}</h2><p>{problems.map((sensor) => `${sensor.name}: ${sensor.temperatureC === null ? "brak danych" : `${sensor.temperatureC.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}°C`}`).join(" · ")}</p>{unavailable.length > 0 && <small>Brak świeżych danych również wymaga sprawdzenia urządzeń na miejscu.</small>}</div>
-    <Link className="waiter-cold-storage-open" href="/kelner/chlodnie">Otwórz chłodnie<br/><small>Próg alarmu −8,00°C</small></Link>
+    <div><span>{temperatureAlerts.length ? "ALARM TEMPERATURY" : "BRAK AKTUALNEGO ODCZYTU"}</span><h2>{temperatureAlerts.length ? "Temperatura urządzenia chłodniczego jest za wysoka" : "Sprawdź monitorowane urządzenia i czujnik BleBox"}</h2><p>{problems.map((sensor) => `${sensor.name}: ${sensor.temperatureC === null ? "brak danych" : `${sensor.temperatureC.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}°C`}`).join(" · ")}</p>{unavailable.length > 0 && <small>Brak świeżych danych również wymaga sprawdzenia urządzeń na miejscu.</small>}</div>
+    <Link className="waiter-cold-storage-open" href="/kelner/chlodnie">Otwórz chłodnie<br/><small>Progi według urządzenia</small></Link>
   </aside>;
 }
 

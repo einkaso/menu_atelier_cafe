@@ -3,6 +3,8 @@ import { pathToFileURL } from "node:url";
 import { isPrivateIpv4, readJson } from "./discovery.mjs";
 
 const SENSOR_MAP = new Map([
+  [0, "room-ambient"],
+  [1, "fridge-glass"],
   [2, "freezer-small"],
   [3, "freezer-large"],
 ]);
@@ -15,7 +17,7 @@ export function temperatureReadings(payload, observedAt = new Date()) {
     if (!key || sensor?.type !== "temperature" || !Number.isFinite(Number(sensor?.value))) return [];
     return [{ key, temperatureC: Number((Number(sensor.value) / 100).toFixed(2)), observedAt: observedAt.toISOString() }];
   });
-  if (readings.length !== SENSOR_MAP.size) throw new Error("Nie udało się odczytać obu zamrażarek.");
+  if (readings.length !== SENSOR_MAP.size) throw new Error("Nie udało się odczytać wszystkich czterech sond temperatury.");
   return readings;
 }
 

@@ -92,13 +92,16 @@ test("network discovery is limited to small private IPv4 ranges", () => {
   assert.throws(() => hostsFromCidr("192.168.0.0/16"), /od \/22 do \/30/);
 });
 
-test("temperature monitor maps only the two Atelier freezer probes", () => {
+test("temperature monitor maps all four Atelier temperature probes", () => {
   const readings = temperatureReadings({ multiSensor: { sensors: [
     { type: "temperature", id: 0, value: 1968 },
+    { type: "temperature", id: 1, value: 1812 },
     { type: "temperature", id: 2, value: -801 },
     { type: "temperature", id: 3, value: -2001 },
   ] } }, new Date("2026-09-23T12:00:00Z"));
   assert.deepEqual(readings, [
+    { key: "room-ambient", temperatureC: 19.68, observedAt: "2026-09-23T12:00:00.000Z" },
+    { key: "fridge-glass", temperatureC: 18.12, observedAt: "2026-09-23T12:00:00.000Z" },
     { key: "freezer-small", temperatureC: -8.01, observedAt: "2026-09-23T12:00:00.000Z" },
     { key: "freezer-large", temperatureC: -20.01, observedAt: "2026-09-23T12:00:00.000Z" },
   ]);

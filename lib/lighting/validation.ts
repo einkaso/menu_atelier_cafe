@@ -30,16 +30,21 @@ export const lightingBridgeStates = z.object({
   states: z.array(lightingBridgeState).max(500),
 });
 
-export const coldStorageSensorKey = z.enum(["freezer-small", "freezer-large"]);
+export const coldStorageSensorKey = z.enum(["room-ambient", "fridge-glass", "freezer-small", "freezer-large"]);
 
 export const coldStorageTemperatureReport = z.object({
   readings: z.array(z.object({
     key: coldStorageSensorKey,
     temperatureC: z.number().finite().min(-100).max(100),
     observedAt: z.coerce.date(),
-  })).length(2).refine((readings) => new Set(readings.map((reading) => reading.key)).size === readings.length, {
-    message: "Raport musi zawierać dwa różne czujniki zamrażarek.",
+  })).length(4).refine((readings) => new Set(readings.map((reading) => reading.key)).size === readings.length, {
+    message: "Raport musi zawierać cztery różne czujniki temperatury.",
   }),
+});
+
+export const coldStorageMonitoringInput = z.object({
+  key: z.literal("fridge-glass"),
+  monitoringEnabled: z.boolean(),
 });
 
 const lightingCapabilities = z.object({
