@@ -132,11 +132,13 @@ test("lighting administration keeps a compact centered desktop layout", async ()
 
 test("lighting scenes persist delayed execution and bounded dimmer fades", async () => {
   const { buildBrightnessFadeSteps } = await vite.ssrLoadModule("/lib/lighting/scenes.ts");
-  const [schema, migration, adminApi, waiterApi, claimApi, adminUi, waiterUi] = await Promise.all([
+  const [schema, migration, scopeMigration, adminApi, waiterApi, waiterLightingApi, claimApi, adminUi, waiterUi] = await Promise.all([
     read("db/schema.ts"),
     read("drizzle/0072_lighting_scenes.sql"),
+    read("drizzle/0074_lighting_scene_scope.sql"),
     read("app/api/admin/lighting/scenes/route.ts"),
     read("app/api/waiter/lighting/scenes/route.ts"),
+    read("app/api/waiter/lighting/route.ts"),
     read("app/api/lighting/bridge/commands/claim/route.ts"),
     read("app/admin/lighting/lighting-admin-client.tsx"),
     read("app/kelner/oswietlenie/lighting-preparation-client.tsx"),
@@ -155,4 +157,12 @@ test("lighting scenes persist delayed execution and bounded dimmer fades", async
   assert.match(claimApi, /lte\(lightingCommands\.executeAt, now\)/);
   assert.match(adminUi, /Zamknięty lokal/);
   assert.match(waiterUi, /Sceny oświetlenia/);
+  assert.match(schema, /lightingScenes = pgTable\("lighting_scenes", \{[\s\S]*roomId: integer\("room_id"\)/);
+  assert.match(scopeMigration, /lighting_scenes_room_id_lighting_rooms_id_fk/);
+  assert.match(adminApi, /roomId: z\.number\(\)\.int\(\)\.positive\(\)\.nullable\(\)\.default\(null\)/);
+  assert.match(adminApi, /Scena pomieszczenia może sterować tylko punktami przypisanymi do tego pomieszczenia/);
+  assert.match(waiterLightingApi, /roomName: lightingRooms\.name/);
+  assert.match(adminUi, /ATELIER CAFE · cały lokal/);
+  assert.match(waiterUi, /<em>SCENA<\/em>/);
+  assert.match(waiterUi, /group\.global \? "CAŁY LOKAL" : "POMIESZCZENIE"/);
 });

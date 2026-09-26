@@ -56,6 +56,8 @@
 .lighting-scene-list article > div { display: grid; gap: 4px; }
 .lighting-scene-list strong { font: 500 1.05rem Georgia, serif; }
 .lighting-scene-list small { color: #718286; font-size: .59rem; }
+.lighting-scene-kind { justify-self: start; padding: 2px 5px; background: var(--admin-navy); color: #fff; font-size: .48rem; font-weight: 900; letter-spacing: .12em; }
+.lighting-scene-scope { color: var(--admin-orange); font-size: .56rem; font-weight: 850; text-transform: uppercase; }
 .lighting-scene-list article > div:last-child { grid-template-columns: 1fr 1fr; }
 
 .lighting-scene-list button,
@@ -84,7 +86,7 @@
 
 .lighting-scene-editor-heading {
   display: grid;
-  grid-template-columns: minmax(220px, 340px) 1fr;
+  grid-template-columns: minmax(200px, 1fr) minmax(220px, 1fr) minmax(280px, 1.2fr);
   align-items: end;
   gap: 18px;
 }

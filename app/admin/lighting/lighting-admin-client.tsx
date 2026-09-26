@@ -10,7 +10,7 @@ type Output = { id: number; deviceId: number; channel: string; label: string; ro
 type Room = { id: number; name: string; sortOrder: number; active: boolean };
 type Draft = Pick<Output, "label" | "roomId" | "active">;
 type SceneAction = { id: number; sceneId: number; outputId: number; outputLabel: string; roomName: string | null; command: "ON" | "OFF" | "BRIGHTNESS"; brightness: number | null; fadeDurationMs: number };
-type Scene = { id: number; name: string; sortOrder: number; active: boolean; actions: SceneAction[] };
+type Scene = { id: number; name: string; roomId: number | null; roomName: string | null; sortOrder: number; active: boolean; actions: SceneAction[] };
 type SceneActionDraft = { command: "KEEP" | "ON" | "OFF" | "BRIGHTNESS"; brightness: number; fadeDurationSeconds: number };
 
 function relativeTime(value: string | null, now: number) {
@@ -29,6 +29,7 @@ export default function LightingAdminClient() {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   const [sceneName, setSceneName] = useState("");
+  const [sceneRoomId, setSceneRoomId] = useState<number | null>(null);
   const [editingSceneId, setEditingSceneId] = useState<number | null>(null);
   const [sceneDrafts, setSceneDrafts] = useState<Record<number, SceneActionDraft>>({});
   const [busy, setBusy] = useState("");
@@ -58,9 +59,10 @@ export default function LightingAdminClient() {
   }, [outputs]);
   const sceneOutputs = useMemo(() => outputs.filter((output) => {
     if (!output.active || output.capabilities.shutter) return false;
+    if (sceneRoomId !== null && output.roomId !== sceneRoomId) return false;
     const adapter = devices.find((device) => device.id === output.deviceId)?.apiType;
     return adapter === "relay" || adapter === "dimmer";
-  }), [devices, outputs]);
+  }), [devices, outputs, sceneRoomId]);
   const bridge = bridges[0];
   const bridgeOnline = Boolean(bridge?.lastHeartbeatAt && now - new Date(bridge.lastHeartbeatAt).getTime() <= 60_000);
   const approvedCount = outputs.filter((output) => output.active).length;
@@ -91,12 +93,14 @@ export default function LightingAdminClient() {
   function resetSceneEditor() {
     setEditingSceneId(null);
     setSceneName("");
+    setSceneRoomId(null);
     setSceneDrafts({});
   }
 
   function editScene(scene: Scene) {
     setEditingSceneId(scene.id);
     setSceneName(scene.name);
+    setSceneRoomId(scene.roomId);
     setSceneDrafts(Object.fromEntries(scene.actions.map((action) => [action.outputId, {
       command: action.command,
       brightness: action.brightness ?? 0,
@@ -119,7 +123,7 @@ export default function LightingAdminClient() {
     });
     if (!sceneName.trim() || !actions.length) { setError("Podaj nazwę sceny i ustaw co najmniej jedną lampę."); return; }
     setBusy("scene"); setError(""); setMessage("");
-    const response = await fetch("/api/admin/lighting/scenes", { method: editingSceneId ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: editingSceneId ?? undefined, name: sceneName, actions }) });
+    const response = await fetch("/api/admin/lighting/scenes", { method: editingSceneId ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: editingSceneId ?? undefined, name: sceneName, roomId: sceneRoomId, actions }) });
     const body = await response.json().catch(() => ({})) as { error?: string };
     if (!response.ok) setError(body.error ?? "Nie udało się zapisać sceny.");
     else { setMessage(`Scena „${sceneName.trim()}” została zapisana.`); resetSceneEditor(); await load(); }
@@ -147,15 +151,15 @@ export default function LightingAdminClient() {
     </section>
     <section className="lighting-admin-intro"><div><span>BEZPIECZNA KONFIGURACJA</span><h2>Najpierw zatwierdź rzeczywiste urządzenia</h2><p>Agent wykrywa urządzenia BleBox w sieci. Zatwierdzaj wyłącznie właściwe lampy, ściemniacze i ekran. Zmiana adresu IP nie wymaga ponownego dodawania — urządzenie rozpoznajemy po stałym identyfikatorze.</p></div><form onSubmit={addRoom}><label>Nazwa nowego pomieszczenia<input name="name" required maxLength={80} placeholder="np. Kawiarnia, Atelier, Biuro"/></label><button className="admin-primary" disabled={busy === "room"}>{busy === "room" ? "Dodaję…" : "Dodaj pomieszczenie"}</button></form></section>
     <section className="lighting-scenes-admin">
-      <header><div><span>SCENY OŚWIETLENIA</span><h2>Jednym przyciskiem ustaw cały lokal</h2><p>Zapisz stan wybranych lamp. Przy ściemniaczach możesz określić czas łagodnego przejścia do nowej jasności.</p></div><button type="button" className="admin-primary" onClick={resetSceneEditor}>Nowa scena</button></header>
-      {scenes.length ? <div className="lighting-scene-list">{scenes.map((scene) => <article key={scene.id}><div><strong>{scene.name}</strong><small>{scene.actions.length} {scene.actions.length === 1 ? "ustawienie" : "ustawień"}{Math.max(0, ...scene.actions.map((action) => action.fadeDurationMs)) > 0 ? ` · przejście do ${Math.round(Math.max(...scene.actions.map((action) => action.fadeDurationMs)) / 1000)} s` : ""}</small></div><div><button type="button" onClick={() => editScene(scene)}>Edytuj</button><button type="button" className="is-delete" disabled={busy === `scene-delete:${scene.id}`} onClick={() => void deleteScene(scene)}>{busy === `scene-delete:${scene.id}` ? "Usuwam…" : "Usuń"}</button></div></article>)}</div> : <div className="lighting-scene-empty">Nie ma jeszcze scen. Zacznij od „Dzień”, „Wieczór” albo „Zamknięty lokal”.</div>}
+      <header><div><span>SCENY OŚWIETLENIA</span><h2>Ustaw pomieszczenie albo cały lokal</h2><p>Scena może należeć do konkretnego pomieszczenia lub do całego lokalu „ATELIER CAFE”. Scena pomieszczenia pokazuje wyłącznie przypisane do niego lampy.</p></div><button type="button" className="admin-primary" onClick={resetSceneEditor}>Nowa scena</button></header>
+      {scenes.length ? <div className="lighting-scene-list">{scenes.map((scene) => <article key={scene.id}><div><span className="lighting-scene-kind">SCENA</span><strong>{scene.name}</strong><b className="lighting-scene-scope">{scene.roomName ?? "ATELIER CAFE · cały lokal"}</b><small>{scene.actions.length} {scene.actions.length === 1 ? "ustawienie" : "ustawień"}{Math.max(0, ...scene.actions.map((action) => action.fadeDurationMs)) > 0 ? ` · przejście do ${Math.round(Math.max(...scene.actions.map((action) => action.fadeDurationMs)) / 1000)} s` : ""}</small></div><div><button type="button" onClick={() => editScene(scene)}>Edytuj</button><button type="button" className="is-delete" disabled={busy === `scene-delete:${scene.id}`} onClick={() => void deleteScene(scene)}>{busy === `scene-delete:${scene.id}` ? "Usuwam…" : "Usuń"}</button></div></article>)}</div> : <div className="lighting-scene-empty">Nie ma jeszcze scen. Zacznij od „Dzień”, „Wieczór” albo „Zamknięty lokal”.</div>}
       <form className="lighting-scene-editor" onSubmit={saveScene}>
-        <div className="lighting-scene-editor-heading"><label>Nazwa sceny<input value={sceneName} maxLength={60} required placeholder="np. Wieczór" onChange={(event) => setSceneName(event.target.value)}/></label><div><span>Szybka nazwa</span>{["Dzień", "Wieczór", "Zamknięty lokal"].map((name) => <button type="button" key={name} onClick={() => setSceneName(name)}>{name}</button>)}</div></div>
+        <div className="lighting-scene-editor-heading"><label>Nazwa sceny<input value={sceneName} maxLength={60} required placeholder="np. Wieczór" onChange={(event) => setSceneName(event.target.value)}/></label><label>Przypisanie sceny<select value={sceneRoomId ?? ""} onChange={(event) => { setSceneRoomId(event.target.value ? Number(event.target.value) : null); setSceneDrafts({}); }}><option value="">ATELIER CAFE · cały lokal</option>{rooms.filter((room) => room.active).map((room) => <option value={room.id} key={room.id}>{room.name}</option>)}</select></label><div><span>Szybka nazwa</span>{["Dzień", "Wieczór", "Zamknięty lokal"].map((name) => <button type="button" key={name} onClick={() => setSceneName(name)}>{name}</button>)}</div></div>
         <div className="lighting-scene-output-list">{sceneOutputs.map((output) => {
           const draft = sceneDrafts[output.id] ?? { command: "KEEP", brightness: output.brightness ?? output.maxBrightness, fadeDurationSeconds: 0 };
           return <article key={output.id}><div><strong>{output.label}</strong><small>{rooms.find((room) => room.id === output.roomId)?.name ?? "Bez pomieszczenia"} · {output.capabilities.dimming ? "ściemniacz" : "włącz / wyłącz"}</small></div><label>Ustawienie<select value={draft.command} onChange={(event) => updateSceneDraft(output, { command: event.target.value as SceneActionDraft["command"] })}><option value="KEEP">Bez zmiany</option>{output.capabilities.dimming ? <option value="BRIGHTNESS">Ustaw jasność</option> : <><option value="ON">Włącz</option><option value="OFF">Wyłącz</option></>}</select></label>{output.capabilities.dimming && draft.command === "BRIGHTNESS" ? <><label>Jasność <b>{draft.brightness}%</b><input type="range" min="0" max={output.maxBrightness} value={draft.brightness} onChange={(event) => { const value = Number(event.target.value); updateSceneDraft(output, { brightness: value === 0 ? 0 : Math.max(output.minBrightness, value) }); }}/></label><label>Czas przejścia<input type="number" min="0" max="300" step="1" value={draft.fadeDurationSeconds} onChange={(event) => updateSceneDraft(output, { fadeDurationSeconds: Math.max(0, Math.min(300, Number(event.target.value) || 0)) })}/><small>sekundy · 0 oznacza natychmiast</small></label></> : null}</article>;
         })}</div>
-        {!sceneOutputs.length ? <p className="lighting-scene-no-outputs">Najpierw zatwierdź co najmniej jeden punkt światła.</p> : null}
+        {!sceneOutputs.length ? <p className="lighting-scene-no-outputs">Wybrane przypisanie nie ma jeszcze zatwierdzonych punktów światła.</p> : null}
         <footer><button type="submit" className="admin-primary" disabled={busy === "scene"}>{busy === "scene" ? "Zapisuję…" : editingSceneId ? "Zapisz zmiany sceny" : "Dodaj scenę"}</button>{editingSceneId ? <button type="button" onClick={resetSceneEditor}>Anuluj edycję</button> : null}</footer>
       </form>
     </section>

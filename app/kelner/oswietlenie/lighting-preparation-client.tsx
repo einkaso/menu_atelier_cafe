@@ -5,7 +5,7 @@ import { clearWaiterSessionToken, createClientRequestId, waiterSessionHeaders } 
 import { WaiterSectionHeader } from "../staff-navigation";
 
 type Employee = { name: string };
-type LightingScene = { id: number; name: string; actionCount: number; maxFadeSeconds: number };
+type LightingScene = { id: number; name: string; roomId: number | null; roomName: string | null; actionCount: number; maxFadeSeconds: number };
 type LightingOutput = {
   id: number;
   label: string;
@@ -106,6 +106,19 @@ export default function LightingPreparationClient() {
       result.set(room, [...(result.get(room) ?? []), output]);
     }
     return [...result.entries()];
+  }, [data]);
+  const sceneGroups = useMemo(() => {
+    const scenes = data?.scenes ?? [];
+    const result: Array<{ key: string; name: string; global: boolean; scenes: LightingScene[] }> = [];
+    const globalScenes = scenes.filter((scene) => scene.roomId === null);
+    if (globalScenes.length) result.push({ key: "global", name: "ATELIER CAFE", global: true, scenes: globalScenes });
+    const byRoom = new Map<number, LightingScene[]>();
+    for (const scene of scenes) {
+      if (scene.roomId === null) continue;
+      byRoom.set(scene.roomId, [...(byRoom.get(scene.roomId) ?? []), scene]);
+    }
+    for (const [roomId, roomScenes] of byRoom) result.push({ key: `room-${roomId}`, name: roomScenes[0]?.roomName ?? "Pomieszczenie", global: false, scenes: roomScenes });
+    return result;
   }, [data]);
 
   function clearBrightnessDraft(outputId: number) {
@@ -229,7 +242,7 @@ export default function LightingPreparationClient() {
     {forbidden ? <section className="waiter-lighting-empty"><strong>Brak uprawnienia</strong><p>Administrator musi włączyć dla Twojego konta uprawnienie „Sterowanie oświetleniem”.</p></section> : null}
     {!forbidden && data?.scenes.length ? <section className="waiter-lighting-scenes">
       <header><div><span>GOTOWE USTAWIENIA</span><h2>Sceny oświetlenia</h2><p>Wybierz scenę i zdecyduj, czy ma uruchomić się teraz, czy po krótkim czasie.</p></div><div className="waiter-lighting-delay"><label>Uruchom za<input type="number" min="0" max={delayUnit === "MINUTES" ? 60 : 3600} step="1" value={delayValue} onChange={(event) => setDelayValue(Math.min(delayUnit === "MINUTES" ? 60 : 3600, Math.max(0, Number(event.target.value) || 0)))}/></label><select aria-label="Jednostka opóźnienia" value={delayUnit} onChange={(event) => { const unit = event.target.value as "SECONDS" | "MINUTES"; setDelayUnit(unit); if (unit === "MINUTES") setDelayValue((value) => Math.min(60, value)); }}><option value="SECONDS">sekund</option><option value="MINUTES">minut</option></select></div></header>
-      <div className="waiter-lighting-scene-buttons">{data.scenes.map((scene) => <button type="button" key={scene.id} disabled={!data.bridge.online || busySceneId !== null} onClick={() => void runScene(scene)}><span>{busySceneId === scene.id ? "Uruchamiam…" : scene.name}</span><small>{scene.actionCount} {scene.actionCount === 1 ? "ustawienie" : "ustawień"}{scene.maxFadeSeconds > 0 ? ` · przejście ${scene.maxFadeSeconds} s` : ""}</small></button>)}</div>
+      <div className="waiter-lighting-scene-groups">{sceneGroups.map((group) => <section className={group.global ? "waiter-lighting-scene-group is-global" : "waiter-lighting-scene-group"} key={group.key}><header><span>{group.global ? "CAŁY LOKAL" : "POMIESZCZENIE"}</span><strong>{group.name}</strong></header><div className="waiter-lighting-scene-buttons">{group.scenes.map((scene) => <button type="button" key={scene.id} disabled={!data.bridge.online || busySceneId !== null} onClick={() => void runScene(scene)}><em>SCENA</em><span>{busySceneId === scene.id ? "Uruchamiam…" : scene.name}</span><small>{scene.actionCount} {scene.actionCount === 1 ? "ustawienie" : "ustawień"}{scene.maxFadeSeconds > 0 ? ` · przejście ${scene.maxFadeSeconds} s` : ""}</small></button>)}</div></section>)}</div>
     </section> : null}
     {!forbidden && data && !data.outputs.length ? <section className="waiter-lighting-empty"><strong>Nie skonfigurowano jeszcze punktów światła</strong><p>Administrator powinien zatwierdzić właściwe wyjścia BleBox i przypisać im nazwy oraz pomieszczenia.</p></section> : null}
     {!forbidden && groups.map(([room, outputs]) => {
@@ -261,7 +274,9 @@ export default function LightingPreparationClient() {
             {output.calibrated !== true ? <small className="waiter-lighting-calibration-note">Pozycja procentowa wymaga jednorazowej kalibracji ekranu w aplikacji wBox.</small> : null}
           </div> : output.dimmingAvailable ? <div className="waiter-lighting-dimmer">
             <div><span>Natężenie światła</span><strong>{brightness}%</strong></div>
-            <input type="range" min="0" max={output.maxBrightness} step="1" value={brightness} disabled={unavailable} aria-label={`Jasność: ${output.label}`} style={{ "--lighting-level": `${brightness}%` } as CSSProperties} onChange={(event) => scheduleBrightness(output, Number(event.currentTarget.value))}/>
+            {/* The ref-backed timer is read only after this input event fires. */}
+            {/* eslint-disable-next-line react-hooks/refs */}
+            <input type="range" min="0" max={output.maxBrightness} step="1" value={brightness} disabled={unavailable} aria-label={`Jasność: ${output.label}`} style={{ "--lighting-level": `${brightness}%` } as CSSProperties} onChange={(event) => { const value = Number(event.currentTarget.value); scheduleBrightness(output, value); }}/>
             <footer><button type="button" disabled={unavailable || brightness === 0} onClick={() => scheduleBrightness(output, 0)}>Wyłącz</button><button type="button" disabled={unavailable || brightness === output.maxBrightness} onClick={() => scheduleBrightness(output, output.maxBrightness)}>Pełna moc</button></footer>
           </div> : output.brightness !== null && !output.controlAvailable ? <span className="waiter-lighting-brightness">Jasność {output.brightness}%</span> : null}
           {output.lastError ? <small className="waiter-lighting-device-error">{output.lastError}</small> : null}

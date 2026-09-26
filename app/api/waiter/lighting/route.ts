@@ -38,7 +38,11 @@ export async function GET(request: Request) {
     .leftJoin(lightingOutputStates, eq(lightingOutputStates.outputId, lightingOutputs.id))
     .where(and(eq(lightingOutputs.active, true), eq(lightingDevices.active, true)))
     .orderBy(asc(lightingRooms.sortOrder), asc(lightingOutputs.label)),
-    db.select({ id: lightingScenes.id, name: lightingScenes.name }).from(lightingScenes).where(eq(lightingScenes.active, true)).orderBy(asc(lightingScenes.sortOrder), asc(lightingScenes.id)),
+    db.select({ id: lightingScenes.id, name: lightingScenes.name, roomId: lightingScenes.roomId, roomName: lightingRooms.name })
+      .from(lightingScenes)
+      .leftJoin(lightingRooms, eq(lightingRooms.id, lightingScenes.roomId))
+      .where(eq(lightingScenes.active, true))
+      .orderBy(asc(lightingScenes.sortOrder), asc(lightingScenes.id)),
     db.select({ sceneId: lightingSceneActions.sceneId, fadeDurationMs: lightingSceneActions.fadeDurationMs }).from(lightingSceneActions),
   ]);
   const now = Date.now();

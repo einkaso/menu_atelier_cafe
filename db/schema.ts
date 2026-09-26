@@ -1113,9 +1113,13 @@ export const lightingGroupMembers = pgTable("lighting_group_members", {
 export const lightingScenes = pgTable("lighting_scenes", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  roomId: integer("room_id").references(() => lightingRooms.id, { onDelete: "set null" }),
   sortOrder: integer("sort_order").notNull().default(0),
   active: boolean("active").notNull().default(true),
-}, (table) => [index("lighting_scenes_sort_idx").on(table.sortOrder)]);
+}, (table) => [
+  index("lighting_scenes_sort_idx").on(table.sortOrder),
+  index("lighting_scenes_room_idx").on(table.roomId),
+]);
 
 export const lightingSceneActions = pgTable("lighting_scene_actions", {
   id: serial("id").primaryKey(),

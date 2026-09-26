@@ -16,14 +16,22 @@
 .waiter-lighting-delay { display: grid; grid-template-columns: 100px 110px; align-items: end; gap: 7px; }
 .waiter-lighting-delay label { display: grid; gap: 4px; color: #687a7c; font-size: .57rem; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
 .waiter-lighting-delay input,.waiter-lighting-delay select { min-width: 0; height: 42px; padding: 8px 9px; border: 1px solid #bfcfcb; background: #fff; color: #0b3440; font: inherit; font-size: .75rem; }
+.waiter-lighting-scene-groups { display: grid; gap: 14px; }
+.waiter-lighting-scene-group { padding: 13px; border: 1px solid #cbd8d5; background: #f7faf9; }
+.waiter-lighting-scene-group.is-global { border-color: #e7b7a6; background: #fff8f4; }
+.waiter-lighting-scene-group > header { display: flex; align-items: baseline; gap: 9px; margin-bottom: 9px; }
+.waiter-lighting-scene-group > header span { color: #da5f82; font-size: .55rem; font-weight: 900; letter-spacing: .13em; }
+.waiter-lighting-scene-group > header strong { font: 500 1.05rem Georgia, serif; }
 .waiter-lighting-scene-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
-.waiter-lighting-scene-buttons button { display: grid; min-height: 72px; align-content: center; gap: 5px; padding: 12px 15px; border: 1px solid #0b3440; background: #0b3440; color: #fff; text-align: left; cursor: pointer; touch-action: manipulation; }
+.waiter-lighting-scene-buttons button { display: grid; min-height: 88px; align-content: center; justify-items: start; gap: 5px; padding: 12px 15px; border: 1px solid #0b3440; background: #0b3440; color: #fff; text-align: left; cursor: pointer; touch-action: manipulation; }
 .waiter-lighting-scene-buttons button:nth-child(3n + 2) { border-color: #25477e; background: #25477e; }
 .waiter-lighting-scene-buttons button:nth-child(3n + 3) { border-color: #d86134; background: #d86134; }
 .waiter-lighting-scene-buttons button span { font: 500 1.12rem Georgia, serif; }
+.waiter-lighting-scene-buttons button em { padding: 3px 6px; border: 1px solid rgba(255,255,255,.52); color: #fff; font-size: .49rem; font-style: normal; font-weight: 900; letter-spacing: .13em; }
 .waiter-lighting-scene-buttons button small { color: rgba(255,255,255,.76); font-size: .59rem; }
 .waiter-lighting-scene-buttons button:disabled { border-color: #cad3d1; background: #e9eeec; color: #9aa6a4; cursor: not-allowed; }
 .waiter-lighting-scene-buttons button:disabled small { color: #9aa6a4; }
+.waiter-lighting-scene-buttons button:disabled em { border-color: #aeb8b6; color: #8f9b99; }
 .waiter-lighting-empty { min-height: 160px; display: grid; place-content: center; text-align: center; }
 .waiter-lighting-empty strong { font: 500 1.6rem/1.2 Georgia, serif; }
 .waiter-lighting-empty p { max-width: 600px; margin: 10px 0 0; color: #687a7c; line-height: 1.55; }

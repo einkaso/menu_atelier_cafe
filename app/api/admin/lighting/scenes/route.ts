@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../../../../../db";
 import { lightingDevices, lightingOutputs, lightingRooms, lightingSceneActions, lightingScenes } from "../../../../../db/schema";
@@ -16,6 +16,7 @@ const sceneActionInput = z.object({
 const sceneInput = z.object({
   id: z.number().int().positive().optional(),
   name: z.string().trim().min(1).max(60),
+  roomId: z.number().int().positive().nullable().default(null),
   actions: z.array(sceneActionInput).min(1).max(100),
 }).superRefine((value, context) => {
   if (new Set(value.actions.map((action) => action.outputId)).size !== value.actions.length) context.addIssue({ code: "custom", message: "Każdy punkt może wystąpić w scenie tylko raz.", path: ["actions"] });
@@ -25,10 +26,16 @@ const sceneInput = z.object({
   });
 });
 
-async function validateTargets(actions: z.infer<typeof sceneActionInput>[]) {
+async function validateTargets(actions: z.infer<typeof sceneActionInput>[], roomId: number | null) {
   const ids = actions.map((action) => action.outputId);
+  if (roomId !== null) {
+    const [room] = await getDb().select({ id: lightingRooms.id }).from(lightingRooms)
+      .where(and(eq(lightingRooms.id, roomId), eq(lightingRooms.active, true))).limit(1);
+    if (!room) return "Wybrane pomieszczenie nie istnieje albo jest nieaktywne.";
+  }
   const targets = await getDb().select({
     id: lightingOutputs.id,
+    roomId: lightingOutputs.roomId,
     channel: lightingOutputs.channel,
     active: lightingOutputs.active,
     capabilities: lightingOutputs.capabilities,
@@ -40,6 +47,7 @@ async function validateTargets(actions: z.infer<typeof sceneActionInput>[]) {
   for (const action of actions) {
     const target = byId.get(action.outputId);
     if (!target || !target.active) return "Scena zawiera punkt, który nie istnieje albo nie został zatwierdzony.";
+    if (roomId !== null && target.roomId !== roomId) return "Scena pomieszczenia może sterować tylko punktami przypisanymi do tego pomieszczenia.";
     if (action.command === "BRIGHTNESS") {
       if (target.adapter !== "dimmer" || target.channel !== "dimmer:0" || !target.capabilities.dimming) return "Regulację jasności można zapisać tylko dla ściemniacza.";
       const brightness = action.brightness ?? -1;
@@ -53,7 +61,16 @@ export async function GET() {
   if (!(await isAdmin())) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const db = getDb();
   const [scenes, actions] = await Promise.all([
-    db.select().from(lightingScenes).orderBy(asc(lightingScenes.sortOrder), asc(lightingScenes.id)),
+    db.select({
+      id: lightingScenes.id,
+      name: lightingScenes.name,
+      roomId: lightingScenes.roomId,
+      roomName: lightingRooms.name,
+      sortOrder: lightingScenes.sortOrder,
+      active: lightingScenes.active,
+    }).from(lightingScenes)
+      .leftJoin(lightingRooms, eq(lightingRooms.id, lightingScenes.roomId))
+      .orderBy(asc(lightingScenes.sortOrder), asc(lightingScenes.id)),
     db.select({
       id: lightingSceneActions.id,
       sceneId: lightingSceneActions.sceneId,
@@ -75,16 +92,16 @@ async function saveScene(request: Request, updating: boolean) {
   if (!(await isAdmin())) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const input = sceneInput.safeParse(await request.json().catch(() => null));
   if (!input.success || (updating && !input.data.id)) return Response.json({ error: "Uzupełnij nazwę sceny i co najmniej jedno ustawienie lampy." }, { status: 400 });
-  const targetError = await validateTargets(input.data.actions);
+  const targetError = await validateTargets(input.data.actions, input.data.roomId);
   if (targetError) return Response.json({ error: targetError }, { status: 409 });
   const scene = await getDb().transaction(async (tx) => {
     let sceneId = input.data.id;
     if (updating) {
-      const [updated] = await tx.update(lightingScenes).set({ name: input.data.name }).where(eq(lightingScenes.id, sceneId!)).returning({ id: lightingScenes.id });
+      const [updated] = await tx.update(lightingScenes).set({ name: input.data.name, roomId: input.data.roomId }).where(eq(lightingScenes.id, sceneId!)).returning({ id: lightingScenes.id });
       if (!updated) return null;
       await tx.delete(lightingSceneActions).where(eq(lightingSceneActions.sceneId, sceneId!));
     } else {
-      const [created] = await tx.insert(lightingScenes).values({ name: input.data.name, active: true }).returning({ id: lightingScenes.id });
+      const [created] = await tx.insert(lightingScenes).values({ name: input.data.name, roomId: input.data.roomId, active: true }).returning({ id: lightingScenes.id });
       sceneId = created.id;
     }
     await tx.insert(lightingSceneActions).values(input.data.actions.map((action) => ({
@@ -94,7 +111,7 @@ async function saveScene(request: Request, updating: boolean) {
       brightness: action.command === "BRIGHTNESS" ? action.brightness : null,
       fadeDurationMs: action.command === "BRIGHTNESS" ? action.fadeDurationSeconds * 1000 : 0,
     })));
-    return { id: sceneId!, name: input.data.name };
+    return { id: sceneId!, name: input.data.name, roomId: input.data.roomId };
   });
   if (!scene) return Response.json({ error: "Scena nie istnieje." }, { status: 404 });
   return Response.json({ scene }, { status: updating ? 200 : 201 });
