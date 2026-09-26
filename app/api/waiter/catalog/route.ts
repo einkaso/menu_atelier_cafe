@@ -6,7 +6,7 @@ import { currentWaiter } from "../../../../lib/waiter-auth";
 import { isAlternativeCoffeeBeanGroup, isAlternativeCoffeeMethod, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
 import { acceptsFlavorSyrup, FLAVOR_SYRUP_GROUP, isForestLifeSyrupCategory, isGenericFlavorSyrupOption, isLemonadeProduct } from "../../../../lib/flavor-syrups";
 import { isWholeVodkaBottleName } from "../../../../lib/alcohol-sale-warning";
-import { menuProductIsAvailable, productTakeawayAvailable, productTemperatures, regularProductStockIsAvailable } from "../../../../lib/menu-tags";
+import { menuProductIsAvailable, productTakeawayAvailable, productTemperatures, regularProductStockIsAvailable, wineOfferHasStock } from "../../../../lib/menu-tags";
 import { sectionFor, waiterCategoryName } from "../../../../lib/menu-categories";
 import { isZeroAlcoholValue } from "../../../../lib/wine-characteristics";
 import { inferredAlcoBarAttributes } from "../../../../lib/alco-characteristics";
@@ -154,9 +154,15 @@ export async function GET(request: Request) {
     const syrupOptions = lemonade ? flavorSyrupOptions.map((option) => ({ ...option, price: "0" })) : flavorSyrupOptions;
     return [...withoutGenericSyrup, { name: FLAVOR_SYRUP_GROUP, required: false, multiple: lemonade, maxSelections: lemonade ? 2 : 1, options: syrupOptions }];
   };
-  const availableProducts = products.filter((product) => menuProductIsAvailable(
+  const stockEligibleProducts = products.filter((product) => menuProductIsAvailable(
     product.tags, MENU_TAG, product.stockDeduct, product.stockOverdraft, product.stockQuantity,
-  ));
+  ) && wineOfferHasStock(sectionFor(product.category) === "wine", hasGlassName(product.name), product.wineCode, product.stockQuantity));
+  const availableWineBottleKeys = new Set(stockEligibleProducts
+    .filter((product) => sectionFor(product.category) === "wine" && product.wineCode && !hasGlassName(product.name))
+    .map((product) => `${product.categoryId}:${product.wineCode}`));
+  const availableProducts = stockEligibleProducts.filter((product) => sectionFor(product.category) !== "wine" || !hasGlassName(product.name)
+    || Boolean(isByGlass(product.tags, product.name) && product.wineCode
+      && availableWineBottleKeys.has(`${product.categoryId}:${product.wineCode}`)));
   const wineDetailsByCode = new Map<string, (typeof availableProducts)[number]>();
   for (const product of availableProducts) {
     if (!product.wineCode || sectionFor(product.category) !== "wine") continue;

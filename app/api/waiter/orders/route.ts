@@ -5,7 +5,8 @@ import { menuAddons, menuCategories, menuProducts, waiterExtraProducts, waiterOr
 import { currentWaiter, waiterCookie } from "../../../../lib/waiter-auth";
 import { isAlternativeCoffeeBeanGroup, isAlternativeCoffeeMethod, isCoffeeAddonGroup } from "../../../../lib/coffee-addons";
 import { acceptsFlavorSyrup, isForestLifeSyrupCategory, isGenericFlavorSyrupOption, isLemonadeProduct } from "../../../../lib/flavor-syrups";
-import { menuProductIsAvailable, productTakeawayAvailable, productTemperatures, regularProductStockIsAvailable, type ServingTemperature } from "../../../../lib/menu-tags";
+import { menuProductIsAvailable, productTakeawayAvailable, productTemperatures, regularProductStockIsAvailable, wineOfferHasStock, type ServingTemperature } from "../../../../lib/menu-tags";
+import { sectionFor } from "../../../../lib/menu-categories";
 import { DotykackaClient } from "../../../../lib/dotykacka/client";
 import { getDotykackaConfig } from "../../../../lib/dotykacka/config";
 
@@ -26,6 +27,18 @@ function temperatureOptionsFor<T extends object>(product: T) {
 function takeawayAvailableFor<T extends object>(product: T) {
   const tags = "tags" in product && Array.isArray(product.tags) ? product.tags as string[] : [];
   return productTakeawayAvailable(tags);
+}
+
+function hasGlassName(name: string) {
+  return /(?:^|[\s_\-/])kielisz(?:ek|ki)(?:$|[\s_\-/])/i.test(name);
+}
+
+function hasGlassTag(tags: string[]) {
+  return tags.some((tag) => ["kieliszek", "na kieliszki", "by-glass"].includes(tag.trim().toLocaleLowerCase("pl")));
+}
+
+function isByGlass(tags: string[], name: string) {
+  return hasGlassName(name) && hasGlassTag(tags);
 }
 
 function clearCookie(response: Response) {
@@ -52,7 +65,8 @@ export async function POST(request: Request) {
   const [table, products, extraProducts, questions, allowedAddons, syrupFlavorProducts, menuSyrupFlavorProducts] = await Promise.all([
     db.select({ id: waiterTables.dotykackaId }).from(waiterTables).where(and(eq(waiterTables.dotykackaId, tableId), eq(waiterTables.display, true), eq(waiterTables.deleted, false))).limit(1),
     db.select({
-      id: menuProducts.id, dotykackaId: menuProducts.dotykackaId, name: menuProducts.name, category: menuCategories.name, price: menuProducts.priceWithVat,
+      id: menuProducts.id, dotykackaId: menuProducts.dotykackaId, name: menuProducts.name, wineCode: menuProducts.wineCode,
+      category: menuCategories.name, categoryId: menuCategories.id, price: menuProducts.priceWithVat,
       tags: menuProducts.tags, stockDeduct: menuProducts.stockDeduct, stockOverdraft: menuProducts.stockOverdraft, stockQuantity: menuProducts.stockQuantity,
     }).from(menuProducts).innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId)).where(and(inArray(menuProducts.dotykackaId, productIds), eq(menuProducts.menuTagged, true), eq(menuProducts.deleted, false))),
     db.select({
@@ -66,9 +80,26 @@ export async function POST(request: Request) {
       .from(menuProducts).innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId))
       .where(and(eq(menuProducts.menuTagged, true), eq(menuProducts.display, true), eq(menuProducts.deleted, false))),
   ]);
-  const availableProducts = [...products.filter((product) => menuProductIsAvailable(
+  const requestedWineCodes = [...new Set(products.flatMap((product) => sectionFor(product.category) === "wine" && product.wineCode ? [product.wineCode] : []))];
+  const pairedWineBottles = requestedWineCodes.length ? await db.select({
+    wineCode: menuProducts.wineCode,
+    categoryId: menuCategories.id,
+    category: menuCategories.name,
+    name: menuProducts.name,
+    stockQuantity: menuProducts.stockQuantity,
+  }).from(menuProducts).innerJoin(menuCategories, eq(menuProducts.dotykackaCategoryId, menuCategories.dotykackaId)).where(and(
+    inArray(menuProducts.wineCode, requestedWineCodes), eq(menuProducts.menuTagged, true), eq(menuProducts.deleted, false),
+  )) : [];
+  const availableWineBottleKeys = new Set(pairedWineBottles.filter((product) => product.wineCode && !hasGlassName(product.name)
+    && wineOfferHasStock(sectionFor(product.category) === "wine", false, product.wineCode, product.stockQuantity))
+    .map((product) => `${product.categoryId}:${product.wineCode}`));
+  const availableMenuProducts = products.filter((product) => menuProductIsAvailable(
     product.tags, MENU_TAG, product.stockDeduct, product.stockOverdraft, product.stockQuantity,
-  )), ...extraProducts.filter((product) => regularProductStockIsAvailable(
+  ) && wineOfferHasStock(sectionFor(product.category) === "wine", hasGlassName(product.name), product.wineCode, product.stockQuantity))
+    .filter((product) => sectionFor(product.category) !== "wine" || !hasGlassName(product.name)
+      || Boolean(isByGlass(product.tags, product.name) && product.wineCode
+        && availableWineBottleKeys.has(`${product.categoryId}:${product.wineCode}`)));
+  const availableProducts = [...availableMenuProducts, ...extraProducts.filter((product) => regularProductStockIsAvailable(
     product.stockDeduct, product.stockOverdraft, product.stockQuantity,
   ))];
   if (!table[0] || availableProducts.length !== productIds.length) return Response.json({ error: "Stolik lub produkt nie jest już dostępny. Odśwież zamówienie." }, { status: 409 });

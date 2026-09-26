@@ -91,6 +91,8 @@ Ikony i fotografie naczyń wraz z ich pojemnością użytkową są przechowywane
 
 ## Wina i mocne alkohole
 
+- Wino butelkowe mające kod `WIN` albo bezpośredni stan magazynowy jest publikowane tylko przy stanie większym od zera, niezależnie od ustawienia przekroczenia stanu w Dotykačce. Wariant kieliszkowy jest dostępny wyłącznie wtedy, gdy odpowiadająca mu butelka ma dodatni stan.
+- Przygotowywane napoje z kategorii win, takie jak grzane wino, które nie mają kodu `WIN` ani własnego stanu produktu, pozostają sterowane widocznością i recepturą zamiast stanem gotowej porcji.
 - Wariant kieliszkowy wina musi jednocześnie mieć odpowiednią nazwę, tag `KIELISZEK` i wspólny kod `WIN` z butelką.
 - Aktywny wariant kieliszkowy oznacza ofertę „Dzisiaj na kieliszki”. Wyłączony wariant pozostawia zwykły napis „Butelka”; o otwarciu kolejnej butelki decyduje obsługa, nie gość.
 - Dopiero całkowity brak wariantu kieliszkowego oznacza „Tylko butelka”.

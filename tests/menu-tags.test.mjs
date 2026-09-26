@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hasTag, isIngredientInventoryCategory, isInventoryTaggedIngredient, isShelfProduct, menuProductDestinations, menuProductIsAvailable, productTakeawayAvailable, productTemperatures, regularProductStockIsAvailable, shelfHasPositiveStock, shouldManageMenuProduct, shouldSyncMenuProduct } from "../lib/menu-tags.ts";
+import { hasTag, isIngredientInventoryCategory, isInventoryTaggedIngredient, isShelfProduct, menuProductDestinations, menuProductIsAvailable, productTakeawayAvailable, productTemperatures, regularProductStockIsAvailable, shelfHasPositiveStock, shouldManageMenuProduct, shouldSyncMenuProduct, wineOfferHasStock } from "../lib/menu-tags.ts";
 
 test("recognizes the PÓŁKA tag regardless of case, whitespace or missing Polish diacritics", () => {
   assert.equal(isShelfProduct(["MENU", " PÓŁKA "]), true);
@@ -89,4 +89,15 @@ test("respects ordinary Dotykacka stock rules for waiter-only products", () => {
   assert.equal(regularProductStockIsAvailable(true, "ALLOW", "0"), true);
   assert.equal(regularProductStockIsAvailable(true, "WARN", "-1"), true);
   assert.equal(regularProductStockIsAvailable(true, "DISABLE", "0"), false);
+});
+
+test("requires positive direct stock for wine bottles without hiding prepared wine drinks", () => {
+  assert.equal(wineOfferHasStock(true, false, "WIN48", null), false);
+  assert.equal(wineOfferHasStock(true, false, "WIN02", "-5.549"), false);
+  assert.equal(wineOfferHasStock(true, false, "WIN01", "0"), false);
+  assert.equal(wineOfferHasStock(true, false, "WIN73", "3"), true);
+  assert.equal(wineOfferHasStock(true, false, null, "0"), false);
+  assert.equal(wineOfferHasStock(true, false, null, null), true);
+  assert.equal(wineOfferHasStock(true, true, "WIN02", "-7"), true);
+  assert.equal(wineOfferHasStock(false, false, null, null), true);
 });

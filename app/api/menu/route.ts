@@ -7,7 +7,7 @@ import { productImageUrl } from "../../../lib/image-import";
 import { menuProductVisibleForGuest } from "../../../lib/menu-visibility";
 import { isAlternativeCoffeeBeanGroup, isCoffeeAddonGroup } from "../../../lib/coffee-addons";
 import { isForestLifeSyrupCategory, isGenericFlavorSyrupOption } from "../../../lib/flavor-syrups";
-import { hasTag, isShelfProduct, menuProductDestinations, menuProductIsAvailable, productTemperatures, shelfHasPositiveStock } from "../../../lib/menu-tags";
+import { hasTag, isShelfProduct, menuProductDestinations, menuProductIsAvailable, productTemperatures, shelfHasPositiveStock, wineOfferHasStock } from "../../../lib/menu-tags";
 import { productAttributesEn, productAttributesPl } from "../../../lib/translation";
 import { isZeroAlcoholValue } from "../../../lib/wine-characteristics";
 import { inferredAlcoBarAttributes, inferredAlcoBarAttributesEn } from "../../../lib/alco-characteristics";
@@ -184,7 +184,8 @@ export async function GET() {
     }
     const individuallyVisibleRows = rows.filter((item) => {
       if (!item.menuTagged || item.deleted || item.categoryDisplay === false || !menuProductVisibleForGuest(item.display, item.manualHidden, item.waiterVisibilityOverride)) return false;
-      return menuProductIsAvailable(item.tags, MENU_TAG, item.stockDeduct, item.stockOverdraft, item.stockQuantity);
+      return menuProductIsAvailable(item.tags, MENU_TAG, item.stockDeduct, item.stockOverdraft, item.stockQuantity)
+        && wineOfferHasStock(sectionFor(item.category) === "wine", hasGlassName(item.name), item.wineCode, item.stockQuantity);
     });
     const availableBottleKeys = new Set(individuallyVisibleRows
       .filter((item) => item.wineCode && !hasGlassName(item.name))

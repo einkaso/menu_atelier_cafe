@@ -90,3 +90,14 @@ export function regularProductStockIsAvailable(
 ) {
   return !(stockDeduct && stockOverdraft === "DISABLE" && Number(stockQuantity ?? 0) <= 0);
 }
+
+export function wineOfferHasStock(
+  isWineCategory: boolean,
+  isGlassVariant: boolean,
+  wineCode: string | null | undefined,
+  stockQuantity: string | number | null | undefined,
+) {
+  if (!isWineCategory || isGlassVariant) return true;
+  const directWineProduct = Boolean(wineCode?.trim()) || stockQuantity !== null && stockQuantity !== undefined;
+  return !directWineProduct || Number(stockQuantity) > 0;
+}
