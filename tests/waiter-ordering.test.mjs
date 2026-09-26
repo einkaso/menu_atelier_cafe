@@ -614,10 +614,10 @@ test("shows the guest tea-detail photos directly in the waiter tea list", async 
 });
 
 test("records an auditable cash day with opening, handover, closing, and live POS checkpoints", async () => {
-  const [schema, calculations, waiterRoute, adminRoute, form, admin, snapshot, waiterClient, tipsRoute, cashStyles] = await Promise.all([
+  const [schema, calculations, waiterRoute, adminRoute, form, admin, snapshot, waiterClient, tipsRoute, cashStyles, cashSequenceMigration] = await Promise.all([
     read("db/schema.ts"), read("lib/waiter-settlement.ts"), read("app/api/waiter/settlements/route.ts"),
     read("app/api/admin/waiter/settlements/route.ts"), read("app/kelner/settlement-form.tsx"), read("app/admin/settlements/settlements-admin-client.tsx"),
-    read("lib/dotykacka/cash-snapshot.ts"), read("app/kelner/waiter-client.tsx"), read("app/api/waiter/tips/route.ts"), read("app/kelner/cash-day.css"),
+    read("lib/dotykacka/cash-snapshot.ts"), read("app/kelner/waiter-client.tsx"), read("app/api/waiter/tips/route.ts"), read("app/kelner/cash-day.css"), read("drizzle/0073_cash_day_operational_sequence.sql"),
   ]);
   assert.match(schema, /waiterCashDays = pgTable\("waiter_cash_days"/);
   assert.match(schema, /waiterSettlements = pgTable\("waiter_settlements"/);
@@ -667,11 +667,21 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(waiterRoute, /tips: action === "HANDOVER" \? \[\] : body\.tips/);
   assert.match(waiterRoute, /const totals = \{ \.\.\.intervalTotals, terminalDifference: 0 \}/);
   assert.doesNotMatch(waiterRoute, /fullDayTotals/);
-  assert.match(waiterRoute, /carryoverDeclaredByDotykackaId: previousClose\[0\]\?\.closedByDotykackaId/);
+  assert.match(waiterRoute, /carryoverDeclaredByDotykackaId: previousClose\?\.closedByDotykackaId/);
+  assert.match(waiterRoute, /orderBy\(desc\(waiterCashDays\.closedAt\), desc\(waiterCashDays\.id\)\)/);
+  assert.match(waiterRoute, /businessDate: day\.businessDate/);
+  assert.match(waiterRoute, /finalCashLeft: centsToMoney\(countedCash\)/);
+  assert.match(waiterRoute, /pg_advisory_xact_lock/);
+  assert.doesNotMatch(snapshot, /businessDate !== currentBusinessDate/);
+  assert.match(schema, /waiter_cash_days_one_open_per_desk_uq/);
+  assert.match(cashSequenceMigration, /WHERE "status" = 'OPEN'/);
+  assert.match(cashSequenceMigration, /"final_cash_left" = closing\."counted_cash"/);
+  assert.match(cashSequenceMigration, /"opening_difference" = day\."counted_opening_cash" - carryover\."final_cash_left"/);
   assert.match(form, /Pełna kwota w kasie teraz/);
   assert.match(form, /System oczekuje teraz/);
   assert.match(form, /Wpisz wyłącznie pełną kwotę, którą fizycznie policzono w kasie/);
-  assert.match(form, /Sprzedaż gotówkowa całego dnia/);
+  assert.match(form, /Sprzedaż gotówkowa całego cyklu/);
+  assert.match(waiterRoute, /const cycleTotals = report\.snapshot && day \? snapshotDelta\(report\.snapshot, snapshotFromDay\(day\)\)/);
   assert.match(form, /function changeCashLeft\(value: string\)[^]*setEnvelopeCash\(moneyInput\(cents\(countedCash\) - cents\(value\)\)\)/);
   assert.match(form, /function changeSafeCash\(value: string\)[^]*setCashLeft\(moneyInput\(cents\(countedCash\) - cents\(value\)\)\)/);
   assert.match(form, /Do sejfu w bezpiecznej kopercie/);

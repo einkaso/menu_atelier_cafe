@@ -58,7 +58,7 @@ type Workflow = {
   snapshotError: string | null;
   baseline: { cash: string; snapshot: Snapshot | null };
   interval: { posCash: string; posCard: string; expectedCash: string };
-  fullDay: {
+  fullCycle: {
     openingCash: string;
     posCash: string;
     posCard: string;
@@ -439,7 +439,7 @@ export default function SettlementForm({
       if (!response.ok || !body.expense) setError(body.error ?? "Nie udało się zapisać wydatku.");
       else {
         setExpenses((rows) => rows.map((row) => row.key === item.key ? { id: body.expense!.id, key: `cash-expense-${body.expense!.id}`, description: body.expense!.description, amount: body.expense!.amount, receiptNumber: body.expense!.receiptNumber ?? "", receiptIncluded: body.expense!.receiptIncluded, saved: true, saving: false } : row));
-        setMessage("Wydatek został zapisany w bieżącym dniu kasowym.");
+        setMessage("Wydatek został zapisany w bieżącym cyklu kasowym.");
       }
     } catch {
       setError("Nie udało się połączyć z modułem rozliczeń.");
@@ -479,7 +479,7 @@ export default function SettlementForm({
       if (!response.ok || !body.deposit) setError(body.error ?? "Nie udało się zapisać wpłaty do kasy.");
       else {
         setDeposits((rows) => rows.map((row) => row.key === item.key ? { id: body.deposit!.id, key: `cash-deposit-${body.deposit!.id}`, contributor: body.deposit!.contributor, amount: body.deposit!.amount, note: body.deposit!.note ?? "", saved: true, saving: false } : row));
-        setMessage("Wpłata drobnych została dodana do bieżącego dnia kasowego.");
+        setMessage("Wpłata drobnych została dodana do bieżącego cyklu kasowego.");
       }
     } catch {
       setError("Nie udało się połączyć z modułem rozliczeń.");
@@ -561,7 +561,7 @@ export default function SettlementForm({
       } else if (requestedAction === "OPEN") {
         setCountedCash("");
         setDiscrepancyNote("");
-        setMessage("Dzień został otwarty. Możesz rozpocząć pracę.");
+        setMessage("Kasa została otwarta. Możesz rozpocząć pracę.");
         await load();
       } else if (Number.isInteger(body.settlementId)) {
         setSubmitted({
@@ -591,13 +591,13 @@ export default function SettlementForm({
           <p>
             {submitted.action === "HANDOVER"
               ? "Stan kasy został zapisany. Teraz zmiennik loguje się swoim PIN-em."
-              : "Dzień został zamknięty, a saldo na jutro zapisane."}
+              : "Cykl kasowy został zamknięty, a pełny policzony stan zapisany do kolejnego otwarcia."}
           </p>
           <div>
             <SummaryAmount label="Policzona gotówka" value={cents(countedCash)} />
             <SummaryAmount label="Dotykačka · gotówka" value={cents(submitted.posCash)} />
             <SummaryAmount label="Dotykačka · karta" value={cents(submitted.posCard)} />
-            {submitted.action === "CLOSE" && <SummaryAmount label="Pozostaje na jutro" value={cents(cashLeft)} />}
+            {submitted.action === "CLOSE" && <SummaryAmount label="Pełny stan do kolejnego otwarcia" value={cents(countedCash)} />}
           </div>
           <p className="cash-final-snapshot">Dane z Dotykački pobrano o {clock(submitted.snapshotAt)}.</p>
           <button onClick={onLogout}>{submitted.action === "HANDOVER" ? "Przekazanie zapisane — zakończ i wyloguj" : "Zamknięcie zapisane — zakończ i wyloguj"}</button>
@@ -612,7 +612,7 @@ export default function SettlementForm({
 
       <section className="waiter-settlement cash-simple">
         <div className="cash-simple-title">
-          <span>{workflow?.businessDate ?? "DZIEŃ KASOWY"}</span>
+          <span>{workflow?.day ? `CYKL OTWARTY ${workflow.day.businessDate}` : workflow?.businessDate ?? "CYKL KASOWY"}</span>
           <h1>
             {openingMode
               ? "Otwórz kasę"
@@ -623,8 +623,8 @@ export default function SettlementForm({
           <CurrentDateCalendar />
           <p>
             {openingMode
-              ? "Przelicz pieniądze, które zostały w kasie po nocy."
-              : "Wybierz przekazanie zmiany albo zamknięcie całego dnia."}
+              ? "Przelicz pieniądze po poprzednim zamknięciu. System przenosi pełny policzony stan."
+              : "Wybierz przekazanie zmiany albo zamknięcie cyklu kasowego. Cykl może przechodzić przez północ."}
           </p>
         </div>
 
@@ -642,10 +642,10 @@ export default function SettlementForm({
           <section className="cash-simple-card cash-closed">
             <b>✓</b>
             <div>
-              <h2>Dzień jest już zamknięty</h2>
+                  <h2>Cykl kasowy jest już zamknięty</h2>
               <p>{workflow.day.closedByName} · {time(workflow.day.closedAt)}</p>
             </div>
-            <strong>{money(workflow.day.finalCashLeft)} zł na jutro</strong>
+            <strong>{money(workflow.day.finalCashLeft)} zł do kolejnego otwarcia</strong>
           </section>
         ) : (
           <>
@@ -670,8 +670,8 @@ export default function SettlementForm({
                   onClick={() => setAction("CLOSE")}
                 >
                   <span>Etap 3</span>
-                  <b>Zamknięcie dnia</b>
-                  <small>Policz i podziel gotówkę na jutro oraz kopertę.</small>
+                  <b>Zamknięcie cyklu kasowego</b>
+                  <small>Policz pełny stan i zapisz podział na kasę oraz kopertę.</small>
                 </button>
               </section>
 
@@ -770,7 +770,7 @@ export default function SettlementForm({
               <header>
                 <span>KROK 1</span>
                 <div>
-                  <h2>{openingMode ? "Sprawdź saldo z wczoraj" : "Sprawdź wyliczenie systemu"}</h2>
+                  <h2>{openingMode ? "Sprawdź saldo z poprzedniego zamknięcia" : "Sprawdź wyliczenie systemu"}</h2>
                   <p>
                     {openingMode
                       ? "Tyle powinno fizycznie zostać w kasie."
@@ -782,10 +782,10 @@ export default function SettlementForm({
 
               {openingMode ? (
                 <div className="cash-opening-summary">
-                  <SummaryAmount label="Powinno zostać po nocy" value={previousCash} highlight />
+                  <SummaryAmount label="Pełny stan z poprzedniego zamknięcia" value={previousCash} highlight />
                   <div className="cash-opening-person">
-                    <span>Ostatnio zamknął</span>
-                    <b>{workflow?.previousClose?.closedByName ?? "Brak wcześniejszego dnia"}</b>
+                    <span>Ostatnie zamknięcie</span>
+                    <b>{workflow?.previousClose?.closedByName ?? "Brak wcześniejszego zamknięcia"}</b>
                     <small>{time(workflow?.previousClose?.closedAt)}</small>
                   </div>
                 </div>
@@ -951,7 +951,7 @@ export default function SettlementForm({
                       {totals.cashToCard > 0 ? ` − ${money(totals.cashToCard)} zł korekt na kartę` : ""}
                       {totals.expensesTotal > 0 ? ` − ${money(totals.expensesTotal)} zł wypłat` : ""}
                       {totals.depositsTotal > 0 ? ` + ${money(totals.depositsTotal)} zł wpłat` : ""}
-                      {action === "CLOSE" ? ` · Sprzedaż gotówkowa całego dnia: ${money(cents(workflow?.fullDay.posCash))} zł` : ""}
+                      {action === "CLOSE" ? ` · Sprzedaż gotówkowa całego cyklu: ${money(cents(workflow?.fullCycle.posCash))} zł` : ""}
                     </small>
                     <button type="button" className="cash-refresh cash-expected-refresh" onClick={() => void load()}>↻ Odśwież</button>
                   </div>
@@ -984,7 +984,7 @@ export default function SettlementForm({
                     value={discrepancyNote}
                     maxLength={1000}
                     onChange={(event) => setDiscrepancyNote(event.target.value)}
-                    placeholder="Np. pomyłka przy wydawaniu reszty albo inny stan pozostawiony po nocy"
+                    placeholder="Np. pomyłka przy wydawaniu reszty albo inny stan od poprzedniego zamknięcia"
                   />
                   <small>Bez wyjaśnienia nie można zapisać różnicy.</small>
                 </label>
@@ -1004,7 +1004,7 @@ export default function SettlementForm({
                   Zostaw w kasie tyle, ile było przy otwarciu
                 </button>
                 <div className="cash-split-fields">
-                  <MoneyField label="Zostaje w kasie na jutro" value={cashLeft} onChange={changeCashLeft} hint={splitAnchor === "SAFE" && cashLeft !== "" ? "Wyliczono automatycznie" : undefined} />
+                  <MoneyField label="Fizycznie zostaje w szufladzie" value={cashLeft} onChange={changeCashLeft} hint={splitAnchor === "SAFE" && cashLeft !== "" ? "Wyliczono automatycznie" : undefined} />
                   <MoneyField label="Do sejfu w bezpiecznej kopercie" value={envelopeCash} onChange={changeSafeCash} hint={splitAnchor === "CASH_LEFT" && envelopeCash !== "" ? "Wyliczono automatycznie" : undefined} />
                   <label>
                     Numer bezpiecznej koperty
@@ -1035,16 +1035,16 @@ export default function SettlementForm({
                     ? "Potwierdź otwarcie"
                     : action === "HANDOVER"
                       ? "Przekaż zmianę"
-                      : "Zamknij dzień"}
+                      : "Zamknij cykl"}
               </button>
             </section>
 
             {workflow?.day && (
               <details className="cash-history">
-                <summary>Historia dzisiejszej kasy ({workflow.checkpoints.length + 1})</summary>
+                <summary>Historia bieżącego cyklu kasy ({workflow.checkpoints.length + 1})</summary>
                 <article>
                   <div>
-                    <b>Otwarcie dnia</b>
+                    <b>Otwarcie kasy</b>
                     <span>{workflow.day.openedByName} · {time(workflow.day.openedAt)}</span>
                   </div>
                   <strong>{money(workflow.day.countedOpeningCash)} zł</strong>
@@ -1052,7 +1052,7 @@ export default function SettlementForm({
                 {workflow.checkpoints.map((item) => (
                   <article key={item.id}>
                     <div>
-                      <b>{item.checkpointType === "HANDOVER" ? "Przekazanie zmiany" : "Zamknięcie dnia"}</b>
+                      <b>{item.checkpointType === "HANDOVER" ? "Przekazanie zmiany" : "Zamknięcie cyklu kasowego"}</b>
                       <span>{item.employeeName} · {time(item.submittedAt)}</span>
                     </div>
                     <strong>{money(item.countedCash)} zł</strong>

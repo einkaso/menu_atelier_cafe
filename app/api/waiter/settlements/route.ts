@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { waiterCashDays, waiterCashDeposits, waiterCashExpenses, waiterEmployees, waiterSettlementEvents, waiterSettlements, waiterTipAllocations } from "../../../../db/schema";
 import { CASH_DESK_NAME, currentBusinessDate, snapshotDelta, type CashSnapshot } from "../../../../lib/cash-day";
@@ -71,13 +71,12 @@ export async function GET(request: Request) {
   if (!employee) return Response.json({ error: "Sesja pracownika wygasła." }, { status: 401 });
   const db = getDb();
   const businessDate = currentBusinessDate();
-  const [employees, openDays, todayDays, previousClose, recent] = await Promise.all([
+  const [employees, openDays, previousClose, recent] = await Promise.all([
     db.select({ dotykackaId: waiterEmployees.dotykackaId, name: waiterEmployees.name })
       .from(waiterEmployees).where(and(eq(waiterEmployees.enabled, true), eq(waiterEmployees.deleted, false)))
       .orderBy(waiterEmployees.name),
-    db.select().from(waiterCashDays).where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).orderBy(desc(waiterCashDays.businessDate)).limit(1),
-    db.select().from(waiterCashDays).where(and(eq(waiterCashDays.businessDate, businessDate), eq(waiterCashDays.cashDesk, CASH_DESK_NAME))).limit(1),
-    db.select().from(waiterCashDays).where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "CLOSED"), lt(waiterCashDays.businessDate, businessDate))).orderBy(desc(waiterCashDays.businessDate), desc(waiterCashDays.closedAt)).limit(1),
+    db.select().from(waiterCashDays).where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).orderBy(desc(waiterCashDays.openedAt), desc(waiterCashDays.id)).limit(1),
+    db.select().from(waiterCashDays).where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "CLOSED"))).orderBy(desc(waiterCashDays.closedAt), desc(waiterCashDays.id)).limit(1),
     db.select({
       id: waiterSettlements.id, businessDate: waiterSettlements.businessDate, shiftName: waiterSettlements.shiftName,
       checkpointType: waiterSettlements.checkpointType, cashDesk: waiterSettlements.cashDesk, status: waiterSettlements.status,
@@ -87,7 +86,7 @@ export async function GET(request: Request) {
     }).from(waiterSettlements).where(eq(waiterSettlements.employeeDotykackaId, employee.dotykackaId))
       .orderBy(desc(waiterSettlements.submittedAt)).limit(10),
   ]);
-  const day = openDays[0] ?? todayDays[0] ?? null;
+  const day = openDays[0] ?? null;
   const [checkpoints, pendingExpenses, pendingDeposits] = day ? await Promise.all([
     db.select().from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id)).orderBy(waiterSettlements.submittedAt),
     db.select().from(waiterCashExpenses).where(and(eq(waiterCashExpenses.cashDayId, day.id), eq(waiterCashExpenses.status, "PENDING"))).orderBy(waiterCashExpenses.createdAt, waiterCashExpenses.id),
@@ -98,10 +97,10 @@ export async function GET(request: Request) {
   const baselineSnapshot = day ? (latest ? snapshotFromSettlement(latest) : snapshotFromDay(day)) : null;
   const baselineCash = day ? numeric(latest?.countedCash ?? day.countedOpeningCash) : numeric(previousClose[0]?.finalCashLeft);
   const delta = report.snapshot && baselineSnapshot ? snapshotDelta(report.snapshot, baselineSnapshot) : { cash: 0, card: 0 };
-  // The full-day view must always show the complete live Dotykacka totals for the
-  // business day. The opening snapshot is only a checkpoint for interval deltas;
-  // subtracting it here hid sales made before this module was opened.
-  const dayTotals = report.snapshot && day ? { cash: report.snapshot.cash, card: report.snapshot.card } : { cash: 0, card: 0 };
+  // A cash cycle is operational, not calendar-based. Subtracting the opening
+  // snapshot keeps its totals correct across midnight and across multiple cycles
+  // opened on the same calendar date.
+  const cycleTotals = report.snapshot && day ? snapshotDelta(report.snapshot, snapshotFromDay(day)) : { cash: 0, card: 0 };
   const dayOpeningCash = numeric(day?.countedOpeningCash);
   return Response.json({
     employee, employees, recent, businessDate, cashDesk: CASH_DESK_NAME,
@@ -110,11 +109,11 @@ export async function GET(request: Request) {
     snapshot: report.snapshot, snapshotError: report.snapshotError,
     baseline: { cash: centsToMoney(baselineCash), snapshot: baselineSnapshot },
     interval: { posCash: centsToMoney(delta.cash), posCard: centsToMoney(delta.card), expectedCash: centsToMoney(baselineCash + delta.cash) },
-    fullDay: {
+    fullCycle: {
       openingCash: centsToMoney(dayOpeningCash),
-      posCash: centsToMoney(dayTotals.cash),
-      posCard: centsToMoney(dayTotals.card),
-      expectedCash: centsToMoney(dayOpeningCash + dayTotals.cash),
+      posCash: centsToMoney(cycleTotals.cash),
+      posCard: centsToMoney(cycleTotals.card),
+      expectedCash: centsToMoney(dayOpeningCash + cycleTotals.cash),
     },
   });
 }
@@ -156,8 +155,8 @@ export async function POST(request: Request) {
   const businessDate = currentBusinessDate();
   const db = getDb();
   if (["SAVE_EXPENSE", "DELETE_EXPENSE"].includes(requestedAction)) {
-    const [day] = await db.select({ id: waiterCashDays.id }).from(waiterCashDays).where(and(eq(waiterCashDays.businessDate, businessDate), eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).limit(1);
-    if (!day) return Response.json({ error: "Najpierw otwórz dzisiejszy dzień kasowy." }, { status: 409 });
+    const [day] = await db.select({ id: waiterCashDays.id }).from(waiterCashDays).where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).orderBy(desc(waiterCashDays.openedAt), desc(waiterCashDays.id)).limit(1);
+    if (!day) return Response.json({ error: "Najpierw otwórz kasę." }, { status: 409 });
     const expenseId = Number(body.expenseId);
     if (requestedAction === "DELETE_EXPENSE") {
       if (!Number.isInteger(expenseId) || expenseId < 1) return Response.json({ error: "Nieprawidłowy wydatek." }, { status: 400 });
@@ -179,8 +178,8 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, expense: saved }, { status: 201 });
   }
   if (["SAVE_DEPOSIT", "DELETE_DEPOSIT"].includes(requestedAction)) {
-    const [day] = await db.select({ id: waiterCashDays.id }).from(waiterCashDays).where(and(eq(waiterCashDays.businessDate, businessDate), eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).limit(1);
-    if (!day) return Response.json({ error: "Najpierw otwórz dzisiejszy dzień kasowy." }, { status: 409 });
+    const [day] = await db.select({ id: waiterCashDays.id }).from(waiterCashDays).where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).orderBy(desc(waiterCashDays.openedAt), desc(waiterCashDays.id)).limit(1);
+    if (!day) return Response.json({ error: "Najpierw otwórz kasę." }, { status: 409 });
     const depositId = Number(body.depositId);
     if (requestedAction === "DELETE_DEPOSIT") {
       if (!Number.isInteger(depositId) || depositId < 1) return Response.json({ error: "Nieprawidłowa wpłata." }, { status: 400 });
@@ -202,7 +201,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, deposit: saved }, { status: 201 });
   }
   const action = requestedAction as CashAction;
-  if (!["OPEN", "HANDOVER", "CLOSE"].includes(action)) return Response.json({ error: "Wybierz otwarcie, przekazanie albo zamknięcie dnia." }, { status: 400 });
+  if (!["OPEN", "HANDOVER", "CLOSE"].includes(action)) return Response.json({ error: "Wybierz otwarcie, przekazanie albo zamknięcie kasy." }, { status: 400 });
   const idempotencyKey = textValue(body.idempotencyKey, 80);
   if (action !== "OPEN" && !/^[a-zA-Z0-9-]{16,80}$/.test(idempotencyKey)) return Response.json({ error: "Brak bezpiecznego identyfikatora operacji. Odśwież ekran i spróbuj ponownie." }, { status: 400 });
   if (action !== "OPEN") {
@@ -229,7 +228,12 @@ export async function POST(request: Request) {
   if (countedCash == null) return Response.json({ error: "Podaj fizycznie policzoną gotówkę." }, { status: 400 });
   const discrepancyNote = textValue(body.discrepancyNote, 1000);
   const employeeNote = textValue(body.employeeNote, 1000);
-  const snapshotResult = await safeSnapshot(businessDate);
+  const [activeDay] = action === "OPEN" ? [] : await db.select().from(waiterCashDays)
+    .where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN")))
+    .orderBy(desc(waiterCashDays.openedAt), desc(waiterCashDays.id)).limit(1);
+  if (action !== "OPEN" && !activeDay) return Response.json({ error: "Najpierw otwórz kasę." }, { status: 409 });
+  const snapshotBusinessDate = activeDay?.businessDate ?? businessDate;
+  const snapshotResult = await safeSnapshot(snapshotBusinessDate);
   if (!snapshotResult.snapshot) return Response.json({ error: `Nie można zapisać operacji bez aktualnego raportu Dotykački. ${snapshotResult.snapshotError ?? ""}`.trim() }, { status: 502 });
   const snapshot = snapshotResult.snapshot;
   const displayedCash = Number(body.snapshotCashCents);
@@ -246,35 +250,45 @@ export async function POST(request: Request) {
   }
 
   if (action === "OPEN") {
-    const [alreadyOpen, todayDay, previousClose] = await Promise.all([
-      db.select({ id: waiterCashDays.id, businessDate: waiterCashDays.businessDate }).from(waiterCashDays).where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).limit(1),
-      db.select({ id: waiterCashDays.id }).from(waiterCashDays).where(and(eq(waiterCashDays.businessDate, businessDate), eq(waiterCashDays.cashDesk, CASH_DESK_NAME))).limit(1),
-      db.select().from(waiterCashDays).where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "CLOSED"), lt(waiterCashDays.businessDate, businessDate))).orderBy(desc(waiterCashDays.businessDate), desc(waiterCashDays.closedAt)).limit(1),
-    ]);
-    if (alreadyOpen[0]) return Response.json({ error: `Dzień ${alreadyOpen[0].businessDate} jest już otwarty.` }, { status: 409 });
-    if (todayDay[0]) return Response.json({ error: "Dzisiejszy dzień kasowy został już utworzony." }, { status: 409 });
-    const expectedOpening = numeric(previousClose[0]?.finalCashLeft);
-    const difference = countedCash - expectedOpening;
-    if (difference !== 0 && !discrepancyNote) return Response.json({ error: "Wyjaśnij różnicę pomiędzy kwotą pozostawioną poprzedniego dnia a stanem fizycznym." }, { status: 400 });
     try {
-      const [saved] = await db.insert(waiterCashDays).values({
-        businessDate, cashDesk: CASH_DESK_NAME, status: "OPEN",
-        expectedOpeningCash: centsToMoney(expectedOpening), countedOpeningCash: centsToMoney(countedCash), openingDifference: centsToMoney(difference), openingNote: discrepancyNote || null,
-        openingPosCash: centsToMoney(snapshot.cash), openingPosCard: centsToMoney(snapshot.card), openingSnapshotAt: new Date(snapshot.capturedAt), openingSnapshotFrom: new Date(snapshot.periodFrom), openingSnapshotDetails: snapshot.payments,
-        carryoverCashDayId: previousClose[0]?.id ?? null,
-        carryoverDeclaredByDotykackaId: previousClose[0]?.closedByDotykackaId ?? null,
-        carryoverDeclaredByName: previousClose[0]?.closedByName ?? null,
-        carryoverDeclaredAt: previousClose[0]?.closedAt ?? null,
-        openedByDotykackaId: employee.dotykackaId, openedByName: employee.name,
-      }).returning({ id: waiterCashDays.id });
+      const saved = await db.transaction(async (tx) => {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`waiter-cash-day:${CASH_DESK_NAME}`}))`);
+        const [alreadyOpen] = await tx.select({ id: waiterCashDays.id }).from(waiterCashDays)
+          .where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).limit(1);
+        if (alreadyOpen) throw new Error("CASH_DAY_ALREADY_OPEN");
+        const [previousClose] = await tx.select().from(waiterCashDays)
+          .where(and(eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "CLOSED")))
+          .orderBy(desc(waiterCashDays.closedAt), desc(waiterCashDays.id)).limit(1);
+        const expectedOpening = numeric(previousClose?.finalCashLeft);
+        const difference = countedCash - expectedOpening;
+        if (difference !== 0 && !discrepancyNote) throw new Error("OPENING_DIFFERENCE_REQUIRES_NOTE");
+        const [created] = await tx.insert(waiterCashDays).values({
+          businessDate, cashDesk: CASH_DESK_NAME, status: "OPEN",
+          expectedOpeningCash: centsToMoney(expectedOpening), countedOpeningCash: centsToMoney(countedCash), openingDifference: centsToMoney(difference), openingNote: discrepancyNote || null,
+          openingPosCash: centsToMoney(snapshot.cash), openingPosCard: centsToMoney(snapshot.card), openingSnapshotAt: new Date(snapshot.capturedAt), openingSnapshotFrom: new Date(snapshot.periodFrom), openingSnapshotDetails: snapshot.payments,
+          carryoverCashDayId: previousClose?.id ?? null,
+          carryoverDeclaredByDotykackaId: previousClose?.closedByDotykackaId ?? null,
+          carryoverDeclaredByName: previousClose?.closedByName ?? null,
+          carryoverDeclaredAt: previousClose?.closedAt ?? null,
+          openedByDotykackaId: employee.dotykackaId, openedByName: employee.name,
+        }).returning({ id: waiterCashDays.id });
+        return created;
+      });
       return Response.json({ status: "ok", action, cashDayId: saved.id, sessionClosed: false, snapshotAt: snapshot.capturedAt });
-    } catch {
-      return Response.json({ error: "Dzisiejszy dzień kasowy został już otwarty przez inną osobę." }, { status: 409 });
+    } catch (error) {
+      if (error instanceof Error && error.message === "OPENING_DIFFERENCE_REQUIRES_NOTE") {
+        return Response.json({ error: "Wyjaśnij różnicę pomiędzy kwotą pozostawioną po poprzednim zamknięciu a stanem fizycznym." }, { status: 400 });
+      }
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+      if ((error instanceof Error && error.message === "CASH_DAY_ALREADY_OPEN") || code === "23505") {
+        return Response.json({ error: "Kasa została już otwarta przez inną osobę." }, { status: 409 });
+      }
+      throw error;
     }
   }
 
-  const [day] = await db.select().from(waiterCashDays).where(and(eq(waiterCashDays.businessDate, businessDate), eq(waiterCashDays.cashDesk, CASH_DESK_NAME), eq(waiterCashDays.status, "OPEN"))).limit(1);
-  if (!day) return Response.json({ error: "Najpierw otwórz dzisiejszy dzień kasowy." }, { status: 409 });
+  const day = activeDay;
+  if (!day) return Response.json({ error: "Najpierw otwórz kasę." }, { status: 409 });
   const checkpoints = await db.select().from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id)).orderBy(waiterSettlements.submittedAt, waiterSettlements.id);
   const latest = checkpoints.at(-1);
   const [pendingExpenseRows, pendingDepositRows] = await Promise.all([
@@ -330,9 +344,9 @@ export async function POST(request: Request) {
       const currentDepositRows = await tx.select({ id: waiterCashDeposits.id, updatedAt: waiterCashDeposits.updatedAt }).from(waiterCashDeposits).where(and(eq(waiterCashDeposits.cashDayId, day.id), eq(waiterCashDeposits.status, "PENDING"))).orderBy(waiterCashDeposits.createdAt, waiterCashDeposits.id);
       if (currentDepositRows.map((item) => `${item.id}:${item.updatedAt.getTime()}`).join("|") !== depositFingerprint) throw new Error("STALE_CASH_DAY");
       const checkpointNumber = (await tx.select({ id: waiterSettlements.id }).from(waiterSettlements).where(eq(waiterSettlements.cashDayId, day.id))).length + 1;
-      const shiftName = action === "HANDOVER" ? `Przekazanie zmiany #${checkpointNumber}` : "Zamknięcie dnia";
+      const shiftName = action === "HANDOVER" ? `Przekazanie zmiany #${checkpointNumber}` : "Zamknięcie cyklu kasowego";
       const [saved] = await tx.insert(waiterSettlements).values({
-        externalId, businessDate, shiftName, cashDesk: CASH_DESK_NAME, cashDayId: day.id, checkpointType: action, priorSettlementId: latest?.id ?? null,
+        externalId, businessDate: day.businessDate, shiftName, cashDesk: CASH_DESK_NAME, cashDayId: day.id, checkpointType: action, priorSettlementId: latest?.id ?? null,
         employeeDotykackaId: employee.dotykackaId, employeeName: employee.name,
         openingCash: centsToMoney(baselineCash), posCash: centsToMoney(posDelta.cash), posCard: centsToMoney(posDelta.card), terminalCard: centsToMoney(terminalCard),
         countedCash: centsToMoney(countedCash), cashLeft: centsToMoney(closeCashLeft), envelopeCash: centsToMoney(envelopeCash), envelopeNumber: envelopeNumber || null,
@@ -347,7 +361,7 @@ export async function POST(request: Request) {
       if (pendingExpenseRows.length) await tx.update(waiterCashExpenses).set({ settlementId: saved.id, status: "SETTLED", settledAt: new Date(), updatedAt: new Date() }).where(inArray(waiterCashExpenses.id, pendingExpenseRows.map((item) => item.id)));
       if (pendingDepositRows.length) await tx.update(waiterCashDeposits).set({ settlementId: saved.id, status: "SETTLED", settledAt: new Date(), updatedAt: new Date() }).where(inArray(waiterCashDeposits.id, pendingDepositRows.map((item) => item.id)));
       await tx.insert(waiterSettlementEvents).values({ settlementId: saved.id, actorType: "EMPLOYEE", actorId: employee.dotykackaId, action: action === "HANDOVER" ? "HANDOVER_SUBMITTED" : "CLOSING_SUBMITTED", details: { externalId, cashDayId: day.id, snapshotAt: snapshot.capturedAt } });
-      if (action === "CLOSE") await tx.update(waiterCashDays).set({ status: "CLOSED", finalCashLeft: centsToMoney(closeCashLeft), closedByDotykackaId: employee.dotykackaId, closedByName: employee.name, closedAt: new Date(), updatedAt: new Date() }).where(eq(waiterCashDays.id, day.id));
+      if (action === "CLOSE") await tx.update(waiterCashDays).set({ status: "CLOSED", finalCashLeft: centsToMoney(countedCash), closedByDotykackaId: employee.dotykackaId, closedByName: employee.name, closedAt: new Date(), updatedAt: new Date() }).where(eq(waiterCashDays.id, day.id));
       return saved.id;
     });
     return Response.json({

@@ -705,7 +705,8 @@ export const waiterCashDays = pgTable("waiter_cash_days", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  uniqueIndex("waiter_cash_days_date_desk_uq").on(table.businessDate, table.cashDesk),
+  index("waiter_cash_days_date_desk_idx").on(table.businessDate, table.cashDesk),
+  uniqueIndex("waiter_cash_days_one_open_per_desk_uq").on(table.cashDesk).where(sql`${table.status} = 'OPEN'`),
   index("waiter_cash_days_status_idx").on(table.status),
 ]);
 

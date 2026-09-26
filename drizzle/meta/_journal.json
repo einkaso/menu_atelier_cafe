@@ -512,6 +512,13 @@
       "when": 1790353800000,
       "tag": "0072_lighting_scenes",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1790438400000,
+      "tag": "0073_cash_day_operational_sequence",
+      "breakpoints": true
     }
   ]
 }

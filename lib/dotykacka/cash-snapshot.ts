@@ -1,13 +1,10 @@
 import "server-only";
-import { businessDayStart, currentBusinessDate, reportPaymentTotals, type CashSnapshot } from "../cash-day";
+import { businessDayStart, reportPaymentTotals, type CashSnapshot } from "../cash-day";
 import { DotykackaClient } from "./client";
 import { getDotykackaConfig } from "./config";
 
 export async function fetchCashSnapshot(businessDate: string): Promise<CashSnapshot> {
   const capturedAt = new Date();
-  if (businessDate !== currentBusinessDate(capturedAt)) {
-    throw new Error("Migawkę sprzedaży można pobrać tylko dla bieżącego dnia operacyjnego.");
-  }
   const config = await getDotykackaConfig();
   if (!config.branchId) throw new Error("W konfiguracji Dotykački nie wybrano oddziału.");
   const periodFrom = businessDayStart(businessDate);
