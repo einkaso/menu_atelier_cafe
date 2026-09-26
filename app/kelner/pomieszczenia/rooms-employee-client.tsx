@@ -46,7 +46,7 @@ export default function RoomsEmployeeClient() {
 
   return <main className="waiter-rooms-page">
     <WaiterSectionHeader eyebrow="Dostęp do lokalu" title="Pomieszczenia" employeeName={data?.employeeName}/>
-    <section className="waiter-rooms-intro"><span>TTLOCK · STEROWANIE PRZEZ BRAMKĘ</span><h1>Wybierz pomieszczenie</h1><p>Stan zamków odświeża się automatycznie. Przed wykonaniem polecenia system zawsze poprosi Cię o potwierdzenie.</p></section>
+    <section className="waiter-rooms-intro"><span>TTLOCK · STEROWANIE PRZEZ BRAMKĘ</span><h1>Wybierz pomieszczenie</h1><p>Stan zamków odświeża się automatycznie.</p></section>
     {error && <div className="waiter-rooms-message is-error" role="alert">{error}</div>}
     {forbidden && <section className="waiter-rooms-empty"><strong>Brak uprawnienia</strong><p>Administrator musi nadać Ci osobne uprawnienie „Pomieszczenia”.</p></section>}
     {!forbidden && data?.configured === false && <section className="waiter-rooms-empty"><strong>System zamków nie jest jeszcze skonfigurowany</strong><p>Administrator musi połączyć konto TTLock na serwerze.</p></section>}
