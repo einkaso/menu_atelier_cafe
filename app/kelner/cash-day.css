@@ -83,22 +83,23 @@
   align-content: center;
   gap: 6px;
   padding: 20px;
-  border: 2px solid var(--w-line);
-  background: #fff;
-  color: var(--w-navy);
+  border: 2px solid var(--w-navy);
+  background: var(--w-navy);
+  color: #fff;
   text-align: left;
   cursor: pointer;
 }
 
 .cash-operation-choice button.is-active {
-  border-color: var(--w-navy);
-  background: var(--w-navy);
-  color: #fff;
+  border-color: #8eb6a5;
+  background: #fff;
+  color: var(--w-navy);
 }
 
 .cash-operation-choice button.is-complete {
   border-color: #8eb6a5;
-  background: #edf6f1;
+  background: var(--w-navy);
+  color: #fff;
 }
 
 .cash-operation-choice button:disabled { cursor: default; opacity: 1; }
@@ -116,12 +117,12 @@
 }
 
 .cash-operation-choice small {
-  color: #718286;
+  color: #bfd0d2;
   font-size: .7rem;
   line-height: 1.45;
 }
 
-.cash-operation-choice .is-active small { color: #bfd0d2; }
+.cash-operation-choice .is-active small { color: #718286; }
 
 .cash-simple-card {
   margin-bottom: 16px;

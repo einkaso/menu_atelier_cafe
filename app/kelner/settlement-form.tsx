@@ -650,7 +650,7 @@ export default function SettlementForm({
         ) : (
           <>
             <section className="cash-operation-choice cash-stage-cards" aria-label="Etapy prowadzenia kasy">
-                <button className={openingMode ? "is-active" : "is-complete"} disabled={!openingMode}>
+                <button className={openingMode ? "is-active" : "is-complete"} disabled={!openingMode} aria-current={openingMode ? "step" : undefined}>
                   <span>Etap 1</span>
                   <b>Otwarcie kasy</b>
                   <small>{openingMode ? "Policz i potwierdź saldo pozostawione przez poprzednią zmianę." : `Otwarto: ${workflow?.day?.openedByName ?? "—"}`}</small>
@@ -658,6 +658,7 @@ export default function SettlementForm({
                 <button
                   className={action === "HANDOVER" ? "is-active" : ""}
                   disabled={openingMode}
+                  aria-current={!openingMode && action === "HANDOVER" ? "step" : undefined}
                   onClick={() => setAction("HANDOVER")}
                 >
                   <span>Etap 2</span>
@@ -667,6 +668,7 @@ export default function SettlementForm({
                 <button
                   className={action === "CLOSE" ? "is-active" : ""}
                   disabled={openingMode}
+                  aria-current={!openingMode && action === "CLOSE" ? "step" : undefined}
                   onClick={() => setAction("CLOSE")}
                 >
                   <span>Etap 3</span>
