@@ -884,7 +884,8 @@ test("keeps the waiter header on one continuous dark bar with ordered controls",
   assert.match(client.slice(tools, tools + 700), /WaiterInstructionEntry[\s\S]*Grafik[\s\S]*ReservationReminder[\s\S]*Inwentaryzacja[\s\S]*Rozliczanie/);
   assert.match(client, /<\/header><nav className="waiter-main-tools waiter-ordering-tools"/);
   assert.match(client.slice(controls, controls + 700), /waiter-guest-receipt-entry[\s\S]*Rachunek dla gościa[\s\S]*waiter-main-exit-controls[\s\S]*← Menu[\s\S]*Wyloguj/);
-  assert.match(client, /waiter-ordering-app[\s\S]*waiter-table-focus[\s\S]*activeTableNumber[\s\S]*aria-label="Wybierz stolik"/);
+  assert.match(client, /waiter-ordering-app[\s\S]*waiter-table-focus[\s\S]*activeTableName[\s\S]*aria-label="Wybierz stolik"/);
+  assert.doesNotMatch(client, /activeTable\?\.name\.match\(\/\\d\+\//);
   assert.match(client, /<select required value=\{tableId\}[\s\S]*<option value="" disabled>Wybierz stolik<\/option>/);
   assert.match(client, /setTableId\(""\); setLoading\(false\);/);
   assert.doesNotMatch(client, /body\.tables\?\.\[0\]\?\.dotykackaId/);
