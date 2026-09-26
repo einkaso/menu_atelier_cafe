@@ -244,19 +244,21 @@ export default function LightingPreparationClient() {
     {!forbidden && groups.map(([room, outputs]) => {
       const desktopColumns = Math.min(outputs.length, 4);
       const tabletColumns = Math.min(outputs.length, 2);
+      const hasDimmers = outputs.some((output) => output.dimmingAvailable);
       const cardWidth = outputs.some((output) => output.dimmingAvailable || output.shutterAvailable) ? 286 : 232;
+      const effectiveCardWidth = outputs.length === 1 && hasDimmers ? 584 : cardWidth;
       const roomStyle = {
         "--lighting-room-columns": desktopColumns,
         "--lighting-room-tablet-columns": tabletColumns,
-        "--lighting-room-width": `${desktopColumns * cardWidth + Math.max(0, desktopColumns - 1) * 12}px`,
-        "--lighting-room-tablet-width": `${tabletColumns * cardWidth + Math.max(0, tabletColumns - 1) * 12}px`,
+        "--lighting-room-width": `${desktopColumns * effectiveCardWidth + Math.max(0, desktopColumns - 1) * 12}px`,
+        "--lighting-room-tablet-width": `${tabletColumns * effectiveCardWidth + Math.max(0, tabletColumns - 1) * 12}px`,
       } as CSSProperties;
-      return <section className="waiter-lighting-room" key={room} style={roomStyle}>
+      return <section className={`waiter-lighting-room${hasDimmers ? " has-dimmers" : ""}`} key={room} style={roomStyle}>
       <header><span>STREFA</span><h2>{room}</h2></header>
       <div className="waiter-lighting-grid">{outputs.map((output) => {
         const unavailable = !data?.bridge.online || output.stale || busyOutputId === output.id;
         const brightness = brightnessDrafts[output.id] ?? output.brightness ?? 0;
-        const cardClassName = `waiter-lighting-card${output.isOn && !output.shutterAvailable ? " is-on" : ""}${output.dimmingAvailable ? " is-dimmer" : ""}${output.shutterAvailable ? " is-shutter" : ""}`;
+        const cardClassName = `waiter-lighting-card${output.isOn && !output.shutterAvailable ? " is-on" : ""}${output.dimmingAvailable ? " is-dimmer" : ""}${output.dimmingAvailable && desktopColumns > 1 ? " is-wide" : ""}${output.shutterAvailable ? " is-shutter" : ""}`;
         return <article className={cardClassName} key={output.id}>
           <div className="waiter-lighting-card-top"><span className="waiter-lighting-bulb" aria-hidden="true"/><span className={output.stale ? "waiter-lighting-reading is-stale" : "waiter-lighting-reading"}>{output.stale ? "Stan nieaktualny" : freshness(output.observedAt)}</span></div>
           <h3>{output.label}</h3>

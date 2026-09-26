@@ -133,6 +133,9 @@ test("lighting inventory, administration and employee controls are wired", async
   assert.match(waiterCss, /\.waiter-lighting-actions button \{[^}]*min-height: 42px;[^}]*touch-action: manipulation;/);
   assert.match(waiterCss, /\.waiter-lighting-dimmer input\[type="range"\]/);
   assert.match(waiterUi, /cardWidth = outputs\.some\(\(output\) => output\.dimmingAvailable \|\| output\.shutterAvailable\) \? 286 : 232/);
+  assert.match(waiterUi, /output\.dimmingAvailable && desktopColumns > 1 \? " is-wide"/);
+  assert.match(waiterCss, /\.waiter-lighting-card\.is-dimmer\.is-wide \{ grid-column: span 2; \}/);
+  assert.match(waiterCss, /\.waiter-lighting-room\.has-dimmers \{ width: calc\(100% - 32px\); \}/);
   assert.match(waiterCss, /\.waiter-lighting-card\.is-on \{ border-color: #9fcdbb; background: linear-gradient\(145deg, #fbfffd, #e9f7f0\)/);
   assert.match(waiterCss, /\.waiter-lighting-dimmer footer button \{ min-height: 46px/);
   assert.match(waiterCss, /\.waiter-lighting-shutter-controls/);
