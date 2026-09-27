@@ -8,7 +8,7 @@ export async function fetchCashSnapshot(businessDate: string): Promise<CashSnaps
   const config = await getDotykackaConfig();
   if (!config.branchId) throw new Error("W konfiguracji Dotykački nie wybrano oddziału.");
   const periodFrom = businessDayStart(businessDate);
-  const report = await new DotykackaClient(config).salesReport(periodFrom, capturedAt);
+  const report = await new DotykackaClient(config).salesReportRange(periodFrom, capturedAt);
   if (!report) throw new Error("Dotykačka nie zwróciła raportu sprzedaży dla wybranego oddziału.");
   const totals = reportPaymentTotals(report);
   return {

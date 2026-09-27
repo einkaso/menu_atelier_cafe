@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { reportPaymentTotals, snapshotDelta } from "../lib/cash-day.ts";
+import { mergePaymentReportRevenue, reportPaymentTotals, snapshotDelta } from "../lib/cash-day.ts";
 import { cleanInventoryLocation, inventoryDifference, millisToQuantity, nonNegativeWholeNumber, quantityToMillis, selectInventoryProducts, wineBottleQuantityMillis } from "../lib/inventory.ts";
 import { moneyToCents, settlementTotals } from "../lib/waiter-settlement.ts";
 import { isAlcoholTakeawayRestrictionTime, isWholeVodkaBottleName, shouldShowAlcoholSaleWarning } from "../lib/alcohol-sale-warning.ts";
@@ -641,7 +641,7 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(waiterRoute, /for update/);
   assert.match(waiterRoute, /openedByDotykackaId: employee\.dotykackaId/);
   assert.match(waiterRoute, /closedByDotykackaId: employee\.dotykackaId/);
-  assert.match(snapshot, /salesReport\(periodFrom, capturedAt\)/);
+  assert.match(snapshot, /salesReportRange\(periodFrom, capturedAt\)/);
   assert.match(adminRoute, /MARK_TIPS_PAID/);
   assert.match(adminRoute, /ADD_TIP_ADJUSTMENT/);
   assert.match(adminRoute, /VOID_TIP_ADJUSTMENT/);
@@ -826,6 +826,26 @@ test("maps Dotykacka cash and card methods and computes checkpoint increments", 
   assert.equal(totals.cash, 12_345);
   assert.equal(totals.card, 8_000);
   assert.deepEqual(snapshotDelta({ cash: 20_100, card: 11_000 }, { cash: 12_345, card: 8_000 }), { cash: 7_755, card: 3_000 });
+});
+
+test("combines Dotykacka payment totals from cash cycles longer than 26 hours", () => {
+  const revenue = mergePaymentReportRevenue([
+    { revenue: { totalWithVat: 150, paymentTypeInfo: [
+      { typeId: 900000001, count: 3, total: 100, rawTotal: 100, currency: "PLN" },
+      { typeId: 900000002, count: 2, total: 50, rawTotal: 50, currency: "PLN" },
+    ] } },
+    { revenue: { totalWithVat: 53.45, paymentTypeInfo: [
+      { typeId: 900000001, count: 1, total: 23.45, rawTotal: 23.45, currency: "PLN" },
+      { typeId: 900000002, count: 1, total: 30, rawTotal: 30, currency: "PLN" },
+    ] } },
+  ]);
+  const totals = reportPaymentTotals({ revenue });
+  assert.equal(totals.cash, 12_345);
+  assert.equal(totals.card, 8_000);
+  assert.deepEqual(totals.payments.map(({ typeId, count, total }) => ({ typeId, count, total })), [
+    { typeId: 900000001, count: 4, total: "123.45" },
+    { typeId: 900000002, count: 3, total: "80.00" },
+  ]);
 });
 
 test("calculates a mixed cash, card, correction, expense, envelope, and tip settlement in cents", () => {

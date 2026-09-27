@@ -1,4 +1,5 @@
 import "server-only";
+import { mergePaymentReportRevenue } from "../cash-day";
 import type { DotykackaCategory, DotykackaConfig, DotykackaDeliveryNote, DotykackaEmployee, DotykackaMoneyLog, DotykackaNamedEntity, DotykackaOrder, DotykackaOrderItem, DotykackaPosActionResponse, DotykackaProduct, DotykackaProductCustomization, DotykackaSalesReport, DotykackaStockProduct, DotykackaStockTakingResponse, DotykackaStockTakingStatus, DotykackaSupplier, DotykackaTable, DotykackaWebhook } from "./types";
 
 type Page<T> = T[] | { data?: T[]; items?: T[]; page?: number; pages?: number; totalPages?: number };
@@ -206,7 +207,10 @@ export class DotykackaClient {
         });
       }
     }
-    return { productSales: Array.from(productSales.values()) } satisfies DotykackaSalesReport;
+    return {
+      revenue: mergePaymentReportRevenue(reports),
+      productSales: Array.from(productSales.values()),
+    } satisfies DotykackaSalesReport;
   }
 
   stockProducts() {

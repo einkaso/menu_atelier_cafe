@@ -20,6 +20,31 @@ export type CashSnapshot = {
   payments: Array<{ typeId: number; count: number; total: string; currency: string | null }>;
 };
 
+export function mergePaymentReportRevenue(reports: Array<{ revenue?: {
+  totalWithVat?: number | null;
+  paymentTypeInfo?: DotykackaPaymentLine[];
+} }>) {
+  const paymentLines = new Map<string, DotykackaPaymentLine>();
+  let totalWithVat = 0;
+  for (const report of reports) {
+    totalWithVat += Number(report.revenue?.totalWithVat ?? 0);
+    for (const line of report.revenue?.paymentTypeInfo ?? []) {
+      const typeId = Number(line.typeId ?? 0);
+      const currency = line.currency ?? null;
+      const key = `${typeId}:${currency ?? ""}`;
+      const previous = paymentLines.get(key);
+      paymentLines.set(key, {
+        typeId,
+        currency,
+        count: Number(previous?.count ?? 0) + Number(line.count ?? 0),
+        total: Number(previous?.total ?? 0) + Number(line.total ?? 0),
+        rawTotal: Number(previous?.rawTotal ?? 0) + Number(line.rawTotal ?? 0),
+      });
+    }
+  }
+  return { totalWithVat, paymentTypeInfo: [...paymentLines.values()] };
+}
+
 export function reportPaymentTotals(report: { revenue?: { paymentTypeInfo?: DotykackaPaymentLine[] } } | null | undefined) {
   const lines = report?.revenue?.paymentTypeInfo ?? [];
   const total = (typeId: number) => Math.round(lines.filter((line) => Number(line.typeId) === typeId)
