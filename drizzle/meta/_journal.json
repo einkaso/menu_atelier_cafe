@@ -540,6 +540,13 @@
       "when": 1790449200000,
       "tag": "0076_temperature_sensor_modes",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790534412533,
+      "tag": "0077_event_os_bridge",
+      "breakpoints": true
     }
   ]
 }

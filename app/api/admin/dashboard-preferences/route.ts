@@ -6,7 +6,7 @@ import { currentAdmin } from "../../../../lib/admin-auth";
 export const dynamic = "force-dynamic";
 
 const tileIds = new Set([
-  "products", "reservations", "settlements", "connection", "lighting", "rooms", "employees",
+  "products", "eventOs", "reservations", "settlements", "connection", "lighting", "rooms", "employees",
   "stock", "instructions", "inventory", "workforce", "categories", "offers",
 ]);
 

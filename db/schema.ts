@@ -134,6 +134,59 @@ export const productContent = pgTable("product_content", {
   check("product_content_espresso_shots_check", sql`${table.espressoShots} is null or ${table.espressoShots} in (0, 1, 2)`),
 ]);
 
+export const eventOsProductAccess = pgTable("event_os_product_access", {
+  productId: integer("product_id").primaryKey().references(() => menuProducts.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const eventOsEvents = pgTable("event_os_events", {
+  externalId: text("external_id").primaryKey(),
+  title: text("title").notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }),
+  status: text("status").notNull().default("COLLECTING"),
+  discountPercent: numeric("discount_percent", { precision: 5, scale: 2 }).notNull().default("0"),
+  orderCutoffAt: timestamp("order_cutoff_at", { withTimezone: true }),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("event_os_events_starts_idx").on(table.startsAt)]);
+
+export type EventOsOrderItem = {
+  productId: string;
+  name: string;
+  category: string;
+  quantity: number;
+  unitPriceRegular: number;
+  discountPercent: number;
+  unitPriceAfterDiscount: number;
+};
+
+export const eventOsOrders = pgTable("event_os_orders", {
+  externalId: text("external_id").primaryKey(),
+  eventExternalId: text("event_external_id").notNull().references(() => eventOsEvents.externalId, { onDelete: "cascade" }),
+  ticketCode: text("ticket_code").notNull(),
+  guestName: text("guest_name").notNull(),
+  guestEmail: text("guest_email"),
+  guestPhone: text("guest_phone"),
+  tableLabel: text("table_label"),
+  status: text("status").notNull().default("RESERVED"),
+  specialRequest: text("special_request"),
+  items: jsonb("items").$type<EventOsOrderItem[]>().notNull().default([]),
+  regularTotal: numeric("regular_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  discountTotal: numeric("discount_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  forecastTotal: numeric("forecast_total", { precision: 12, scale: 2 }).notNull().default("0"),
+  dotykackaOrderId: text("dotykacka_order_id"),
+  orderedAt: timestamp("ordered_at", { withTimezone: true }).notNull(),
+  arrivedAt: timestamp("arrived_at", { withTimezone: true }),
+  sentToPosAt: timestamp("sent_to_pos_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("event_os_orders_event_status_idx").on(table.eventExternalId, table.status),
+  index("event_os_orders_ticket_idx").on(table.ticketCode),
+]);
+
 export type StaffManualMedia = {
   id: string;
   path: string;

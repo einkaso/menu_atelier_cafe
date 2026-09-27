@@ -183,11 +183,12 @@ type VisibilityFilter = "" | "visible" | "hidden" | "all";
 type ProductStatusKind = "approved" | "needs-review" | "dotykacka-hidden" | "menu-hidden";
 type ProductStatusFilter = "all" | ProductStatusKind;
 type AdminView = "home" | "connection" | "products" | "stock" | "categories" | "productOrder" | "offers" | "promotions" | "audit" | "visibilityHistory" | "rules";
-type AdminDashboardTileId = "products" | "reservations" | "settlements" | "connection" | "lighting" | "rooms" | "employees" | "stock" | "instructions" | "inventory" | "workforce" | "categories" | "offers";
+type AdminDashboardTileId = "products" | "eventOs" | "reservations" | "settlements" | "connection" | "lighting" | "rooms" | "employees" | "stock" | "instructions" | "inventory" | "workforce" | "categories" | "offers";
 type AdminDashboardTilePreference = { id: AdminDashboardTileId; visible: boolean; background: string; foreground: string };
 
 const ADMIN_DASHBOARD_TILES: Array<{ id: AdminDashboardTileId; title: string; description: string; view?: AdminView; href?: string }> = [
   { id: "products", title: "Produkty", description: "Wyszukiwanie, widoczność i edycja produktów.", view: "products" },
+  { id: "eventOs", title: "EVENT OS", description: "Menu wydarzeń, zamówienia gości i prognozy.", href: "/admin/event-os" },
   { id: "reservations", title: "Rezerwacje", description: "Kalendarz gości, stoliki i przygotowanie.", href: "/admin/reservations" },
   { id: "settlements", title: "Rozliczenia", description: "Zmiany, napiwki i finanse operacyjne.", href: "/admin/settlements" },
   { id: "connection", title: "Połączenie z Dotykačką", description: "Synchronizacja, produkty, magazyn i stoliki.", view: "connection" },
@@ -204,7 +205,7 @@ const ADMIN_DASHBOARD_TILES: Array<{ id: AdminDashboardTileId; title: string; de
 
 const DEFAULT_ADMIN_DASHBOARD_PREFERENCES: AdminDashboardTilePreference[] = ADMIN_DASHBOARD_TILES.map((tile) => ({
   id: tile.id,
-  visible: ["products", "reservations", "settlements", "connection", "lighting", "rooms", "employees"].includes(tile.id),
+  visible: ["products", "eventOs", "reservations", "settlements", "connection", "lighting", "rooms", "employees"].includes(tile.id),
   background: tile.id === "connection" ? "#519e46" : tile.id === "settlements" ? "#0b3442" : "paper",
   foreground: "auto",
 }));
@@ -245,6 +246,7 @@ function dashboardTileForeground(background: string, foreground = "auto") {
 function AdminDashboardTileIcon({ id }: { id: AdminDashboardTileId }) {
   const props = { size: 21, strokeWidth: 1.8, "aria-hidden": true } as const;
   if (id === "products") return <Coffee {...props}/>;
+  if (id === "eventOs") return <CalendarDays {...props}/>;
   if (id === "reservations") return <CalendarDays {...props}/>;
   if (id === "settlements") return <WalletCards {...props}/>;
   if (id === "connection") return <RefreshCw {...props}/>;
@@ -1636,6 +1638,7 @@ export default function AdminPanel({ administratorName }: { administratorName: s
           <a className="admin-secondary" href="/admin/inventory">Inwentaryzacja</a>
           <a className="admin-secondary" href="/admin/waiters">Pracownicy</a>
           <a className="admin-secondary" href="/admin/reservations">Rezerwacje</a>
+          <a className="admin-secondary" href="/admin/event-os">EVENT OS</a>
           <a className="admin-secondary" href="/admin/lighting">Oświetlenie</a>
           <a className="admin-secondary" href="/admin/rooms">Pomieszczenia</a>
         </nav>
