@@ -36,7 +36,9 @@ export default function GuestReceiptView({ receipt }: { receipt: GuestReceipt })
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState("");
+  const [feedbackComplete, setFeedbackComplete] = useState(false);
   const requiredComplete = receipt.surveyQuestions.every((question) => !question.required || Boolean(answers[String(question.id)]));
+  const hasAnswers = Object.keys(answers).length > 0;
   const qrUrl = receipt.reviewUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=8&data=${encodeURIComponent(receipt.reviewUrl)}` : null;
 
   useEffect(() => {
@@ -45,12 +47,15 @@ export default function GuestReceiptView({ receipt }: { receipt: GuestReceipt })
 
   async function finish() {
     setFinishing(true); setError("");
-    if (requiredComplete && Object.keys(answers).length > 0) {
+    if (!feedbackComplete && requiredComplete && hasAnswers) {
       const save = await fetch("/api/guest/feedback", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }) }).catch(() => null);
       if (!save?.ok) {
         const body = await save?.json().catch(() => ({})) as { error?: string } | undefined;
         setError(body?.error ?? "Nie udało się zapisać odpowiedzi. Spróbuj ponownie."); setFinishing(false); return;
       }
+      setFeedbackComplete(true);
+      setFinishing(false);
+      return;
     }
     await fetch("/api/guest/receipt", { method: "DELETE", credentials: "same-origin" }).catch(() => null);
     window.location.replace("/");
@@ -61,11 +66,11 @@ export default function GuestReceiptView({ receipt }: { receipt: GuestReceipt })
       <div className="guest-receipt-screen">
         <section className="guest-receipt-paper"><header><img src="/logo-cafe.png" alt="Marta Banaszek atelier-café"/><h1>Dziękujemy za wizytę</h1></header><p className="guest-receipt-meta">{receipt.tableName} · {date.format(new Date(receipt.completedAt))} · paragon {receipt.documentNumber}</p><div className="guest-receipt-items">{receipt.items.map((item) => <article key={item.id}><div><b>{item.quantity} ×</b><span>{item.name}{item.customizations.length > 0 && <small>{item.customizations.join(" · ")}</small>}</span></div><strong>{money.format(Number(item.total))}</strong></article>)}</div><div className="guest-receipt-total"><span>Razem</span><strong>{money.format(Number(receipt.total))}</strong></div>{receipt.payments.length > 0 && <div className="guest-receipt-payments">{receipt.payments.map((payment) => <p key={payment.id}><span>{payment.label}</span><b>{money.format(Number(payment.amount))}</b></p>)}</div>}<p className="guest-receipt-fiscal-note">To elektroniczne podsumowanie rachunku. Dokument fiskalny wystawia kasa.</p></section>
         {receipt.servedBy && <section className="guest-personal-thanks"><GuestThankYouMedia servedBy={receipt.servedBy}/><div><span>OD OSOBY, KTÓRA CIĘ OBSŁUGIWAŁA</span><h2>{receipt.servedBy.name}</h2><p>„{receipt.servedBy.message}”</p></div></section>}
-        <section className="guest-after-survey"><span>JUŻ PO RACHUNKU</span><h2>Jak minęła wizyta?</h2><p>Ta krótka ankieta jest niezależna od pytań zadawanych przed zamówieniem i nie zbiera danych osobowych.</p>{receipt.surveyQuestions.map((question, index) => <fieldset key={question.id}><legend>{index + 1}. {question.prompt}{question.required && <small>wymagane</small>}</legend><div className={question.kind === "RATING" ? "is-rating" : ""}>{question.options.map((option) => <button type="button" key={option} className={answers[String(question.id)] === option ? "is-selected" : ""} onClick={() => setAnswers((current) => ({ ...current, [String(question.id)]: option }))}>{question.kind === "RATING" ? <><b>{option}</b><small>★</small></> : option}</button>)}</div></fieldset>)}</section>
-        <section className="guest-google-review"><h2>Podobało Ci się?</h2><p>Będzie nam bardzo miło, jeśli zostawisz opinię w Google. To naprawdę pomaga małym miejscom.</p>{qrUrl && receipt.reviewUrl ? <><a href={receipt.reviewUrl} target="_blank" rel="noreferrer"><img src={qrUrl} alt="Kod QR do wystawienia opinii w Google"/></a><a className="guest-google-button" href={receipt.reviewUrl} target="_blank" rel="noreferrer">Oceń nas w Google</a></> : <small>Link do opinii Google zostanie tu wyświetlony po jego skonfigurowaniu.</small>}</section>
+        {!feedbackComplete ? <section className="guest-after-survey"><span>JUŻ PO RACHUNKU</span><h2>Jak minęła wizyta?</h2><p>Ta krótka ankieta jest niezależna od pytań zadawanych przed zamówieniem i nie zbiera danych osobowych.</p>{receipt.surveyQuestions.map((question, index) => <fieldset key={question.id}><legend>{index + 1}. {question.prompt}{question.required && <small>wymagane</small>}</legend><div className={question.kind === "RATING" ? "is-rating" : ""}>{question.options.map((option) => <button type="button" key={option} className={answers[String(question.id)] === option ? "is-selected" : ""} onClick={() => setAnswers((current) => ({ ...current, [String(question.id)]: option }))}>{question.kind === "RATING" ? <><b>{option}</b><small>★</small></> : option}</button>)}</div></fieldset>)}</section> : <section className="guest-feedback-thanks"><span>DZIĘKUJEMY ZA SZCZEROŚĆ</span><h2>Twoja odpowiedź jest już u nas</h2><p>Przekazaliśmy ją wewnętrznie zespołowi Atelier Café. Pomoże nam lepiej zadbać o kolejne wizyty.</p></section>}
+        {qrUrl && receipt.reviewUrl && <section className="guest-google-review"><div className="guest-google-stars" aria-hidden="true">★★★★★</div><span className="guest-google-mark" aria-hidden="true">G</span><h2>Chcesz dodać publiczną opinię?</h2><p>Jeśli masz jeszcze chwilę, opisz w Google swoje prawdziwe doświadczenie — zarówno to, co było dobre, jak i to, co możemy poprawić. Twoja szczera opinia pomaga innym odkryć Atelier Café i wspiera nasze małe miejsce.</p><div className="guest-google-qr"><img src={qrUrl} alt="Kod QR do wystawienia opinii w Google na własnym telefonie"/></div><strong>Zeskanuj kod własnym telefonem</strong><small>Google otworzy się wyłącznie na Twoim urządzeniu. Na tym ekranie nie wpisuj loginu ani hasła.</small></section>}
         {error && <p className="waiter-error guest-receipt-error" role="alert">{error}</p>}
       </div>
-      <footer className="guest-receipt-finish"><button disabled={finishing} onClick={() => void finish()}>{finishing ? "Zamykam…" : requiredComplete ? "Zakończ i wróć do menu" : "Pomiń ankietę i zamknij"}</button></footer>
+      <footer className="guest-receipt-finish"><button disabled={finishing} onClick={() => void finish()}>{finishing ? (feedbackComplete ? "Zamykam…" : "Zapisuję…") : feedbackComplete ? "Zakończ i wróć do menu" : requiredComplete && hasAnswers ? "Wyślij ankietę" : "Pomiń ankietę i zamknij"}</button></footer>
     </div>
   </main>;
 }

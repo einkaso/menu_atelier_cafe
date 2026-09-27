@@ -37,6 +37,20 @@ test("keeps pre-order and post-receipt surveys separate", async () => {
   assert.match(guest, /JUŻ PO RACHUNKU/);
 });
 
+test("shows every guest the same neutral Google invitation", async () => {
+  const [guest, exampleEnv] = await Promise.all([
+    readFile(new URL("../app/kelner/guest-receipt-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../.env_example", import.meta.url), "utf8"),
+  ]);
+  assert.match(guest, /\{qrUrl && receipt\.reviewUrl && <section className="guest-google-review">/);
+  assert.match(guest, /Zeskanuj kod własnym telefonem/);
+  assert.match(guest, /Na tym ekranie nie wpisuj loginu ani hasła/);
+  assert.doesNotMatch(guest, /href=\{receipt\.reviewUrl\}|target="_blank"/);
+  assert.match(guest, /zarówno to, co było dobre, jak i to, co możemy poprawić/);
+  assert.doesNotMatch(guest, /feedbackComplete && qrUrl|inviteToGoogle|suggestsPositiveExperience/);
+  assert.match(exampleEnv, /GOOGLE_REVIEW_URL=https:\/\/g\.page\/r\/CQsw-xr0OEMDECA\/review/);
+});
+
 test("shows an editable personal thank-you with a random animation from the employee gallery", async () => {
   const [schema, migration, messageMigration, server, guest, picker, orientation, orientationLock, waiterStyles, guestStyles, admin, mediaRoute, defaults] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
