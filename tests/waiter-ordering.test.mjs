@@ -720,6 +720,7 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(form, /aria-current=\{openingMode \? "step" : undefined\}/);
   assert.match(form, /className=\{!openingMode && action === "HANDOVER" \? "is-active" : ""\}/);
   assert.match(form, /className=\{!openingMode && action === "CLOSE" \? "is-active" : ""\}/);
+  assert.match(form, /\? "Zakończ otwarcie"[\s\S]*\? "Zakończ przekazanie zmiany"[\s\S]*: "Zakończ cykl kasowy"/);
   assert.match(waiterRoute, /\["SAVE_EXPENSE", "DELETE_EXPENSE"\]/);
   assert.match(waiterRoute, /pendingExpenseRows/);
   assert.match(waiterRoute, /pendingDepositRows/);

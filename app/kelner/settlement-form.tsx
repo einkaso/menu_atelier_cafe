@@ -1034,10 +1034,10 @@ export default function SettlementForm({
                 {sending
                   ? "Sprawdzam dane i zapisuję…"
                   : openingMode
-                    ? "Potwierdź otwarcie"
+                    ? "Zakończ otwarcie"
                     : action === "HANDOVER"
-                      ? "Przekaż zmianę"
-                      : "Zamknij cykl"}
+                      ? "Zakończ przekazanie zmiany"
+                      : "Zakończ cykl kasowy"}
               </button>
             </section>
 
