@@ -718,6 +718,8 @@ test("records an auditable cash day with opening, handover, closing, and live PO
   assert.match(cashStyles, /\.cash-operation-choice button \{[\s\S]*background: var\(--w-navy\);[\s\S]*color: #fff;/);
   assert.match(cashStyles, /\.cash-operation-choice button\.is-active \{[\s\S]*background: #fff;[\s\S]*color: var\(--w-navy\);/);
   assert.match(form, /aria-current=\{openingMode \? "step" : undefined\}/);
+  assert.match(form, /className=\{!openingMode && action === "HANDOVER" \? "is-active" : ""\}/);
+  assert.match(form, /className=\{!openingMode && action === "CLOSE" \? "is-active" : ""\}/);
   assert.match(waiterRoute, /\["SAVE_EXPENSE", "DELETE_EXPENSE"\]/);
   assert.match(waiterRoute, /pendingExpenseRows/);
   assert.match(waiterRoute, /pendingDepositRows/);

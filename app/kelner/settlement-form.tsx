@@ -656,7 +656,7 @@ export default function SettlementForm({
                   <small>{openingMode ? "Policz i potwierdź saldo pozostawione przez poprzednią zmianę." : `Otwarto: ${workflow?.day?.openedByName ?? "—"}`}</small>
                 </button>
                 <button
-                  className={action === "HANDOVER" ? "is-active" : ""}
+                  className={!openingMode && action === "HANDOVER" ? "is-active" : ""}
                   disabled={openingMode}
                   aria-current={!openingMode && action === "HANDOVER" ? "step" : undefined}
                   onClick={() => setAction("HANDOVER")}
@@ -666,7 +666,7 @@ export default function SettlementForm({
                   <small>Policz kasę, zapisz stan i wyloguj się.</small>
                 </button>
                 <button
-                  className={action === "CLOSE" ? "is-active" : ""}
+                  className={!openingMode && action === "CLOSE" ? "is-active" : ""}
                   disabled={openingMode}
                   aria-current={!openingMode && action === "CLOSE" ? "step" : undefined}
                   onClick={() => setAction("CLOSE")}
