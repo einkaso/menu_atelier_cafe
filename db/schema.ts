@@ -153,6 +153,18 @@ export const eventOsEvents = pgTable("event_os_events", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [index("event_os_events_starts_idx").on(table.startsAt)]);
 
+export const eventOsEventProducts = pgTable("event_os_event_products", {
+  id: serial("id").primaryKey(),
+  eventExternalId: text("event_external_id").notNull().references(() => eventOsEvents.externalId, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => menuProducts.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("event_os_event_products_event_product_uq").on(table.eventExternalId, table.productId),
+  index("event_os_event_products_event_idx").on(table.eventExternalId),
+]);
+
 export type EventOsOrderItem = {
   productId: string;
   name: string;

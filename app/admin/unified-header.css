@@ -134,6 +134,13 @@
   border: 0;
 }
 
+.admin-shell .admin-event-session {
+  color: #c4cdcf;
+  font-size: .66rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 @media (max-width: 1280px) {
   .admin-shell .admin-topbar {
     flex-wrap: wrap;

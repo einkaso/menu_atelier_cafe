@@ -547,6 +547,13 @@
       "when": 1790534412533,
       "tag": "0077_event_os_bridge",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1790553600000,
+      "tag": "0078_event_os_event_products",
+      "breakpoints": true
     }
   ]
 }
